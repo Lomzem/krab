@@ -13,7 +13,7 @@ bun install --frozen-lockfile
 bun run dev --host 127.0.0.1
 ```
 
-Open the local URL printed by Vite. Stop it with Ctrl-C. Installation runs `prepare` to synchronize SvelteKit types; it does not install commit hooks yet. Hook setup and policy enforcement belong to the following scaffold tickets.
+Open the local URL printed by Vite. Stop it with Ctrl-C. Installation runs `prepare` to synchronize SvelteKit types; it does not install commit hooks yet. Hook setup belongs to a following scaffold ticket. Code policy commands are available below.
 
 ## Verification and static output
 
@@ -26,7 +26,7 @@ bun run preview --host 127.0.0.1
 
 `check` synchronizes framework types and runs strict Svelte/TypeScript checking. The static adapter writes the deployable site to `build/`, including the client-rendered `index.html` fallback. Configure a future static host to serve that fallback for application routes. Generated `.svelte-kit/` server intermediates are build tooling output; the shipped `build/` directory needs no SvelteKit application server. `preview` serves the production build locally and is not a hosting setup.
 
-Formatting/lint enforcement, hooks, CI, and review configuration are subsequent tickets. There is no service worker or offline cache, product storage, geolocation, map, or authentication in this shell. No product test framework is installed; this foundation is verified through the real install, development, check, and build commands.
+Formatting and lint commands are documented in [Code checks](docs/tooling.md). Hooks, CI, and review configuration are subsequent tickets. There is no service worker or offline cache, product storage, geolocation, map, or authentication in this shell. No product test framework is installed; this foundation is verified through the real install, development, check, and build commands.
 
 ## Installation assets
 

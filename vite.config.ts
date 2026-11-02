@@ -5,8 +5,11 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  plugins: [tailwindcss(), sveltekit({
-    adapter: adapter({ fallback: 'index.html' }),
-    preprocess: vitePreprocess()
-  })]
+  plugins: [
+    tailwindcss(),
+    sveltekit({
+      adapter: adapter({ fallback: 'index.html' }),
+      preprocess: vitePreprocess()
+    })
+  ]
 });
