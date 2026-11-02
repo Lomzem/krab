@@ -21,19 +21,19 @@ Open the local URL printed by Vite. Stop it with Ctrl-C. Installation runs `prep
 ```sh
 bun run check
 bun run build
-bun scripts/check-assets.ts
+bun run check:assets
 bun run preview --host 127.0.0.1
 ```
 
 `check` synchronizes framework types and runs strict Svelte/TypeScript checking. The static adapter writes the deployable site to `build/`, including the client-rendered `index.html` fallback. Configure a future static host to serve that fallback for application routes. Generated `.svelte-kit/` server intermediates are build tooling output; the shipped `build/` directory needs no SvelteKit application server. `preview` serves the production build locally and is not a hosting setup.
 
-Formatting and lint commands are documented in [Code checks](docs/tooling.md). Hooks, CI, and review configuration are subsequent tickets. There is no service worker or offline cache, product storage, geolocation, map, or authentication in this shell. No product test framework is installed; this foundation is verified through the real install, development, check, and build commands.
+Formatting and lint commands are documented in [Code checks](docs/tooling.md). Commit hooks and CI use the shared commands below. There is no service worker or offline cache, product storage, geolocation, map, or authentication in this shell. No product test framework is installed; this foundation is verified through the real install, development, check, and build commands.
 
 ## Installation assets
 
 The static shell links a standalone web app manifest and a 180px Apple touch icon, with 192px and 512px manifest icons. These are original placeholder crab drawings generated with ImageMagick. The manifest assumes hosting at the origin root; update its URLs and scope when adopting a subpath host.
 
-After each build, run `bun scripts/check-assets.ts` from the repository root. This single check parses the emitted HTML and manifest, resolves the start URL and icon references inside `build/`, verifies PNG dimensions, and checks the shell's installation presentation metadata. It uses Bun's HTMLRewriter and requires no running server. A suitable HTTPS origin is needed for installation; hosting is deferred.
+After each build, run `bun run check:assets` from the repository root. This single check parses the emitted HTML and manifest, resolves the start URL and icon references inside `build/`, verifies PNG dimensions, and checks the shell's installation presentation metadata. It uses Bun's HTMLRewriter and requires no running server. A suitable HTTPS origin is needed for installation; hosting is deferred.
 
 Installation metadata does not provide offline startup. No service worker or offline cache is included. Automated asset verification does not establish actual iPhone installation or launch behavior; no manual device check is required for the scaffold.
 
@@ -79,8 +79,14 @@ bun run secrets:history
 bun run test:security
 ```
 
-The history command runs the same native scanner over **all fetched refs** with `--log-opts=--all`, including older commits whose files were deleted. It rejects shallow repositories. CI must use a full-history checkout (`fetch-depth: 0`) and run `bun run setup:security` before scanning; unfetched history is outside its scope. CI wiring belongs to the following scaffold ticket.
+The history command runs the same native scanner over **all fetched refs** with `--log-opts=--all`, including older commits whose files were deleted. It rejects shallow repositories. CI must use a full-history checkout (`fetch-depth: 0`) and run `bun run setup:security` before scanning; unfetched history is outside its scope. The CI workflow runs this command before code checks.
 
 Both scan commands require version 8.30.1 and pass `--redact=100`. Native output is suppressed; a private temporary JSON report is reduced to path, line, and rule, then deleted on process exit. No finding snippets, values, authors, commit messages, or fingerprints are printed. Scanner/setup errors block commits. No credentials or service keys are required.
 
 `test:security` uses disposable repositories and synthetic non-secret material: one hook lifecycle/policy scenario, staged/index mismatch security proof, and a distinct removed historical finding on another branch. It checks native redaction and hook diagnostics without displaying the synthetic material. Historical fixtures are created before hook activation in that isolated repository. It neither changes this checkout's index/history nor bypasses its hooks.
+
+## CI and review configuration
+
+[CI and manual review documentation](docs/ci.md) records pinned Actions, the shared verification sequence, CodeRabbit skip settings, and local validation limits. CI runs on pushes, pull requests, and manual dispatch with read-only repository permission. No deployment or paid scanner integration is configured.
+
+CodeRabbit automatic initial, incremental, and draft reviews are disabled. Do not request a CodeRabbit review for scaffolding, including its completed integration PR, through comments, CLI, or integrations. Reviews are reserved for later product work when explicitly requested; check current public-repository eligibility and limits then.

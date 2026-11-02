@@ -21,7 +21,8 @@
     "setup:security": "bun run scripts/install-gitleaks.ts && lefthook install",
     "secrets:staged": "bun run scripts/scan-secrets.ts staged",
     "secrets:history": "bun run scripts/scan-secrets.ts history",
-    "test:security": "bun run scripts/security.test.ts"
+    "test:security": "bun run scripts/security.test.ts",
+    "check:assets": "bun run scripts/check-assets.ts"
   },
   "dependencies": {
     "effect": "4.1.2",

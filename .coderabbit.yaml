@@ -1,0 +1,14 @@
+reviews:
+  auto_review:
+    enabled: false
+    auto_incremental_review: false
+    drafts: false
+    description_keyword: ''
+    labels: []
+  path_filters:
+    - '!bun.lock'
+    - '!node_modules/**'
+    - '!.svelte-kit/**'
+    - '!build/**'
+    - '!.tools/**'
+    - '!.scratch/**'

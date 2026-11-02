@@ -6,7 +6,7 @@ Use Bun 1.4.4 and the Node version in `.node-version`. Install the pinned tools 
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
 | `bun run format`       | Format supported source, configuration, and Markdown; sort Tailwind classes using `src/app.css` |
 | `bun run format:check` | Check formatting without rewriting files                                                        |
-| `bun run lint`         | Run ESLint and then the absolute comment check                                                  |
+| `bun run lint`         | Run the absolute comment check and then ESLint                                                  |
 | `bun run check`        | Synchronize SvelteKit and check the whole TypeScript/Svelte project, including tooling          |
 | `bun run test:policy`  | Exercise paired valid/invalid inputs through those real commands in a disposable checkout       |
 
