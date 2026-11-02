@@ -26,7 +26,86 @@ type PolicyCase = {
   diagnostic: string;
   risk: string;
 };
+const lockfile = await readFile(join(source, 'bun.lock'), 'utf8');
 const cases: PolicyCase[] = [
+  {
+    name: 'HTML inert data versus typed executable script',
+    file: 'probe.html',
+    valid:
+      '<script type="text/plain">This is data: https://example.invalid/*data*/</script>',
+    invalid:
+      '<script type="text/javascript; charset=utf-8">/* forbidden */const data = "safe";</script>',
+    command: 'lint',
+    diagnostic: 'policy/no-comments',
+    risk: 'Unknown data types are parsed as JavaScript or executable MIME types escape checking'
+  },
+  {
+    name: 'HTML JSON data script',
+    file: 'probe.html',
+    valid:
+      '<script type="application/json">{"url":"https://example.invalid/*data*/"}</script>',
+    invalid:
+      '<script type="application/json">{/* forbidden */"url":"safe"}</script>',
+    command: 'lint',
+    diagnostic: 'policy/no-comments',
+    risk: 'Plain JSON data misses the structured data parser'
+  },
+  {
+    name: 'HTML JSON-LD data script',
+    file: 'probe.html',
+    valid:
+      '<script type="application/ld+json">{"url":"https://example.invalid/*data*/"}</script>',
+    invalid:
+      '<script type="application/ld+json">{/* forbidden */"url":"safe"}</script>',
+    command: 'lint',
+    diagnostic: 'policy/no-comments',
+    risk: 'JSON data is parsed as JavaScript or exempted from comment checking'
+  },
+  {
+    name: 'maintained Bun JSONC lockfile',
+    file: 'bun.lock',
+    valid: lockfile,
+    invalid: '// forbidden\n' + lockfile,
+    command: 'lint',
+    diagnostic: 'policy/no-comments',
+    risk: 'Maintained text lockfile is excluded as generated output'
+  },
+  {
+    name: 'Svelte style directive CSS',
+    file: 'src/Probe.svelte',
+    valid: `<script lang="ts">const color = 'red'; const data = '/* data */';</script><p style:color={color} style:--data="'{data}https://example.invalid/*data*/'">safe</p>`,
+    invalid: '<p style:color="/* forbidden */ red">safe</p>',
+    command: 'lint',
+    diagnostic: 'policy/no-comments',
+    risk: 'Style directives escape inline CSS checking'
+  },
+  {
+    name: 'Svelte inline CSS with expressions',
+    file: 'src/Probe.svelte',
+    valid: `<script lang="ts">const color = 'red'; const data = '/* data */';</script><p style="color: {color}; --data: '{data}https://example.invalid/*data*/'">safe</p>`,
+    invalid: '<p style="color: /* forbidden */ red">safe</p>',
+    command: 'lint',
+    diagnostic: 'policy/no-comments',
+    risk: 'Svelte inline declarations bypass CSS checking or expressions become CSS'
+  },
+  {
+    name: 'HTML inline CSS',
+    file: 'probe.html',
+    valid: `<p style="--data: 'https://example.invalid/*data*/'; color: red">safe</p>`,
+    invalid: '<p style="color: /* forbidden */ red">safe</p>',
+    command: 'lint',
+    diagnostic: 'policy/no-comments',
+    risk: 'HTML style attributes escape stylesheet inspection'
+  },
+  {
+    name: 'HTML embedded CSS',
+    file: 'probe.html',
+    valid: '<style>a { content: "https://example.invalid/*data*/"; }</style>',
+    invalid: '<style>/* comment */a { color: red; }</style>',
+    command: 'lint',
+    diagnostic: 'policy/no-comments',
+    risk: 'HTML parser leaves stylesheets as raw text'
+  },
   {
     name: 'standalone CSS',
     file: 'probe.css',
@@ -93,15 +172,13 @@ const cases: PolicyCase[] = [
     risk: 'App shell falls outside Svelte linting'
   },
   {
-    name: 'HTML embedded languages',
+    name: 'HTML executable script',
     file: 'probe.html',
-    valid:
-      '<script>const data = "/* text */";</script><style>a { content: "// text"; }</style>',
-    invalid:
-      '<script>/* comment */const data = "safe";</script><style>/* comment */a { color: red; }</style>',
+    valid: '<script>const data = "https://example.invalid/*text*/";</script>',
+    invalid: '<script>/* comment */const data = "safe";</script>',
     command: 'lint',
     diagnostic: 'policy/no-comments',
-    risk: 'HTML parser leaves script and style as raw text'
+    risk: 'HTML parser leaves executable scripts as raw text'
   },
   ...[
     [
@@ -249,6 +326,7 @@ await cp(source, root, {
 });
 await symlink(join(source, 'node_modules'), join(root, 'node_modules'));
 for (const row of cases) {
+  const original = row.file === 'bun.lock' ? lockfile : undefined;
   for (const [text, expected] of [
     [row.valid, 0],
     [row.invalid, 1]
@@ -267,7 +345,8 @@ for (const row of cases) {
       text,
       `${row.name}: check rewrote input`
     );
-    await rm(join(root, row.file));
+    if (original === undefined) await rm(join(root, row.file));
+    else await writeFile(join(root, row.file), original);
   }
   console.log(`PASS ${row.name}`);
 }

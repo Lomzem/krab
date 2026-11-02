@@ -8,7 +8,8 @@ import { parseForESLint as parseToml } from 'toml-eslint-parser';
 import * as tsParser from '@typescript-eslint/parser';
 import {
   parseForESLint as parseSvelte,
-  traverseNodes
+  traverseNodes,
+  type AST
 } from 'svelte-eslint-parser';
 
 type Position = { line: number; column: number };
@@ -26,8 +27,9 @@ function report(file: string, position: Position) {
   );
   failures += 1;
 }
-function css(text: string, file: string, line = 0) {
+function css(text: string, file: string, line = 0, context = 'stylesheet') {
   parseCss(text, {
+    context,
     positions: true,
     filename: file,
     line: line + 1,
@@ -49,12 +51,80 @@ function script(text: string, file: string, line = 0) {
     });
   }
 }
+const javascriptTypes = new Set([
+  '',
+  'module',
+  'application/ecmascript',
+  'application/javascript',
+  'application/x-ecmascript',
+  'application/x-javascript',
+  'text/ecmascript',
+  'text/javascript',
+  'text/javascript1.0',
+  'text/javascript1.1',
+  'text/javascript1.2',
+  'text/javascript1.3',
+  'text/javascript1.4',
+  'text/javascript1.5',
+  'text/jscript',
+  'text/livescript',
+  'text/x-ecmascript',
+  'text/x-javascript'
+]);
+function htmlScript(text: string, file: string, line: number, type: string) {
+  const mime = type.trim().toLowerCase().split(';')[0]?.trim() ?? '';
+  if (
+    ['application/json', 'importmap', 'speculationrules'].includes(mime) ||
+    mime.endsWith('+json')
+  ) {
+    for (const token of parseJson(text).ast.comments) {
+      report(file, {
+        line: (token.loc?.start.line ?? 1) + line,
+        column: (token.loc?.start.column ?? 0) + 1
+      });
+    }
+    return;
+  }
+  if (javascriptTypes.has(mime)) script(text, file, line);
+}
+function svelteInlineStyle(
+  node: AST.SvelteAttribute | AST.SvelteStyleDirective,
+  file: string
+) {
+  if (node.type === 'SvelteAttribute' && node.key.name !== 'style') return;
+  const text = node.value
+    .map((part) => {
+      if (part.type === 'SvelteLiteral') return part.value;
+      return (
+        'svelte-expression' +
+        '\n'.repeat(part.loc.end.line - part.loc.start.line)
+      );
+    })
+    .join('');
+  css(
+    text,
+    file,
+    (node.value[0]?.loc.start.line ?? node.loc.start.line) - 1,
+    node.type === 'SvelteAttribute' ? 'declarationList' : 'value'
+  );
+}
 function htmlNode(node: DefaultTreeAdapterMap['node'], file: string) {
   if (node.nodeName === '#comment') {
     report(file, {
       line: node.sourceCodeLocation?.startLine ?? 1,
       column: node.sourceCodeLocation?.startCol ?? 1
     });
+  }
+  if ('attrs' in node) {
+    for (const attribute of node.attrs) {
+      if (attribute.name === 'style')
+        css(
+          attribute.value,
+          file,
+          (node.sourceCodeLocation?.attrs?.style.startLine ?? 1) - 1,
+          'declarationList'
+        );
+    }
   }
   if (
     'tagName' in node &&
@@ -65,7 +135,13 @@ function htmlNode(node: DefaultTreeAdapterMap['node'], file: string) {
       .map((child) => ('value' in child ? child.value : ''))
       .join('');
     const line = (node.sourceCodeLocation?.startTag?.endLine ?? 1) - 1;
-    if (node.tagName === 'script') script(text, file, line);
+    if (node.tagName === 'script')
+      htmlScript(
+        text,
+        file,
+        line,
+        node.attrs.find((attribute) => attribute.name === 'type')?.value ?? ''
+      );
     else css(text, file, line);
   }
   if ('childNodes' in node)
@@ -82,7 +158,7 @@ function configurationAst(text: string, extension: string) {
   return undefined;
 }
 async function check(file: string) {
-  const extension = extname(file);
+  const extension = basename(file) === 'bun.lock' ? '.jsonc' : extname(file);
   if (
     ![
       '.js',
@@ -129,6 +205,11 @@ async function check(file: string) {
             line: node.loc.start.line,
             column: node.loc.start.column + 1
           });
+        if (
+          node.type === 'SvelteAttribute' ||
+          node.type === 'SvelteStyleDirective'
+        )
+          svelteInlineStyle(node, file);
         if (node.type === 'SvelteStyleElement')
           css(
             text.slice(node.startTag.range[1], node.endTag?.range[0]),

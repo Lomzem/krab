@@ -40,8 +40,8 @@ Installation metadata does not provide offline startup. No service worker or off
 ## Code organization
 
 - `src/routes/` contains thin SvelteKit routes that compose feature UI. The scaffold placeholder lives directly in the route until a real feature exists.
-- Future `src/lib/features/<feature>/` directories own each feature's UI, domain logic, and Effect services together. Consume another feature through its intended public boundary.
-- Future `src/lib/platform/` holds browser integrations. Add adapters when real callers need them.
+- Future `src/lib/features/<feature>/` directories own each feature's UI, domain logic, Effect services, and private browser integrations together. Consume another feature through its intended public boundary.
+- Extract shared browser integrations when multiple features need them.
 - `src/lib/utils.ts` and future shared helpers contain genuinely reusable, domain-independent code.
 - `src/lib/components/ui/` contains maintained shadcn-svelte components; `components.json` configures their paths. They follow the same general coding policies as other owned code.
 
