@@ -1,5 +1,11 @@
 # Agent instructions
 
+## Code organization
+
+- Organize application code by feature under `src/lib/features/<feature>/`, keeping each feature’s UI, logic, and private helpers together.
+- Extract shared modules when multiple features need them.
+- Keep framework routes thin; compose feature modules there.
+
 ## Agent skills
 
 ### Issue tracker
