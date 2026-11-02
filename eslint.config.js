@@ -7,7 +7,15 @@ import globals from 'globals';
 import { plugin as shadcn } from '@shadcn/lint';
 
 export default defineConfig([
-  { ignores: ['node_modules/**', '.svelte-kit/**', 'build/**', '.scratch/**'] },
+  {
+    ignores: [
+      'node_modules/**',
+      '.svelte-kit/**',
+      'build/**',
+      '.scratch/**',
+      '.tools/**'
+    ]
+  },
   {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,svelte}'],
     extends: [js.configs.recommended],
