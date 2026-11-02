@@ -1,2 +1,6 @@
-# Local issues, specs, and working notes
 /.scratch/
+/node_modules/
+/.svelte-kit/
+/build/
+/.env
+/.env.*
