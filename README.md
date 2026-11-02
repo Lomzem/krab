@@ -20,12 +20,21 @@ Open the local URL printed by Vite. Stop it with Ctrl-C. Installation runs `prep
 ```sh
 bun run check
 bun run build
+bun scripts/check-assets.ts
 bun run preview --host 127.0.0.1
 ```
 
 `check` synchronizes framework types and runs strict Svelte/TypeScript checking. The static adapter writes the deployable site to `build/`, including the client-rendered `index.html` fallback. Configure a future static host to serve that fallback for application routes. Generated `.svelte-kit/` server intermediates are build tooling output; the shipped `build/` directory needs no SvelteKit application server. `preview` serves the production build locally and is not a hosting setup.
 
-Formatting/lint enforcement, hooks, installation metadata/icons, CI, and review configuration are subsequent tickets. There is no service worker or offline cache, product storage, geolocation, map, or authentication in this shell. No product test framework is installed; this foundation is verified through the real install, development, check, and build commands.
+Formatting/lint enforcement, hooks, CI, and review configuration are subsequent tickets. There is no service worker or offline cache, product storage, geolocation, map, or authentication in this shell. No product test framework is installed; this foundation is verified through the real install, development, check, and build commands.
+
+## Installation assets
+
+The static shell links a standalone web app manifest and a 180px Apple touch icon, with 192px and 512px manifest icons. These are original placeholder crab drawings generated with ImageMagick. The manifest assumes hosting at the origin root; update its URLs and scope when adopting a subpath host.
+
+After each build, run `bun scripts/check-assets.ts` from the repository root. This single check parses the emitted HTML and manifest, resolves the start URL and icon references inside `build/`, verifies PNG dimensions, and checks the shell's installation presentation metadata. It uses Bun's HTMLRewriter and requires no running server. A suitable HTTPS origin is needed for installation; hosting is deferred.
+
+Installation metadata does not provide offline startup. No service worker or offline cache is included. Automated asset verification does not establish actual iPhone installation or launch behavior; no manual device check is required for the scaffold.
 
 ## Code organization
 
