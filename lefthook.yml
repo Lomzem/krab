@@ -1,0 +1,4 @@
+pre-commit:
+  commands:
+    checks:
+      run: bun run secrets:staged && bun run format:check && bun run lint && bun run check

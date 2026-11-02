@@ -12,12 +12,16 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "prepare": "svelte-kit sync",
+    "prepare": "svelte-kit sync && lefthook install",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "bun run scripts/check-comments.ts && eslint . --max-warnings 0",
-    "test:policy": "bun run scripts/policy.test.ts"
+    "test:policy": "bun run scripts/policy.test.ts",
+    "setup:security": "bun run scripts/install-gitleaks.ts && lefthook install",
+    "secrets:staged": "bun run scripts/scan-secrets.ts staged",
+    "secrets:history": "bun run scripts/scan-secrets.ts history",
+    "test:security": "bun run scripts/security.test.ts"
   },
   "dependencies": {
     "effect": "4.1.2",
@@ -42,6 +46,7 @@
     "eslint-plugin-svelte": "3.23.1",
     "globals": "17.14.0",
     "jsonc-eslint-parser": "3.3.0",
+    "lefthook": "2.2.2",
     "parse5": "8.1.0",
     "prettier": "3.9.10",
     "prettier-plugin-svelte": "4.1.1",

@@ -10,10 +10,11 @@ From a fresh checkout:
 
 ```sh
 bun install --frozen-lockfile
+bun run setup:security
 bun run dev --host 127.0.0.1
 ```
 
-Open the local URL printed by Vite. Stop it with Ctrl-C. Installation runs `prepare` to synchronize SvelteKit types; it does not install commit hooks yet. Hook setup belongs to a following scaffold ticket. Code policy commands are available below.
+Open the local URL printed by Vite. Stop it with Ctrl-C. Installation runs `prepare` to synchronize SvelteKit types and activate Lefthook. `setup:security` installs the pinned native scanner and reinstalls the hook. Complete both steps before committing. Code policy commands are available below.
 
 ## Verification and static output
 
@@ -57,3 +58,29 @@ Direct versions are pinned in `package.json`, with transitive resolutions in `bu
 - [shadcn-svelte manual installation](https://www.shadcn-svelte.com/docs/installation/manual)
 - [Effect v4 documentation](https://effect.website/docs/v4/onboarding), matching installed stable v4
 - Primary npm metadata: [SvelteKit](https://registry.npmjs.org/@sveltejs%2fkit), [svelte-check](https://registry.npmjs.org/svelte-check), [TypeScript](https://registry.npmjs.org/typescript), [Effect](https://registry.npmjs.org/effect)
+
+## Commit and secret protection
+
+Setup requires Git, tar, and HTTPS access to GitHub releases. `bun run setup:security` downloads the [official Gitleaks 8.30.1 release](https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1) for Linux/macOS x64/arm64, verifies its archive against the pinned upstream SHA-256, and installs it in ignored `.tools/gitleaks`. It does not use the system Gitleaks or an npm scanner wrapper. Bun installs the pinned Lefthook package from the frozen lockfile. The installed hook uses Bun on PATH; run setup again after moving the checkout or replacing hooks. Do not set a competing Git `core.hooksPath`.
+
+Every normal commit runs these non-mutating commands in order and stops on failure:
+
+```sh
+bun run secrets:staged
+bun run format:check
+bun run lint
+bun run check
+```
+
+The scanner reads the staged Git diff, including index content that differs from the working copy. It runs before policy checks to prevent their diagnostics from printing a detected staged value. Fix a finding in the index and rerun the commit; checks never rewrite or stage files. Gitleaks uses its upstream detection rules; a passing scan is limited to those rules.
+
+```sh
+bun run secrets:history
+bun run test:security
+```
+
+The history command runs the same native scanner over **all fetched refs** with `--log-opts=--all`, including older commits whose files were deleted. It rejects shallow repositories. CI must use a full-history checkout (`fetch-depth: 0`) and run `bun run setup:security` before scanning; unfetched history is outside its scope. CI wiring belongs to the following scaffold ticket.
+
+Both scan commands require version 8.30.1 and pass `--redact=100`. Native output is suppressed; a private temporary JSON report is reduced to path, line, and rule, then deleted on process exit. No finding snippets, values, authors, commit messages, or fingerprints are printed. Scanner/setup errors block commits. No credentials or service keys are required.
+
+`test:security` uses disposable repositories and synthetic non-secret material: one hook lifecycle/policy scenario, staged/index mismatch security proof, and a distinct removed historical finding on another branch. It checks native redaction and hook diagnostics without displaying the synthetic material. Historical fixtures are created before hook activation in that isolated repository. It neither changes this checkout's index/history nor bypasses its hooks.
