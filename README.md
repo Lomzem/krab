@@ -25,7 +25,7 @@ bun run preview --host 127.0.0.1
 
 `check` synchronizes framework types and runs strict Svelte/TypeScript checking. The static adapter writes the deployable site to `build/`, including the client-rendered `index.html` fallback. Configure a future static host to serve that fallback for application routes. Generated `.svelte-kit/` server intermediates are build tooling output; the shipped `build/` directory needs no SvelteKit application server. `preview` serves the production build locally and is not a hosting setup.
 
-Formatting/lint enforcement, hooks, installation metadata/icons, CI, and review configuration are subsequent tickets. There is no service worker or offline cache, product storage, geolocation, map, or authentication in this shell. No product test framework is installed; this foundation is verified through the real install, development, check, and build commands.
+Formatting and lint commands are documented in [Code checks](docs/tooling.md). Hooks, installation metadata/icons, CI, and review configuration are subsequent tickets. There is no service worker or offline cache, product storage, geolocation, map, or authentication in this shell. No product test framework is installed; this foundation is verified through the real install, development, check, and build commands.
 
 ## Code organization
 

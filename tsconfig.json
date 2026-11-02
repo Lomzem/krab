@@ -11,11 +11,6 @@
     "strict": true,
     "moduleResolution": "bundler"
   },
-  "include": [
-    "src",
-    "*.ts"
-  ],
-  "exclude": [
-    "src/service-worker"
-  ]
+  "include": ["src", "*.ts", "scripts"],
+  "exclude": ["src/service-worker"]
 }

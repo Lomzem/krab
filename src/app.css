@@ -47,7 +47,7 @@
   }
 
   .cn-badge-variant-destructive {
-    @apply bg-destructive/10 [a]:hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 text-destructive dark:bg-destructive/20;
+    @apply bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20;
   }
 
   .cn-badge-variant-ghost {
@@ -57,5 +57,4 @@
   .cn-badge-variant-link {
     @apply text-primary underline-offset-4 hover:underline;
   }
-
 }
