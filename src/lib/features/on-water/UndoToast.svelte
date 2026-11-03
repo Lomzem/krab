@@ -1,9 +1,13 @@
 <script lang="ts">
   import { Countdown } from './countdown';
-  import type { Notice, Retry } from './on-water.svelte';
+  import type { Notice, Offer, Retry, Undo } from './on-water.svelte';
 
-  const UNDO_MS = 8000;
-  const NOTE_MS = 4000;
+  const SHOWN_MS: Record<Offer['action'], number | null> = {
+    none: 4000,
+    'undo-drop': 8000,
+    restore: 8000,
+    retry: null
+  };
 
   let {
     notice,
@@ -12,7 +16,7 @@
     ondismiss
   }: {
     notice: Notice | null;
-    onundo: (undo: NonNullable<Notice['undo']>) => void;
+    onundo: (undo: Undo) => void;
     onretry: (retry: Retry) => void;
     ondismiss: (key: number) => void;
   } = $props();
@@ -20,9 +24,11 @@
   let countdown: Countdown | null = null;
 
   $effect(() => {
-    if (!notice || notice.retry) return;
+    if (!notice) return;
+    const shownMs = SHOWN_MS[notice.offer.action];
+    if (shownMs === null) return;
     const { key } = notice;
-    const current = new Countdown(notice.undo ? UNDO_MS : NOTE_MS, () => {
+    const current = new Countdown(shownMs, () => {
       ondismiss(key);
     });
     countdown = current;
@@ -54,8 +60,8 @@
         onfocusout={release('focus')}
       >
         <p class="flex-1 py-1.5 text-[17px] font-semibold">{notice.text}</p>
-        {#if notice.undo}
-          {@const undo = notice.undo}
+        {#if notice.offer.action === 'undo-drop' || notice.offer.action === 'restore'}
+          {@const undo = notice.offer}
           <button
             type="button"
             class="min-h-11 min-w-11 rounded-control px-4 text-[17px] font-bold text-primary-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tab-mark"
@@ -63,9 +69,8 @@
               onundo(undo);
             }}>Undo</button
           >
-        {/if}
-        {#if notice.retry}
-          {@const retry = notice.retry}
+        {:else if notice.offer.action === 'retry'}
+          {@const retry = notice.offer.retry}
           {@const key = notice.key}
           <button
             type="button"

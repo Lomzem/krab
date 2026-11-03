@@ -27,7 +27,7 @@ bun run preview --host 127.0.0.1
 
 `check` synchronizes framework types and runs strict Svelte/TypeScript checking. The static adapter writes the deployable site to `build/`, including the client-rendered `index.html` fallback. Configure a future static host to serve that fallback for application routes. Generated `.svelte-kit/` server intermediates are build tooling output; the shipped `build/` directory needs no SvelteKit application server. `preview` serves the production build locally and is not a hosting setup.
 
-Formatting, lint and test commands are documented in [Code checks](docs/tooling.md). Commit hooks and CI use the shared commands below. There is no service worker or offline cache, map, or authentication yet.
+Formatting, lint and test commands are documented in [Code checks](docs/tooling.md). Commit hooks and CI use the shared commands below. After one online load the service worker keeps the app shell for offline use; see [Offline shell and updates](docs/offline.md) for the caching contract, hosting headers and kill switch. There is no map or authentication yet.
 
 ## Tests
 
@@ -36,7 +36,7 @@ bun run test:unit
 bun run test:e2e:container
 ```
 
-`test:unit` runs Vitest against the trip module's public interface over `fake-indexeddb`, with a fixed clock and position source. `test:e2e:container` builds the site and runs the Playwright WebKit suite with iPhone emulation, an emulated made-up position and axe (WCAG 2.2 AA, light and dark) inside the official `mcr.microsoft.com/playwright:v<version>-noble` image whose version matches the installed `@playwright/test`, because WebKit does not launch natively on every Linux host. It needs Docker. Where WebKit runs natively (as in CI), `bun run build && bun run test:e2e` runs the same suite directly. Test output goes to the ignored `test-results/`.
+`test:unit` runs Vitest against the trip module's public interface over `fake-indexeddb`, with a fixed clock and position source. `test:e2e:container` builds the site twice (the second build stands in for an update) and runs the Playwright WebKit suite with iPhone emulation, an emulated made-up position and axe (WCAG 2.2 AA, light and dark) inside the official `mcr.microsoft.com/playwright:v<version>-noble` image whose version matches the installed `@playwright/test`, because WebKit does not launch natively on every Linux host. It needs Docker. Where WebKit runs natively (as in CI), `bun run build && bun run build:next && bun run test:e2e` runs the same suite directly. Test output goes to the ignored `test-results/`.
 
 ## Installation assets
 
@@ -44,7 +44,7 @@ The static shell links a standalone web app manifest and a 180px Apple touch ico
 
 After each build, run `bun run check:assets` from the repository root. This single check parses the emitted HTML and manifest, resolves the start URL and icon references inside `build/`, verifies PNG dimensions, and checks the shell's installation presentation metadata. It uses Bun's HTMLRewriter and requires no running server. A suitable HTTPS origin is needed for installation; hosting is deferred.
 
-Installation metadata does not provide offline startup. No service worker or offline cache is included. Automated asset verification does not establish actual iPhone installation or launch behavior; no manual device check is required for the scaffold.
+Offline startup comes from the service worker described in [Offline shell and updates](docs/offline.md). Automated asset verification does not establish actual iPhone installation or launch behavior; no manual device check is required for the scaffold.
 
 ## Code organization
 

@@ -8,6 +8,8 @@ const run = (command: string, args: string[]) =>
 const test = (image: string) => {
   const build = run('bun', ['run', 'build']);
   if (build !== 0) return build;
+  const next = run('bun', ['run', 'build:next']);
+  if (next !== 0) return next;
   const { uid, gid } = userInfo();
   return run('docker', [
     'run',

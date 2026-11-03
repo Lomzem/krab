@@ -1,12 +1,16 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { keepScreenAwakeWhile } from '#lib/features/app-shell/index.js';
   import { PositionWatch } from '#lib/features/location/index.js';
+  import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
   import DropControl from './DropControl.svelte';
   import GearList from './GearList.svelte';
+  import { sheetSubject } from './gear-sheet';
+  import GearSheet from './GearSheet.svelte';
   import GettingPosition from './GettingPosition.svelte';
   import LocationIntro from './LocationIntro.svelte';
   import LocationStatus from './LocationStatus.svelte';
-  import { OnWater, type Retry } from './on-water.svelte';
+  import { OnWater, type Retry, type Undo } from './on-water.svelte';
   import {
     locationExplained,
     rememberLocationExplained,
@@ -21,12 +25,17 @@
 
   const watch = new PositionWatch();
   const water = new OnWater(watch);
+  keepScreenAwakeWhile(() => water.trip !== null);
 
   let tab = $state<Tab>('map');
   let kind = $state(savedKind());
   let explained = $state(locationExplained());
   let now = $state(Date.now());
   let dropButton = $state<HTMLButtonElement>();
+  let sheetDropId = $state<string | null>(null);
+  let sheetOpener: HTMLElement | null = null;
+
+  const subject = $derived(sheetSubject(water.trip, sheetDropId));
 
   $effect(() => {
     const timer = setInterval(() => {
@@ -69,9 +78,27 @@
     });
   };
 
-  const undo = (target: { dropId: string; name: string }) => {
+  const undo = (target: Undo) => {
     void water.undo(target).then(() => {
       dropButton?.focus();
+    });
+  };
+
+  const openSheet = (dropId: string, opener: HTMLElement) => {
+    sheetOpener = opener;
+    sheetDropId = dropId;
+  };
+
+  const closeSheet = () => {
+    sheetDropId = null;
+  };
+
+  const sheetReturnFocus = () =>
+    sheetOpener?.isConnected ? sheetOpener : dropButton;
+
+  const deleteDrop = (dropId: string) => {
+    void water.remove(dropId).then((deleted) => {
+      if (deleted) closeSheet();
     });
   };
 </script>
@@ -87,7 +114,7 @@
       </section>
     {:else if tab === 'gear'}
       {#if water.ready}
-        <GearList trip={water.trip} from={watch.fix} {now} />
+        <GearList trip={water.trip} from={watch.fix} {now} onopen={openSheet} />
       {/if}
     {:else}
       <section class="px-4 pt-5">
@@ -96,6 +123,24 @@
       </section>
     {/if}
   </main>
+
+  <GearSheet
+    {subject}
+    onclose={closeSheet}
+    onsave={(dropId: string, edit: DropEdit, nextKind: Kind | null) =>
+      water.save(dropId, edit, nextKind)}
+    returnFocus={sheetReturnFocus}
+  >
+    {#snippet endAction(target: Drop)}
+      <button
+        type="button"
+        class="min-h-13 rounded-control border-2 border-destructive px-4 text-[18px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        onclick={() => {
+          deleteDrop(target.id);
+        }}>Delete drop</button
+      >
+    {/snippet}
+  </GearSheet>
 
   <UndoToast
     notice={water.notice}

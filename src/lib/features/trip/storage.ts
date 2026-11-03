@@ -51,7 +51,9 @@ export type Change<A> = {
   result: A;
 };
 
-type Plan<A> = (trips: readonly Trip[]) => Change<A>;
+export type Plan<A, E> = (
+  trips: readonly Trip[]
+) => Result.Result<Change<A>, E>;
 
 type Started = { tx: IDBTransaction; store: IDBObjectStore; read: IDBRequest };
 
@@ -73,19 +75,34 @@ const begin = (db: IDBDatabase, mode: IDBTransactionMode) =>
     readAll
   );
 
-const writeChange = <A>(store: IDBObjectStore, plan: Plan<A>, rows: unknown) =>
-  Result.flatMap(parseTrips(rows), (trips) =>
-    Result.try(() => {
-      const change = plan(trips);
+const apply = <A>(store: IDBObjectStore, change: Change<A>) =>
+  Result.try({
+    try: () => {
       for (const trip of change.put) store.put(trip);
       for (const id of change.remove) store.delete(id);
       return change.result;
-    })
+    },
+    catch: failed
+  });
+
+const decide = <A, E>(plan: Plan<A, E>, trips: readonly Trip[]) =>
+  Result.flatMap(
+    Result.try({ try: () => plan(trips), catch: failed }),
+    (planned: Result.Result<Change<A>, E>) => planned
   );
 
-const finish = <A>({ tx, store, read }: Started, plan: Plan<A>) =>
-  Effect.callback<A, StorageFailed>((resume) => {
-    let outcome: Result.Result<A, unknown> | null = null;
+const writeChange = <A, E>(
+  store: IDBObjectStore,
+  plan: Plan<A, E>,
+  rows: unknown
+): Result.Result<A, E | StorageFailed> =>
+  Result.flatMap(Result.mapError(parseTrips(rows), failed), (trips) =>
+    Result.flatMap(decide(plan, trips), (change) => apply(store, change))
+  );
+
+const finish = <A, E>({ tx, store, read }: Started, plan: Plan<A, E>) =>
+  Effect.callback<A, E | StorageFailed>((resume) => {
+    let outcome: Result.Result<A, E | StorageFailed> | null = null;
     read.onsuccess = () => {
       outcome = writeChange(store, plan, read.result);
       if (Result.isFailure(outcome)) abortQuietly(tx);
@@ -94,21 +111,29 @@ const finish = <A>({ tx, store, read }: Started, plan: Plan<A>) =>
       resume(
         outcome && Result.isSuccess(outcome)
           ? Effect.succeed(outcome.success)
-          : Effect.fail(failed(outcome?.failure ?? tx.error))
+          : Effect.fail(outcome?.failure ?? failed(tx.error))
       );
     };
     tx.onabort = () => {
-      const cause =
-        outcome && Result.isFailure(outcome) ? outcome.failure : tx.error;
-      resume(Effect.fail(failed(cause)));
+      resume(
+        Effect.fail(
+          outcome && Result.isFailure(outcome)
+            ? outcome.failure
+            : failed(tx.error)
+        )
+      );
     };
   });
 
-const isClosed = (cause: unknown) =>
-  cause instanceof DOMException && cause.name === 'InvalidStateError';
+const isClosed = (failure: unknown) =>
+  failure instanceof StorageFailed &&
+  failure.cause instanceof DOMException &&
+  failure.cause.name === 'InvalidStateError';
 
 export type TripStorage = {
-  readModifyWrite: <A>(plan: Plan<A>) => Effect.Effect<A, StorageFailed>;
+  readModifyWrite: <A, E = never>(
+    plan: Plan<A, E>
+  ) => Effect.Effect<A, E | StorageFailed>;
   readTrips: () => Effect.Effect<readonly Trip[], StorageFailed>;
 };
 
@@ -136,11 +161,11 @@ const ownConnection = (idb: IDBFactory, first: IDBDatabase): TripStorage => {
   const connection = Effect.suspend(() =>
     current ? Effect.succeed(current) : Effect.map(openConnection(idb), keep)
   );
-  const forgetIfClosed = (db: IDBDatabase) => (failure: StorageFailed) =>
+  const forgetIfClosed = (db: IDBDatabase) => (failure: unknown) =>
     Effect.sync(() => {
-      if (isClosed(failure.cause)) forget(db);
+      if (isClosed(failure)) forget(db);
     });
-  const transact = <A>(mode: IDBTransactionMode, plan: Plan<A>) =>
+  const transact = <A, E>(mode: IDBTransactionMode, plan: Plan<A, E>) =>
     Effect.flatMap(connection, (db) =>
       begin(db, mode).pipe(
         Effect.flatMap((started) => finish(started, plan)),
@@ -150,7 +175,9 @@ const ownConnection = (idb: IDBFactory, first: IDBDatabase): TripStorage => {
   return {
     readModifyWrite: (plan) => transact('readwrite', plan),
     readTrips: () =>
-      transact('readonly', (trips) => ({ put: [], remove: [], result: trips }))
+      transact('readonly', (trips) =>
+        Result.succeed({ put: [], remove: [], result: trips })
+      )
   };
 };
 
