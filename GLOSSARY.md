@@ -44,5 +44,5 @@ How long a drop's gear has been in the water, from the drop until now, or until 
 _Avoid_: Soak, soak time
 
 **Catch**:
-The crabs kept and released from one drop. Zero kept and zero released means nothing was caught; no catch means it was not recorded.
+The crabs kept and released from one drop. Zero kept and zero released means nothing was caught; no catch means it was not recorded. Only a collected drop can have a catch, on an active or a past trip: an active drop or an uncollected drop never came out of the water, so it has none.
 _Avoid_: Haul
