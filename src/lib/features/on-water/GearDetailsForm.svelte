@@ -2,13 +2,12 @@
   import { tick, type Snippet } from 'svelte';
   import {
     canChangeKind,
-    type Drop,
     type DropEdit,
-    type Kind,
-    type Trip
+    type Kind
   } from '#lib/features/trip/index.js';
   import DetailsFields from './DetailsFields.svelte';
   import { draftOf, editOf } from './details-draft';
+  import type { SheetSubject } from './gear-sheet';
   import KindField from './KindField.svelte';
   import type { SaveProblem } from './on-water.svelte';
 
@@ -19,20 +18,14 @@
   };
 
   let {
-    trip,
-    drop,
-    stored,
-    name,
+    subject,
     formId,
     editKind,
     onsave,
     onsaved,
     children
   }: {
-    trip: Trip;
-    drop: Drop;
-    stored: Kind;
-    name: string;
+    subject: SheetSubject;
     formId: string;
     editKind: boolean;
     onsave: (
@@ -44,6 +37,8 @@
     children?: Snippet;
   } = $props();
 
+  const drop = $derived(subject.drop);
+  const stored = $derived(subject.gear.kind);
   const idPrefix = $derived(`gear-${drop.id}`);
   const initial = () => ({ draft: draftOf(drop), kind: stored });
   let draft = $state(initial().draft);
@@ -75,8 +70,8 @@
     <KindField
       bind:kind
       {stored}
-      {name}
-      locked={!canChangeKind(trip, drop.gearId)}
+      name={subject.name}
+      locked={!canChangeKind(subject.trip, drop.gearId)}
       {idPrefix}
     />
   {/if}

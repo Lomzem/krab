@@ -7,7 +7,7 @@ const gearRow = (page: Page, name: string) =>
 const focusIsInside = (dialog: Locator) =>
   dialog.evaluate((element) => element.contains(document.activeElement));
 
-test('the gear sheet keeps edits as a draft, saves details and kind, and deletes with undo', async ({
+test('the gear sheet keeps edits as a draft, saves details and kind, and deletes once with undo', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -70,7 +70,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(label).toHaveValue('red float');
   await expect(depth).toHaveValue('12.5');
 
-  await sheet.getByRole('button', { name: 'Delete drop' }).click();
+  await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
   await expect(sheet).toBeHidden();
   await expect(
     page.getByRole('button', { name: /^Drop (pot|net)$/ })

@@ -3,6 +3,7 @@
   import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
   import DropControl from './DropControl.svelte';
   import GearList from './GearList.svelte';
+  import { sheetSubject } from './gear-sheet';
   import GearSheet from './GearSheet.svelte';
   import LocationIntro from './LocationIntro.svelte';
   import { OnWater, type Undo } from './on-water.svelte';
@@ -29,9 +30,7 @@
   let sheetDropId = $state<string | null>(null);
   let sheetOpener: HTMLElement | null = null;
 
-  const sheetDrop = $derived(
-    water.trip?.drops.find((item) => item.id === sheetDropId) ?? null
-  );
+  const subject = $derived(sheetSubject(water.trip, sheetDropId));
 
   $effect(() => {
     const timer = setInterval(() => {
@@ -111,8 +110,7 @@
   </main>
 
   <GearSheet
-    trip={water.trip}
-    drop={sheetDrop}
+    {subject}
     onclose={closeSheet}
     onsave={(dropId: string, edit: DropEdit, nextKind: Kind | null) =>
       water.save(dropId, edit, nextKind)}

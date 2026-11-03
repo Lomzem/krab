@@ -1,9 +1,12 @@
 <script lang="ts">
   import { Countdown } from './countdown';
-  import type { Notice } from './on-water.svelte';
+  import type { Notice, Offer, Undo } from './on-water.svelte';
 
-  const UNDO_MS = 8000;
-  const NOTE_MS = 4000;
+  const SHOWN_MS: Record<Offer['action'], number> = {
+    none: 4000,
+    'undo-drop': 8000,
+    restore: 8000
+  };
 
   let {
     notice,
@@ -11,7 +14,7 @@
     ondismiss
   }: {
     notice: Notice | null;
-    onundo: (undo: NonNullable<Notice['undo']>) => void;
+    onundo: (undo: Undo) => void;
     ondismiss: (key: number) => void;
   } = $props();
 
@@ -20,7 +23,7 @@
   $effect(() => {
     if (!notice) return;
     const { key } = notice;
-    const current = new Countdown(notice.undo ? UNDO_MS : NOTE_MS, () => {
+    const current = new Countdown(SHOWN_MS[notice.offer.action], () => {
       ondismiss(key);
     });
     countdown = current;
@@ -52,8 +55,8 @@
         onfocusout={release('focus')}
       >
         <p class="flex-1 text-[17px] font-semibold">{notice.text}</p>
-        {#if notice.undo}
-          {@const undo = notice.undo}
+        {#if notice.offer.action !== 'none'}
+          {@const undo = notice.offer}
           <button
             type="button"
             class="min-h-11 min-w-11 rounded-control px-4 text-[17px] font-bold text-primary-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tab-mark"

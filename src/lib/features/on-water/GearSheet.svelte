@@ -1,12 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import {
-    gearName,
-    type Drop,
-    type DropEdit,
-    type Kind,
-    type Trip
-  } from '#lib/features/trip/index.js';
+  import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
+  import type { SheetSubject } from './gear-sheet';
   import GearDetailsForm from './GearDetailsForm.svelte';
   import GearIcon from './GearIcon.svelte';
   import type { SaveProblem } from './on-water.svelte';
@@ -16,8 +11,7 @@
   const FORM_ID = 'gear-sheet-form';
 
   let {
-    trip,
-    drop,
+    subject,
     editKind = true,
     onclose,
     onsave,
@@ -25,8 +19,7 @@
     actions,
     endAction
   }: {
-    trip: Trip | null;
-    drop: Drop | null;
+    subject: SheetSubject | null;
     editKind?: boolean;
     onclose: () => void;
     onsave: (
@@ -38,38 +31,31 @@
     actions?: Snippet<[Drop]>;
     endAction?: Snippet<[Drop]>;
   } = $props();
-
-  const gear = $derived(
-    drop ? trip?.gear.find((item) => item.id === drop.gearId) : undefined
-  );
 </script>
 
-<Sheet open={Boolean(gear)} titleId={TITLE_ID} {onclose} {returnFocus}>
+<Sheet open={subject !== null} titleId={TITLE_ID} {onclose} {returnFocus}>
   {#snippet heading()}
-    {#if gear}
+    {#if subject}
       <h2
         id={TITLE_ID}
         class="flex items-center gap-2.5 text-[26px] leading-tight font-bold"
       >
-        <GearIcon kind={gear.kind} size={28} />
-        {gearName(gear)}
+        <GearIcon kind={subject.gear.kind} size={28} />
+        {subject.name}
       </h2>
     {/if}
   {/snippet}
 
-  {#if trip && drop && gear}
-    {#key drop.id}
+  {#if subject}
+    {#key subject.drop.id}
       <GearDetailsForm
-        {trip}
-        {drop}
-        stored={gear.kind}
-        name={gearName(gear)}
+        {subject}
         formId={FORM_ID}
         {editKind}
         {onsave}
         onsaved={onclose}
       >
-        {@render actions?.(drop)}
+        {@render actions?.(subject.drop)}
       </GearDetailsForm>
     {/key}
   {/if}
@@ -81,8 +67,8 @@
       class="min-h-13 flex-1 rounded-control bg-primary px-4 text-[18px] font-bold text-primary-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >Save</button
     >
-    {#if drop}
-      {@render endAction?.(drop)}
+    {#if subject}
+      {@render endAction?.(subject.drop)}
     {/if}
   {/snippet}
 </Sheet>

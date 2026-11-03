@@ -3,30 +3,35 @@ import {
   openTripBook,
   StorageFailed,
   type Deletion,
+  type DropNotFound,
   type DropEdit,
+  type InvalidDepth,
+  type KindLocked,
   type Kind,
   type PositionSource,
   type Trip,
   type TripBook
 } from '#lib/features/trip/index.js';
 
-export type Undo =
-  | { action: 'drop'; dropId: string; name: string }
-  | { action: 'delete'; deletion: Deletion; name: string };
+export type Offer =
+  | { action: 'none' }
+  | { action: 'undo-drop'; dropId: string; name: string }
+  | { action: 'restore'; deletion: Deletion; name: string };
 
-export type Notice = {
-  key: number;
-  text: string;
-  undo: Undo | null;
-};
+export type Undo = Exclude<Offer, { action: 'none' }>;
+
+export type Notice = { key: number; text: string; offer: Offer };
 
 export type SaveProblem = 'depth' | 'kind' | 'storage';
 
-const refusal = (
-  failure: { _tag: string },
-  tag: string,
-  problem: SaveProblem
-): SaveProblem => (failure._tag === tag ? problem : 'storage');
+type SaveFailure = DropNotFound | InvalidDepth | KindLocked | StorageFailed;
+
+const PROBLEMS: Record<SaveFailure['_tag'], SaveProblem> = {
+  InvalidDepth: 'depth',
+  KindLocked: 'kind',
+  DropNotFound: 'storage',
+  StorageFailed: 'storage'
+};
 
 const outcome = <A, E>(
   effect: Effect.Effect<A, E>
@@ -81,7 +86,7 @@ export class OnWater {
     const placed = exit.value;
     this.trip = placed.trip;
     this.#say(`${placed.name} dropped`, {
-      action: 'drop',
+      action: 'undo-drop',
       dropId: placed.drop.id,
       name: placed.name
     });
@@ -94,7 +99,7 @@ export class OnWater {
   async undo(undo: Undo) {
     const book = await this.#book;
     if (!book) return;
-    if (undo.action === 'drop') {
+    if (undo.action === 'undo-drop') {
       const exit = await Effect.runPromiseExit(book.undoDrop(undo.dropId));
       if (Exit.isFailure(exit)) {
         this.#say("Couldn't undo. Try again.", undo);
@@ -111,7 +116,7 @@ export class OnWater {
         retry
           ? "Couldn't undo. Try again."
           : `Couldn't restore ${undo.name}. Another trip has started.`,
-        retry ? undo : null
+        retry ? undo : undefined
       );
       return;
     }
@@ -128,15 +133,11 @@ export class OnWater {
     const book = await this.#book;
     if (!book) return 'storage';
     const updated = await outcome(book.updateDrop(dropId, edit));
-    if (Result.isFailure(updated)) {
-      return refusal(updated.failure, 'InvalidDepth', 'depth');
-    }
+    if (Result.isFailure(updated)) return PROBLEMS[updated.failure._tag];
     this.#show(updated.success);
     if (!kind) return null;
     const changed = await outcome(book.changeKind(dropId, kind));
-    if (Result.isFailure(changed)) {
-      return refusal(changed.failure, 'KindLocked', 'kind');
-    }
+    if (Result.isFailure(changed)) return PROBLEMS[changed.failure._tag];
     this.#show(changed.success.trip);
     return null;
   }
@@ -146,12 +147,14 @@ export class OnWater {
     if (!book) return false;
     const deleted = await outcome(book.deleteDrop(dropId));
     if (Result.isFailure(deleted)) {
+      const alreadyGone = deleted.failure._tag === 'DropNotFound';
+      if (alreadyGone) return true;
       this.#say("Couldn't delete the drop. Try again.");
       return false;
     }
     const { trip, name, deletion } = deleted.success;
     if (this.trip?.id === deletion.trip.id) this.trip = trip;
-    this.#say(`${name} deleted`, { action: 'delete', deletion, name });
+    this.#say(`${name} deleted`, { action: 'restore', deletion, name });
     return true;
   }
 
@@ -172,8 +175,8 @@ export class OnWater {
     if (this.trip?.id === trip.id) this.trip = trip;
   }
 
-  #say(text: string, undo: Notice['undo'] = null) {
+  #say(text: string, offer: Offer = { action: 'none' }) {
     this.#noticeKey += 1;
-    this.notice = { key: this.#noticeKey, text, undo };
+    this.notice = { key: this.#noticeKey, text, offer };
   }
 }
