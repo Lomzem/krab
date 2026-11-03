@@ -1,11 +1,13 @@
 import { Effect } from 'effect';
-import { IDBDatabase, IDBFactory } from 'fake-indexeddb';
-import { afterEach, expect, it, vi } from 'vitest';
+import { IDBDatabase, IDBFactory, IDBTransaction } from 'fake-indexeddb';
+import { afterEach, assert, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   gearInWater,
   openTripBook,
   type Drop,
   type Fix,
+  type NoPosition,
+  type Position,
   type Trip,
   type TripBook
 } from './index';
@@ -76,7 +78,7 @@ const harness = () => {
     tell();
   };
   const open = () => Effect.runPromise(openTripBook(deps));
-  return { state, open, advance, report, deny, idb };
+  return { state, idb, open, advance, report, deny };
 };
 
 type Harness = ReturnType<typeof harness>;
@@ -101,6 +103,42 @@ const abortNextTransaction = () => {
     });
     return tx;
   });
+};
+
+const closeConnectionAtNextTransaction = () => {
+  const spy = vi.spyOn(IDBDatabase.prototype, 'transaction');
+  spy.mockImplementationOnce(function (
+    this: IDBDatabase,
+    ...args: Parameters<IDBDatabase['transaction']>
+  ) {
+    spy.mockRestore();
+    this.close();
+    return this.transaction(...args);
+  });
+};
+
+const request = <A>(make: () => IDBRequest<A>) =>
+  new Promise<A>((resolve, reject) => {
+    const pending = make();
+    pending.onsuccess = () => {
+      resolve(pending.result);
+    };
+    pending.onerror = () => {
+      reject(pending.error ?? new Error('IndexedDB request failed'));
+    };
+  });
+
+const withStoredTrips = async <A>(
+  idb: IDBFactory,
+  mode: IDBTransactionMode,
+  use: (trips: IDBObjectStore) => IDBRequest<A>
+) => {
+  const db = await request(() => idb.open('krab', 1));
+  const result = await request(() =>
+    use(db.transaction('trips', mode).objectStore('trips'))
+  );
+  db.close();
+  return result;
 };
 
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect);
@@ -130,13 +168,13 @@ it('waits for a late fix and stores it with the tap time', async () => {
   const book = await open();
 
   const attempt = await run(book.placeDrop('pot'));
-  const waitingAtTap = attempt.gettingPosition();
+  const phaseAtTap = attempt.phase();
   advance(12_000);
   report({ lat: 0.0001, lon: -140, accuracyM: 9, at: state.now });
   const placed = await run(attempt.result);
 
-  expect(waitingAtTap).toBe(true);
-  expect(attempt.gettingPosition()).toBe(false);
+  expect(phaseAtTap).toBe('acquiring');
+  expect(attempt.phase()).toBe('settled');
   expect(placed.drop.placedAt).toBe(T0);
   expect(placed.drop.position).toEqual({
     lat: 0.0001,
@@ -146,22 +184,31 @@ it('waits for a late fix and stores it with the tap time', async () => {
   expect(placed.drop.noPosition).toBeNull();
 });
 
-it('saves without a position 20 s after the tap when no fix arrives', async () => {
+const drain = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 10);
+  });
+
+it('saves nothing until 20 s after the tap, then saves without a position', async () => {
   const { state, open, advance } = harness();
   state.fix = null;
   const book = await open();
 
   const attempt = await run(book.placeDrop('net'));
   advance(19_999);
-  const waitingJustBefore = attempt.gettingPosition();
-  advance(1);
-  const placed = await run(attempt.result);
+  await drain();
+  expect(await run(book.activeTrip())).toBeNull();
 
-  expect(waitingJustBefore).toBe(true);
+  advance(1);
+  await drain();
+  const saved = await run(book.activeTrip());
+  expect(saved?.gear).toMatchObject([{ kind: 'net', number: 1 }]);
+  expect(saved?.drops).toMatchObject([
+    { placedAt: T0, position: null, noPosition: 'no-fix' }
+  ]);
+
+  const placed = await run(attempt.result);
   expect(placed.name).toBe('Net 1');
-  expect(placed.drop.placedAt).toBe(T0);
-  expect(placed.drop.position).toBeNull();
-  expect(placed.drop.noPosition).toBe('no-fix');
 });
 
 it('stores nothing when the wait is cancelled, even if a fix arrives later', async () => {
@@ -178,7 +225,7 @@ it('stores nothing when the wait is cancelled, even if a fix arrives later', asy
   const active = await run(book.activeTrip());
 
   expect(failure._tag).toBe('DropCancelled');
-  expect(attempt.gettingPosition()).toBe(false);
+  expect(attempt.phase()).toBe('settled');
   expect(active).toBeNull();
 });
 
@@ -199,22 +246,32 @@ it('records the skipped reason when saved without a position during the wait', a
   expect(active?.drops).toEqual([placed.drop]);
 });
 
-it('records the denied reason without waiting, or as soon as location is denied', async () => {
+it('records the denied reason as soon as location is denied during the wait', async () => {
   const { state, open, advance, deny } = harness();
   state.fix = null;
   const book = await open();
 
-  const waiting = await run(book.placeDrop('pot'));
+  const attempt = await run(book.placeDrop('pot'));
   advance(2000);
   deny();
-  const deniedDuringWait = await run(waiting.result);
-  const deniedAtTap = await run(book.placeDrop('net'));
-  const waitedAtTap = deniedAtTap.gettingPosition();
-  const placed = await run(deniedAtTap.result);
+  const placed = await run(attempt.result);
 
-  expect(deniedDuringWait.drop.placedAt).toBe(T0);
-  expect(deniedDuringWait.drop.noPosition).toBe('denied');
-  expect(waitedAtTap).toBe(false);
+  expect(placed.drop.placedAt).toBe(T0);
+  expect(placed.drop.position).toBeNull();
+  expect(placed.drop.noPosition).toBe('denied');
+});
+
+it('records the denied reason without waiting when location is denied, even over a fresh fix', async () => {
+  const { state, open, report, deny } = harness();
+  const book = await open();
+  report({ ...SEA, accuracyM: 5, at: state.now });
+  deny();
+
+  const attempt = await run(book.placeDrop('net'));
+  const phaseAtTap = attempt.phase();
+  const placed = await run(attempt.result);
+
+  expect(phaseAtTap).toBe('saving');
   expect(placed.drop.position).toBeNull();
   expect(placed.drop.noPosition).toBe('denied');
 });
@@ -238,7 +295,7 @@ it('flags a fix worse than 50 m as rough, in feet, on the drop and its gear row'
   ]);
 });
 
-it('reports a failed save as not saved, stores nothing, and retries the same drop', async () => {
+it('stores nothing when a save fails, and replaying its Retry saves that drop once under one number', async () => {
   const { state, open, advance, report } = harness();
   state.fix = { ...SEA, accuracyM: 7, at: T0 - 1000 };
   const book = await open();
@@ -247,18 +304,135 @@ it('reports a failed save as not saved, stores nothing, and retries the same dro
   const attempt = await run(book.placeDrop('pot'));
   const failure = await run(Effect.flip(attempt.result));
   const afterFailure = await run(book.activeTrip());
+  assert(failure._tag === 'DropNotSaved');
   advance(30_000);
   report({ lat: 0.01, lon: -140, accuracyM: 4, at: state.now });
-  const retried =
-    failure._tag === 'DropNotSaved' ? await run(failure.retry) : null;
+  const first = await run(failure.retry);
+  const unrelated = await place(book, 'pot');
+  const again = await run(failure.retry);
+  const concurrent = await run(
+    Effect.all([failure.retry, failure.retry], { concurrency: 'unbounded' })
+  );
+  const reopened = await run((await open()).activeTrip());
+  const next = await place(book, 'pot');
+
+  expect(afterFailure).toBeNull();
+  expect(first.name).toBe('Pot 1');
+  expect(first.drop.placedAt).toBe(T0);
+  expect(first.drop.position).toEqual({ lat: 0, lon: -140, accuracyM: 7 });
+  expect(
+    [again, ...concurrent].map((replay) => [replay.drop.id, replay.name])
+  ).toEqual([
+    [first.drop.id, 'Pot 1'],
+    [first.drop.id, 'Pot 1'],
+    [first.drop.id, 'Pot 1']
+  ]);
+  expect(unrelated.name).toBe('Pot 2');
+  expect(reopened?.drops).toEqual([first.drop, unrelated.drop]);
+  expect(reopened?.gear.map((gear) => gear.number)).toEqual([1, 2]);
+  expect(next.name).toBe('Pot 3');
+});
+
+it('types a drop location as a position or a reason, never both or neither', () => {
+  type Placed<L> = Omit<Drop, 'position' | 'noPosition'> & L;
+
+  expectTypeOf<
+    Placed<{ position: Position; noPosition: null }>
+  >().toExtend<Drop>();
+  expectTypeOf<
+    Placed<{ position: null; noPosition: NoPosition }>
+  >().toExtend<Drop>();
+  expectTypeOf<
+    Placed<{ position: Position; noPosition: NoPosition }>
+  >().not.toExtend<Drop>();
+  expectTypeOf<
+    Placed<{ position: null; noPosition: null }>
+  >().not.toExtend<Drop>();
+});
+
+it('fails a save on a connection that closed as not saved, and Retry saves it once on a fresh connection', async () => {
+  const { open } = harness();
+  const book = await open();
+  closeConnectionAtNextTransaction();
+
+  const attempt = await run(book.placeDrop('pot'));
+  const failure = await run(Effect.flip(attempt.result));
+  assert(failure._tag === 'DropNotSaved');
+  const retried = await run(failure.retry);
+  const reopened = await run((await open()).activeTrip());
+
+  expect(retried.name).toBe('Pot 1');
+  expect(reopened?.drops).toEqual([retried.drop]);
+});
+
+it('lets another connection delete the database, then saves the next drop on a fresh connection', async () => {
+  const { idb, open } = harness();
+  const book = await open();
+  await place(book, 'pot');
+
+  await request(() => idb.deleteDatabase('krab'));
+  const next = await place(book, 'net');
+  const reopened = await run((await open()).activeTrip());
+
+  expect(next.name).toBe('Net 1');
+  expect(reopened?.drops).toEqual([next.drop]);
+});
+
+it('reports a storage error thrown while starting a save as not saved, and leaves nothing behind', async () => {
+  const { open } = harness();
+  const book = await open();
+  const spy = vi.spyOn(IDBTransaction.prototype, 'objectStore');
+  spy.mockImplementationOnce(function (this: IDBTransaction) {
+    spy.mockRestore();
+    return this.objectStore('a-store-that-was-never-created');
+  });
+
+  const attempt = await run(book.placeDrop('pot'));
+  const failure = await run(Effect.flip(attempt.result));
   const active = await run(book.activeTrip());
 
   expect(failure._tag).toBe('DropNotSaved');
-  expect(afterFailure).toBeNull();
-  expect(retried?.name).toBe('Pot 1');
-  expect(retried?.drop.placedAt).toBe(T0);
-  expect(retried?.drop.position).toEqual({ lat: 0, lon: -140, accuracyM: 7 });
-  expect(active?.drops).toEqual([retried?.drop]);
+  expect(active).toBeNull();
+});
+
+it('refuses a stored trip whose drop has both a position and a reason, and writes nothing', async () => {
+  const { idb, open } = harness();
+  const book = await open();
+  const contradictory = {
+    id: 'stored-trip',
+    startedAt: T0,
+    endedAt: null,
+    gear: [{ id: 'stored-gear', kind: 'pot', number: 1 }],
+    drops: [
+      {
+        id: 'stored-drop',
+        gearId: 'stored-gear',
+        placedAt: T0,
+        position: { ...SEA, accuracyM: 5 },
+        noPosition: 'denied',
+        label: '',
+        bait: '',
+        depthFt: null,
+        notes: '',
+        collectedAt: null,
+        kept: null,
+        released: null
+      }
+    ],
+    next: { pot: 2, net: 1 }
+  };
+  await withStoredTrips(idb, 'readwrite', (trips) => trips.put(contradictory));
+
+  const read = await run(Effect.flip(book.activeTrip()));
+  const attempt = await run(book.placeDrop('pot'));
+  const failure = await run(Effect.flip(attempt.result));
+  const stored = await withStoredTrips(idb, 'readonly', (trips) =>
+    trips.getAll()
+  );
+
+  expect(read._tag).toBe('StorageFailed');
+  expect(failure._tag).toBe('DropNotSaved');
+  expect(stored).toEqual([contradictory]);
 });
 
 it('records gear number, tap time and a fresh fix', async () => {
@@ -299,14 +473,14 @@ it('uses a fix exactly 5 s old at once, but waits when the fix is older', async 
 
   state.fix = { ...SEA, accuracyM: 8, at: T0 - 5000 };
   const fresh = await run(book.placeDrop('pot'));
-  const freshWaits = fresh.gettingPosition();
+  const freshPhase = fresh.phase();
   const placed = await run(fresh.result);
   state.fix = { ...SEA, accuracyM: 8, at: T0 - 5001 };
   const stale = await run(book.placeDrop('net'));
 
-  expect(freshWaits).toBe(false);
+  expect(freshPhase).toBe('saving');
   expect(placed.drop.position).toEqual({ lat: 0, lon: -140, accuracyM: 8 });
-  expect(stale.gettingPosition()).toBe(true);
+  expect(stale.phase()).toBe('acquiring');
 });
 
 it('removes the drop but keeps the trip while other drops remain', async () => {

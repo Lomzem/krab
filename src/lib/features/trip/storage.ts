@@ -1,5 +1,5 @@
-import { Data, Effect, Result } from 'effect';
-import type { Trip } from './types';
+import { Data, Effect, Result, Schema } from 'effect';
+import { Trip } from './types';
 
 export class StorageFailed extends Data.TaggedError('StorageFailed')<{
   readonly cause: unknown;
@@ -9,38 +9,41 @@ const DATABASE = 'krab';
 const VERSION = 1;
 const TRIPS = 'trips';
 
-const upgrade = (request: IDBOpenDBRequest) => {
-  request.result.createObjectStore(TRIPS, { keyPath: 'id' });
-};
+const parseTrips = Schema.decodeUnknownResult(Schema.Array(Trip));
 
-const closeOnVersionChange = (db: IDBDatabase) => {
-  db.onversionchange = () => {
-    db.close();
-  };
-  return db;
-};
+const failed = (cause: unknown) => new StorageFailed({ cause });
 
-const openRequest = (idb: IDBFactory) =>
-  Effect.try({
-    try: () => idb.open(DATABASE, VERSION),
-    catch: (cause) => new StorageFailed({ cause })
+const abortQuietly = (tx: IDBTransaction | null) => {
+  Result.try(() => {
+    tx?.abort();
   });
+};
+
+const upgrade = (request: IDBOpenDBRequest) =>
+  Result.try(() => request.result.createObjectStore(TRIPS, { keyPath: 'id' }));
 
 const awaitOpen = (request: IDBOpenDBRequest) =>
   Effect.callback<IDBDatabase, StorageFailed>((resume) => {
+    let upgradeFailure: unknown = null;
     request.onupgradeneeded = () => {
-      upgrade(request);
+      const upgraded = upgrade(request);
+      if (Result.isSuccess(upgraded)) return;
+      upgradeFailure = upgraded.failure;
+      abortQuietly(request.transaction);
     };
     request.onsuccess = () => {
-      resume(Effect.succeed(closeOnVersionChange(request.result)));
+      resume(Effect.succeed(request.result));
     };
     request.onerror = () => {
-      resume(Effect.fail(new StorageFailed({ cause: request.error })));
+      resume(Effect.fail(failed(upgradeFailure ?? request.error)));
     };
   });
 
-export const openDatabase = (idb: IDBFactory) =>
-  Effect.flatMap(openRequest(idb), awaitOpen);
+const openConnection = (idb: IDBFactory) =>
+  Effect.flatMap(
+    Effect.try({ try: () => idb.open(DATABASE, VERSION), catch: failed }),
+    awaitOpen
+  );
 
 export type Change<A> = {
   put: Trip[];
@@ -48,49 +51,135 @@ export type Change<A> = {
   result: A;
 };
 
-const startTransaction = (db: IDBDatabase, mode: IDBTransactionMode) =>
+export type Plan<A, E> = (
+  trips: readonly Trip[]
+) => Result.Result<Change<A>, E>;
+
+type Started = { tx: IDBTransaction; store: IDBObjectStore; read: IDBRequest };
+
+const readAll = (tx: IDBTransaction) =>
   Effect.try({
-    try: () => db.transaction(TRIPS, mode),
-    catch: (cause) => new StorageFailed({ cause })
+    try: (): Started => {
+      const store = tx.objectStore(TRIPS);
+      return { tx, store, read: store.getAll() };
+    },
+    catch: (cause) => {
+      abortQuietly(tx);
+      return failed(cause);
+    }
   });
 
-const apply = <A>(store: IDBObjectStore, change: Change<A>) => {
-  for (const trip of change.put) store.put(trip);
-  for (const id of change.remove) store.delete(id);
-  return change.result;
-};
+const begin = (db: IDBDatabase, mode: IDBTransactionMode) =>
+  Effect.flatMap(
+    Effect.try({ try: () => db.transaction(TRIPS, mode), catch: failed }),
+    readAll
+  );
 
-export type Plan<A, E> = (trips: Trip[]) => Result.Result<Change<A>, E>;
+const apply = <A>(store: IDBObjectStore, change: Change<A>) =>
+  Result.try({
+    try: () => {
+      for (const trip of change.put) store.put(trip);
+      for (const id of change.remove) store.delete(id);
+      return change.result;
+    },
+    catch: failed
+  });
 
-const runTransaction = <A, E>(tx: IDBTransaction, plan: Plan<A, E>) =>
+const decide = <A, E>(plan: Plan<A, E>, trips: readonly Trip[]) =>
+  Result.flatMap(
+    Result.try({ try: () => plan(trips), catch: failed }),
+    (planned: Result.Result<Change<A>, E>) => planned
+  );
+
+const writeChange = <A, E>(
+  store: IDBObjectStore,
+  plan: Plan<A, E>,
+  rows: unknown
+): Result.Result<A, E | StorageFailed> =>
+  Result.flatMap(Result.mapError(parseTrips(rows), failed), (trips) =>
+    Result.flatMap(decide(plan, trips), (change) => apply(store, change))
+  );
+
+const finish = <A, E>({ tx, store, read }: Started, plan: Plan<A, E>) =>
   Effect.callback<A, E | StorageFailed>((resume) => {
-    const store = tx.objectStore(TRIPS);
-    const read = store.getAll();
-    const outcome: { value?: Result.Result<A, E> } = {};
+    let outcome: Result.Result<A, E | StorageFailed> | null = null;
     read.onsuccess = () => {
-      outcome.value = Result.map(plan(read.result as Trip[]), (change) =>
-        apply(store, change)
-      );
+      outcome = writeChange(store, plan, read.result);
+      if (Result.isFailure(outcome)) abortQuietly(tx);
     };
     tx.oncomplete = () => {
-      resume(Effect.fromResult(outcome.value as Result.Result<A, E>));
+      resume(
+        outcome && Result.isSuccess(outcome)
+          ? Effect.succeed(outcome.success)
+          : Effect.fail(outcome?.failure ?? failed(tx.error))
+      );
     };
     tx.onabort = () => {
-      resume(Effect.fail(new StorageFailed({ cause: tx.error })));
+      resume(
+        Effect.fail(
+          outcome && Result.isFailure(outcome)
+            ? outcome.failure
+            : failed(tx.error)
+        )
+      );
     };
   });
 
-export const readModifyWrite = <A, E = never>(
-  db: IDBDatabase,
-  plan: Plan<A, E>
-) =>
-  Effect.flatMap(startTransaction(db, 'readwrite'), (tx) =>
-    runTransaction(tx, plan)
-  );
+const isClosed = (failure: unknown) =>
+  failure instanceof StorageFailed &&
+  failure.cause instanceof DOMException &&
+  failure.cause.name === 'InvalidStateError';
 
-export const readTrips = (db: IDBDatabase) =>
-  Effect.flatMap(startTransaction(db, 'readonly'), (tx) =>
-    runTransaction(tx, (trips) =>
-      Result.succeed({ put: [], remove: [], result: trips })
-    )
+export type TripStorage = {
+  readModifyWrite: <A, E = never>(
+    plan: Plan<A, E>
+  ) => Effect.Effect<A, E | StorageFailed>;
+  readTrips: () => Effect.Effect<readonly Trip[], StorageFailed>;
+};
+
+const ownConnection = (idb: IDBFactory, first: IDBDatabase): TripStorage => {
+  let current: IDBDatabase | null = null;
+  const forget = (db: IDBDatabase) => {
+    if (current === db) current = null;
+  };
+  const keep = (db: IDBDatabase) => {
+    if (current) {
+      db.close();
+      return current;
+    }
+    db.onversionchange = () => {
+      db.close();
+      forget(db);
+    };
+    db.onclose = () => {
+      forget(db);
+    };
+    current = db;
+    return db;
+  };
+  keep(first);
+  const connection = Effect.suspend(() =>
+    current ? Effect.succeed(current) : Effect.map(openConnection(idb), keep)
   );
+  const forgetIfClosed = (db: IDBDatabase) => (failure: unknown) =>
+    Effect.sync(() => {
+      if (isClosed(failure)) forget(db);
+    });
+  const transact = <A, E>(mode: IDBTransactionMode, plan: Plan<A, E>) =>
+    Effect.flatMap(connection, (db) =>
+      begin(db, mode).pipe(
+        Effect.flatMap((started) => finish(started, plan)),
+        Effect.tapError(forgetIfClosed(db))
+      )
+    );
+  return {
+    readModifyWrite: (plan) => transact('readwrite', plan),
+    readTrips: () =>
+      transact('readonly', (trips) =>
+        Result.succeed({ put: [], remove: [], result: trips })
+      )
+  };
+};
+
+export const openTripStorage = (idb: IDBFactory) =>
+  Effect.map(openConnection(idb), (first) => ownConnection(idb, first));

@@ -4,6 +4,7 @@ import {
   DropNotSaved,
   startDrop,
   type DropAttempt,
+  type DropPhase,
   type PlacedDrop
 } from './drop';
 import {
@@ -23,11 +24,10 @@ import {
   withoutDrop
 } from './rules';
 import {
-  openDatabase,
-  readModifyWrite,
-  readTrips,
+  openTripStorage,
   StorageFailed,
-  type Change
+  type Change,
+  type TripStorage
 } from './storage';
 import type { Deletion, DropEdit, Kind, Trip, TripDeps } from './types';
 
@@ -55,8 +55,9 @@ export {
   KindLocked,
   StorageFailed
 };
-export type { DropAttempt, PlacedDrop };
+export type { DropAttempt, DropPhase, PlacedDrop };
 export { canChangeKind, gearName, KIND_NAMES, KINDS } from './rules';
+export { availability, type Availability } from './availability';
 export {
   gearInWater,
   roughness,
@@ -100,11 +101,11 @@ const saved = (trip: Trip): Change<Trip> => ({
   result: trip
 });
 
-const bookFor = (deps: TripDeps, db: IDBDatabase): TripBook => ({
-  activeTrip: () => Effect.map(readTrips(db), activeOf),
-  placeDrop: (kind) => startDrop(deps, db, kind),
+const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
+  activeTrip: () => Effect.map(storage.readTrips(), activeOf),
+  placeDrop: (kind) => startDrop(deps, storage, kind),
   undoDrop: (dropId) =>
-    readModifyWrite(db, (trips) => {
+    storage.readModifyWrite((trips) => {
       const active = activeOf(trips);
       if (!active?.drops.some((drop) => drop.id === dropId)) {
         return Result.succeed({ put: [], remove: [], result: active });
@@ -117,13 +118,13 @@ const bookFor = (deps: TripDeps, db: IDBDatabase): TripBook => ({
       );
     }),
   updateDrop: (dropId, edit) =>
-    readModifyWrite<Trip, DropNotFound | InvalidDepth>(db, (trips) => {
+    storage.readModifyWrite<Trip, DropNotFound | InvalidDepth>((trips) => {
       const found = locateDrop(trips, dropId);
       if (!found) return Result.fail(new DropNotFound({ dropId }));
       return Result.map(editDrop(found.trip, dropId, edit), saved);
     }),
   changeKind: (dropId, kind) =>
-    readModifyWrite<NamedTrip, DropNotFound | KindLocked>(db, (trips) => {
+    storage.readModifyWrite<NamedTrip, DropNotFound | KindLocked>((trips) => {
       const active = activeOf(trips);
       const found = active && locateDrop([active], dropId);
       if (!found) return Result.fail(new DropNotFound({ dropId }));
@@ -134,7 +135,7 @@ const bookFor = (deps: TripDeps, db: IDBDatabase): TripBook => ({
       }));
     }),
   deleteDrop: (dropId) =>
-    readModifyWrite<DeletedDrop, DropNotFound>(db, (trips) => {
+    storage.readModifyWrite<DeletedDrop, DropNotFound>((trips) => {
       const found = locateDrop(trips, dropId);
       const deletion = found && deletionOf(found.trip, found.index, found.drop);
       if (!found || !deletion) {
@@ -149,7 +150,7 @@ const bookFor = (deps: TripDeps, db: IDBDatabase): TripBook => ({
       );
     }),
   restoreDrop: (deletion) =>
-    readModifyWrite<NamedTrip, AnotherTripActive>(db, (trips) =>
+    storage.readModifyWrite<NamedTrip, AnotherTripActive>((trips) =>
       Result.map(restoreDrop(trips, deletion), (trip) => ({
         put: [trip],
         remove: [],
@@ -159,4 +160,4 @@ const bookFor = (deps: TripDeps, db: IDBDatabase): TripBook => ({
 });
 
 export const openTripBook = (deps: TripDeps) =>
-  Effect.map(openDatabase(deps.idb), (db) => bookFor(deps, db));
+  Effect.map(openTripStorage(deps.idb), (storage) => bookFor(deps, storage));
