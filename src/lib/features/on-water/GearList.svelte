@@ -39,6 +39,16 @@
               >In the water for {row.timeInWater.spoken}</span
             >
           </p>
+          {#if row.rough}
+            <p class="text-[15px] font-semibold text-destructive">
+              <span aria-hidden="true"
+                >Rough position, within about {row.rough.short}</span
+              >
+              <span class="sr-only"
+                >Rough position, within about {row.rough.spoken}</span
+              >
+            </p>
+          {/if}
         </div>
         {#if row.direction}
           <div class="flex items-center gap-2">

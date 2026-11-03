@@ -19,7 +19,7 @@ bun scripts/verify-krab/run.ts
 
 The executable helper reuses `scripts/e2e-container.ts`: build the static app with `bun run build` and again with `bun run build:next`, mount this checkout at `/work`, run as the host UID/GID, and use the checkout's dependencies. The custom Playwright config launches `vite preview --host 127.0.0.1 --port 4173 --strictPort`. Readiness requires the HTTP response followed by the visible first-launch location explanation. Each journey starts with empty localStorage and IndexedDB in a fresh browser context. There is no account, backend, migration or seed step: Krab creates its IndexedDB schema on first use.
 
-Launch, doctor, drive, evidence copy and cleanup are one bounded command. Success is two passed journeys (Map and Gear entry points), exit 0, and `Evidence retained after cleanup: <absolute path>`. Build/test output is saved to `run.log` at that path.
+Launch, doctor, drive, evidence copy and cleanup are one bounded command. Success is three passed journeys (Map and Gear entry points, and a drop with location denied), exit 0, and `Evidence retained after cleanup: <absolute path>`. Build/test output is saved to `run.log` at that path.
 
 Isolation: container network and fresh browser contexts isolate other checkouts. In one checkout, `test-results/verify-krab-lock` excludes another verification run. An occupied container preview port fails the run; Playwright never reuses another server. Avoid running another build in this checkout during verification.
 
@@ -41,7 +41,7 @@ The executable recipe is `scripts/verify-krab/placing-drop.ts`, configured by `s
 
 Follow the feature file's exact roles and accessible names. Drive real UI actions; use page evaluation only for read-only observation of the real browser IndexedDB. Never insert trip records or call component state setters to manufacture success.
 
-For future permission/offline journeys in this recipe, use fresh contexts: `await context.clearPermissions()` denies location in this WebKit environment (it does not emulate an iOS prompt), `await context.grantPermissions(['geolocation'])` grants it, and `await context.setOffline(true)` / `await context.setOffline(false)` controls network access. These controls are available, but denied-location UX and offline reload are not claimed by the placing-drop proof. Add the owning ticket's observable requirements before treating them as verified. A missing precondition fails the journey; do not substitute a convenient path.
+For future permission/offline journeys in this recipe, use fresh contexts: `await context.clearPermissions()` denies location in this WebKit environment (it does not emulate an iOS prompt), `await context.grantPermissions(['geolocation'])` grants it, and `await context.setOffline(true)` / `await context.setOffline(false)` controls network access. The placing-drop recipe drives denied location with `clearPermissions()`; offline reload is not claimed by it. Add the owning ticket's observable requirements before treating them as verified. A missing precondition fails the journey; do not substitute a convenient path.
 
 ## Evidence
 
