@@ -19,6 +19,7 @@ Each file has a user-facing introduction and exactly four H2s: Sub-features, How
 ## Features
 
 - [Placing a drop](placing-drop.md): fully driven from both Map and Gear, including restoration, plus a drop with location denied.
+- [Drop details](drop-details.md): journey mapped for ticket 04; not yet driven by the bounded recipe.
 - [Finding gear](finding-gear.md): Gear list reachable; tickets 06/08 own map and finding gear.
 - [Collecting](collecting.md): placeholder owned by ticket 05.
 - [Ending a trip](ending-trip.md): placeholder owned by ticket 09.

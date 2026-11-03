@@ -1,4 +1,4 @@
-import { Data, Deferred, Effect, Fiber } from 'effect';
+import { Data, Deferred, Effect, Fiber, Result } from 'effect';
 import { activeOf, gearName, placeDrop, type Located } from './rules';
 import { roughness, type SpokenText } from './queries';
 import { readModifyWrite, type StorageFailed } from './storage';
@@ -52,7 +52,7 @@ const store = (
   Effect.mapError(
     readModifyWrite(db, (trips) => {
       const placed = placeDrop(activeOf(trips), kind, tapAt, where);
-      return {
+      return Result.succeed({
         put: [placed.trip],
         remove: [],
         result: {
@@ -61,7 +61,7 @@ const store = (
           name: gearName(placed.gear),
           rough: roughness(placed.drop.position)
         }
-      };
+      });
     }),
     (cause) =>
       new DropNotSaved({

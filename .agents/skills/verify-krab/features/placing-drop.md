@@ -35,4 +35,4 @@ Preconditions: fresh context, empty site data, granted emulated location, made-u
 - `clearPermissions()` makes WebKit report denied at once. It does not show an iOS prompt, and the Settings path in the guidance is unverified on a device.
 - Without `Position ready`, a tap starts the Getting position panel instead of saving at once. Wait for the status rather than sleeping.
 - Reload returns to Map, so choose Gear again before asserting restoration.
-- The Gear list's navigation items are also list items; scope the pot row to main.
+- The Gear list's navigation items are also list items; scope the pot row to main. Each row now wraps a button that opens its gear sheet (see [Drop details](drop-details.md)); the `listitem` locator still matches.

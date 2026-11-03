@@ -1,0 +1,74 @@
+<script lang="ts">
+  import type { Snippet } from 'svelte';
+  import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
+  import type { SheetSubject } from './gear-sheet';
+  import GearDetailsForm from './GearDetailsForm.svelte';
+  import GearIcon from './GearIcon.svelte';
+  import type { SaveProblem } from './on-water.svelte';
+  import Sheet from './Sheet.svelte';
+
+  const TITLE_ID = 'gear-sheet-title';
+  const FORM_ID = 'gear-sheet-form';
+
+  let {
+    subject,
+    editKind = true,
+    onclose,
+    onsave,
+    returnFocus,
+    actions,
+    endAction
+  }: {
+    subject: SheetSubject | null;
+    editKind?: boolean;
+    onclose: () => void;
+    onsave: (
+      dropId: string,
+      edit: DropEdit,
+      kind: Kind | null
+    ) => Promise<SaveProblem | null>;
+    returnFocus: () => HTMLElement | null | undefined;
+    actions?: Snippet<[Drop]>;
+    endAction?: Snippet<[Drop]>;
+  } = $props();
+</script>
+
+<Sheet open={subject !== null} titleId={TITLE_ID} {onclose} {returnFocus}>
+  {#snippet heading()}
+    {#if subject}
+      <h2
+        id={TITLE_ID}
+        class="flex items-center gap-2.5 text-[26px] leading-tight font-bold"
+      >
+        <GearIcon kind={subject.gear.kind} size={28} />
+        {subject.name}
+      </h2>
+    {/if}
+  {/snippet}
+
+  {#if subject}
+    {#key subject.drop.id}
+      <GearDetailsForm
+        {subject}
+        formId={FORM_ID}
+        {editKind}
+        {onsave}
+        onsaved={onclose}
+      >
+        {@render actions?.(subject.drop)}
+      </GearDetailsForm>
+    {/key}
+  {/if}
+
+  {#snippet footer()}
+    <button
+      type="submit"
+      form={FORM_ID}
+      class="min-h-13 flex-1 rounded-control bg-primary px-4 text-[18px] font-bold text-primary-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >Save</button
+    >
+    {#if subject}
+      {@render endAction?.(subject.drop)}
+    {/if}
+  {/snippet}
+</Sheet>

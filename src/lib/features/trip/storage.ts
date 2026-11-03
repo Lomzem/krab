@@ -1,4 +1,4 @@
-import { Data, Effect } from 'effect';
+import { Data, Effect, Result } from 'effect';
 import type { Trip } from './types';
 
 export class StorageFailed extends Data.TaggedError('StorageFailed')<{
@@ -60,28 +60,29 @@ const apply = <A>(store: IDBObjectStore, change: Change<A>) => {
   return change.result;
 };
 
-const runTransaction = <A>(
-  tx: IDBTransaction,
-  plan: (trips: Trip[]) => Change<A>
-) =>
-  Effect.callback<A, StorageFailed>((resume) => {
+export type Plan<A, E> = (trips: Trip[]) => Result.Result<Change<A>, E>;
+
+const runTransaction = <A, E>(tx: IDBTransaction, plan: Plan<A, E>) =>
+  Effect.callback<A, E | StorageFailed>((resume) => {
     const store = tx.objectStore(TRIPS);
     const read = store.getAll();
-    const outcome: { value?: A } = {};
+    const outcome: { value?: Result.Result<A, E> } = {};
     read.onsuccess = () => {
-      outcome.value = apply(store, plan(read.result as Trip[]));
+      outcome.value = Result.map(plan(read.result as Trip[]), (change) =>
+        apply(store, change)
+      );
     };
     tx.oncomplete = () => {
-      resume(Effect.succeed(outcome.value as A));
+      resume(Effect.fromResult(outcome.value as Result.Result<A, E>));
     };
     tx.onabort = () => {
       resume(Effect.fail(new StorageFailed({ cause: tx.error })));
     };
   });
 
-export const readModifyWrite = <A>(
+export const readModifyWrite = <A, E = never>(
   db: IDBDatabase,
-  plan: (trips: Trip[]) => Change<A>
+  plan: Plan<A, E>
 ) =>
   Effect.flatMap(startTransaction(db, 'readwrite'), (tx) =>
     runTransaction(tx, plan)
@@ -89,5 +90,7 @@ export const readModifyWrite = <A>(
 
 export const readTrips = (db: IDBDatabase) =>
   Effect.flatMap(startTransaction(db, 'readonly'), (tx) =>
-    runTransaction(tx, (trips) => ({ put: [], remove: [], result: trips }))
+    runTransaction(tx, (trips) =>
+      Result.succeed({ put: [], remove: [], result: trips })
+    )
   );
