@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { expect, test, type Page } from '@playwright/test';
 import { doctor } from './doctor';
+import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
 
@@ -40,9 +41,7 @@ test('collecting a pot records its catch, survives reload, and drops it again', 
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Position ready')).toBeVisible();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
   log('made-up mid-ocean fix; tap Drop pot; Pot 1 dropped');
   await capture('01-dropped');
 
@@ -57,9 +56,7 @@ test('collecting a pot records its catch, survives reload, and drops it again', 
 
   await collect.click();
   await expect(sheet.getByRole('heading', { name: 'Catch' })).toBeFocused();
-  await expect(page.getByRole('status').getByRole('group')).toContainText(
-    'Pot 1 collected'
-  );
+  await expect(toastOf(page)).toContainText('Pot 1 collected');
   await expect(
     sheet.getByRole('button', { name: 'Undo collect' })
   ).toBeVisible();
@@ -99,9 +96,7 @@ test('collecting a pot records its catch, survives reload, and drops it again', 
   await collectedRow(page).click();
   await sheet.getByRole('button', { name: 'Drop pot again here' }).click();
   await expect(sheet).toBeHidden();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(inWaterRow(page)).toBeVisible();
   const again = await readTrips(page);
   const drops = again[0]?.drops ?? [];

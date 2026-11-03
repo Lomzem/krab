@@ -31,21 +31,35 @@ const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 export const Catch = Schema.Struct({ kept: Count, released: Count });
 export type Catch = typeof Catch.Type;
 
-const Drop = Located.mapMembers(
-  Tuple.map(
-    Schema.fieldsAssign({
-      id: Schema.String,
-      gearId: Schema.String,
-      placedAt: Schema.Finite,
-      label: Schema.String,
-      bait: Schema.String,
-      depthFt: Schema.NullOr(Schema.Finite),
-      notes: Schema.String,
-      collectedAt: Schema.NullOr(Schema.Finite),
-      catch: Schema.NullOr(Catch)
-    })
-  )
-);
+const Collection = Schema.Union([
+  Schema.Struct({ collectedAt: Schema.Null, catch: Schema.Null }),
+  Schema.Struct({ collectedAt: Schema.Finite, catch: Schema.NullOr(Catch) })
+]);
+
+const dropLocated = <const Fields extends Schema.Struct.Fields>(
+  located: Fields
+) =>
+  Collection.mapMembers(
+    Tuple.map(
+      Schema.fieldsAssign({
+        id: Schema.String,
+        gearId: Schema.String,
+        placedAt: Schema.Finite,
+        ...located,
+        label: Schema.String,
+        bait: Schema.String,
+        depthFt: Schema.NullOr(Schema.Finite),
+        notes: Schema.String
+      })
+    )
+  );
+
+const [Placed, Unplaced] = Located.members;
+
+const Drop = Schema.Union([
+  dropLocated(Placed.fields),
+  dropLocated(Unplaced.fields)
+]);
 export type Drop = typeof Drop.Type;
 
 export const Trip = Schema.Struct({

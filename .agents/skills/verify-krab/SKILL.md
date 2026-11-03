@@ -19,7 +19,7 @@ bun scripts/verify-krab/run.ts
 
 The executable helper reuses `scripts/e2e-container.ts`: build the static app with `bun run build` and again with `bun run build:next`, mount this checkout at `/work`, run as the host UID/GID, and use the checkout's dependencies. The custom Playwright config launches `vite preview --host 127.0.0.1 --port 4173 --strictPort`. Readiness requires the HTTP response followed by the visible first-launch location explanation. Each journey starts with empty localStorage and IndexedDB in a fresh browser context. There is no account, backend, migration or seed step: Krab creates its IndexedDB schema on first use.
 
-Launch, doctor, drive, evidence copy and cleanup are one bounded command. Success is six passed journeys (placing a drop from Map and from Gear, a drop with location denied, finding gear on the Map tab, NOAA chart alignment, and collecting), exit 0, and `Evidence retained after cleanup: <absolute path>`. Build/test output is saved to `run.log` at that path.
+Launch, doctor, drive, evidence copy and cleanup are one bounded command. Success is seven passed journeys (placing a drop from Map and from Gear, a drop with location denied, finding gear on the Map tab, NOAA chart alignment, collecting, and drop details), exit 0, and `Evidence retained after cleanup: <absolute path>`. Build/test output is saved to `run.log` at that path.
 
 Isolation: container network and fresh browser contexts isolate other checkouts. In one checkout, `test-results/verify-krab-lock` excludes another verification run. An occupied container preview port fails the run; Playwright never reuses another server. Avoid running another build in this checkout during verification.
 
@@ -37,7 +37,7 @@ This requires exactly one active container matching this checkout and the pinned
 
 ## Drive
 
-The executable recipes are `scripts/verify-krab/placing-drop.ts`, `scripts/verify-krab/finding-gear.ts` and `scripts/verify-krab/collecting.ts`, configured by `scripts/verify-krab.config.ts` and sharing the evidence recorder in `scripts/verify-krab/evidence.ts`. Invoke it through `bun scripts/verify-krab/run.ts` so build, Docker checks, evidence retention and teardown all run. The recipes use the existing `iPhone 17` WebKit project, grant geolocation, and supply only the fictional mid-ocean position from `MADE_UP_SEA` in `playwright.config.ts`. The one exception is the chart alignment journey, which samples NOAA tiles at named public landmarks and never sets them as a position or drop.
+The executable recipes are `scripts/verify-krab/placing-drop.ts`, `scripts/verify-krab/finding-gear.ts`, `scripts/verify-krab/collecting.ts` and `scripts/verify-krab/drop-details.ts`, configured by `scripts/verify-krab.config.ts` and sharing the evidence recorder in `scripts/verify-krab/evidence.ts`. Invoke it through `bun scripts/verify-krab/run.ts` so build, Docker checks, evidence retention and teardown all run. The recipes use the existing `iPhone 17` WebKit project, grant geolocation, and supply only the fictional mid-ocean position from `MADE_UP_SEA` in `playwright.config.ts`. The one exception is the chart alignment journey, which samples NOAA tiles at named public landmarks and never sets them as a position or drop.
 
 Follow the feature file's exact roles and accessible names. Drive real UI actions; use page evaluation only for read-only observation of the real browser IndexedDB. Never insert trip records or call component state setters to manufacture success.
 
@@ -67,6 +67,6 @@ Run no kill-by-name commands. After an interrupted wrapper, inspect `docker ps -
 
 ## Helpers
 
-All shipped TypeScript helpers are executable. The supported complete invocation is `bun scripts/verify-krab/run.ts`. That runs the existing `bun run scripts/e2e-container.ts --config scripts/verify-krab.config.ts`; Playwright then launches `node scripts/verify-krab/preview.ts` and executes `scripts/verify-krab/placing-drop.ts`, `scripts/verify-krab/finding-gear.ts` and `scripts/verify-krab/collecting.ts`. The doctor is also called by the recipe before each drive. The config and recipe are consumed by Playwright, not standalone Bun programs. Preview uses the image's Node because Bun is supplied by the host, not installed in the image.
+All shipped TypeScript helpers are executable. The supported complete invocation is `bun scripts/verify-krab/run.ts`. That runs the existing `bun run scripts/e2e-container.ts --config scripts/verify-krab.config.ts`; Playwright then launches `node scripts/verify-krab/preview.ts` and executes `scripts/verify-krab/placing-drop.ts`, `scripts/verify-krab/finding-gear.ts`, `scripts/verify-krab/collecting.ts` and `scripts/verify-krab/drop-details.ts`. The doctor is also called by the recipe before each drive. The config and recipe are consumed by Playwright, not standalone Bun programs. Preview uses the image's Node because Bun is supplied by the host, not installed in the image.
 
 As features change, use `/maintain-verification-skill` in Claude Code or `$maintain-verification-skill` in Codex to keep this map and its runnable recipes current.

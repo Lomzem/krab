@@ -35,16 +35,12 @@
   } = $props();
 
   const rows = $derived(trip ? gearInWater(trip, fix, now) : []);
-  const nearest = $derived(trip ? nearestGear(trip, fix, now) : null);
+  const nearest = $derived(nearestGear(rows));
   const rowsById = $derived(new Map(rows.map((row) => [row.drop.id, row])));
   const places = $derived(
-    trip
-      ? trip.drops.flatMap((drop): MapPlace[] =>
-          drop.collectedAt === null && drop.position
-            ? [{ id: drop.id, at: drop.position }]
-            : []
-        )
-      : []
+    rows.flatMap(({ drop }): MapPlace[] =>
+      drop.position ? [{ id: drop.id, at: drop.position }] : []
+    )
   );
   const rough = $derived(fix && roughness(fix));
   const me = $derived(

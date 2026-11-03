@@ -108,12 +108,18 @@ export type TripBook = {
   activeTrip: () => Effect.Effect<Trip | null, StorageFailed>;
   placeDrop: (target: DropTarget) => Effect.Effect<DropAttempt>;
   undoDrop: (dropId: string) => Effect.Effect<Trip | null, StorageFailed>;
-  updateDrop: (
+  saveDrop: (
     dropId: string,
-    edit: DropEdit
+    edit: DropEdit,
+    kind: Kind | null
   ) => Effect.Effect<
-    Trip,
-    DropNotFound | InvalidDepth | InvalidCatch | NotCollected | StorageFailed
+    NamedTrip,
+    | DropNotFound
+    | InvalidDepth
+    | InvalidCatch
+    | NotCollected
+    | KindLocked
+    | StorageFailed
   >;
   collect: (
     dropId: string
@@ -121,10 +127,6 @@ export type TripBook = {
   undoCollect: (
     dropId: string
   ) => Effect.Effect<Collection, DropNotFound | DroppedAgain | StorageFailed>;
-  changeKind: (
-    dropId: string,
-    kind: Kind
-  ) => Effect.Effect<NamedTrip, DropNotFound | KindLocked | StorageFailed>;
   deleteDrop: (
     dropId: string
   ) => Effect.Effect<DeletedDrop, DropNotFound | StorageFailed>;
@@ -133,17 +135,15 @@ export type TripBook = {
   ) => Effect.Effect<NamedTrip, AnotherTripActive | StorageFailed>;
 };
 
-const saved = (trip: Trip): Change<Trip> => ({
-  put: [trip],
-  remove: [],
-  result: trip
-});
+const dropIn = (trips: readonly Trip[], dropId: string) => {
+  const found = locateDrop(trips, dropId);
+  const gear = found?.trip.gear.find((item) => item.id === found.drop.gearId);
+  return found && gear ? { ...found, gear } : null;
+};
 
 const activeDrop = (trips: readonly Trip[], dropId: string) => {
   const active = activeOf(trips);
-  const found = active && locateDrop([active], dropId);
-  const gear = found?.trip.gear.find((item) => item.id === found.drop.gearId);
-  return found && gear ? { ...found, gear } : null;
+  return active ? dropIn([active], dropId) : null;
 };
 
 type ActiveDrop = NonNullable<ReturnType<typeof activeDrop>>;
@@ -182,14 +182,25 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
           : { put: [], remove: [active.id], result: null }
       );
     }),
-  updateDrop: (dropId, edit) =>
+  saveDrop: (dropId, edit, kind) =>
     storage.readModifyWrite<
-      Trip,
-      DropNotFound | InvalidDepth | InvalidCatch | NotCollected
+      NamedTrip,
+      DropNotFound | InvalidDepth | InvalidCatch | NotCollected | KindLocked
     >((trips) => {
-      const found = locateDrop(trips, dropId);
+      const found = dropIn(trips, dropId);
       if (!found) return Result.fail(new DropNotFound({ dropId }));
-      return Result.map(editDrop(found.trip, found.drop, edit), saved);
+      const edited = Result.flatMap(
+        editDrop(found.trip, found.drop, edit),
+        (trip) =>
+          kind === null
+            ? Result.succeed({ trip, gear: found.gear })
+            : switchKind(trip, found.drop, kind)
+      );
+      return Result.map(edited, (next) => ({
+        put: [next.trip],
+        remove: [],
+        result: { trip: next.trip, name: gearName(next.gear) }
+      }));
     }),
   collect: (dropId) =>
     Effect.suspend(() => {
@@ -212,16 +223,6 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
         );
       }
     ),
-  changeKind: (dropId, kind) =>
-    storage.readModifyWrite<NamedTrip, DropNotFound | KindLocked>((trips) => {
-      const found = activeDrop(trips, dropId);
-      if (!found) return Result.fail(new DropNotFound({ dropId }));
-      return Result.map(switchKind(found.trip, found.drop, kind), (next) => ({
-        put: [next.trip],
-        remove: [],
-        result: { trip: next.trip, name: gearName(next.gear) }
-      }));
-    }),
   deleteDrop: (dropId) =>
     storage.readModifyWrite<DeletedDrop, DropNotFound>((trips) => {
       const found = locateDrop(trips, dropId);

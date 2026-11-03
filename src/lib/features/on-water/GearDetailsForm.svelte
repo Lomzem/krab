@@ -12,7 +12,7 @@
   import CatchField from './CatchField.svelte';
   import DetailsFields from './DetailsFields.svelte';
   import { draftOf, editOf } from './details-draft';
-  import type { SheetSubject } from './gear-sheet';
+  import type { SheetOperation, SheetSubject } from './gear-sheet';
   import KindField from './KindField.svelte';
   import type { SaveProblem } from './on-water.svelte';
 
@@ -20,7 +20,8 @@
   const PROBLEMS: Record<Exclude<SaveProblem, 'depth'>, string> = {
     catch:
       "Couldn't save the catch. It needs collected gear and whole numbers from 0.",
-    kind: 'This gear has been dropped again, so it keeps its kind. The details were saved.',
+    kind: 'This gear has been dropped again, so it keeps its kind. Nothing was saved.',
+    gone: "Couldn't save. That drop is gone.",
     storage: "Couldn't save. Try again."
   };
 
@@ -29,8 +30,8 @@
     formId,
     editKind,
     now,
+    operation,
     onsave,
-    onsaved,
     oncollect,
     ondropagain,
     children
@@ -39,14 +40,10 @@
     formId: string;
     editKind: boolean;
     now: number;
-    onsave: (
-      dropId: string,
-      edit: DropEdit,
-      kind: Kind | null
-    ) => Promise<SaveProblem | null>;
-    onsaved: () => void;
+    operation: SheetOperation | null;
+    onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     oncollect?: (dropId: string) => void;
-    ondropagain?: (dropId: string) => void;
+    ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     children?: Snippet;
   } = $props();
 
@@ -65,8 +62,8 @@
   let catchDraft = $derived(
     collectedAt === null ? null : untrack(() => drop.catch)
   );
-  let problem = $state<SaveProblem | null>(null);
-  let saving = false;
+  const busy = $derived(operation?.pending ?? false);
+  const problem = $derived(operation?.problem ?? null);
   let wasCollected = initial().collected;
   let collectButton = $state<HTMLButtonElement>();
   let catchHeading = $state<HTMLHeadingElement>();
@@ -80,29 +77,22 @@
     });
   });
 
-  const save = async () => {
-    if (saving) return false;
-    saving = true;
-    problem = await onsave(
-      drop.id,
-      editOf(draft, catchDraft),
-      kind === stored ? null : kind
-    );
-    saving = false;
-    if (problem === 'depth') {
-      await tick();
+  $effect(() => {
+    if (operation?.problem !== 'depth') return;
+    void tick().then(() => {
       document.getElementById(`${idPrefix}-depth`)?.focus();
-    }
-    return problem === null;
+    });
+  });
+
+  const save = (
+    send: (dropId: string, edit: DropEdit, kind: Kind | null) => void
+  ) => {
+    send(drop.id, editOf(draft, catchDraft), kind === stored ? null : kind);
   };
 
-  const submit = async (event: SubmitEvent) => {
+  const submit = (event: SubmitEvent) => {
     event.preventDefault();
-    if (await save()) onsaved();
-  };
-
-  const dropAgain = async (again: (dropId: string) => void) => {
-    if (await save()) again(drop.id);
+    save(onsave);
   };
 </script>
 
@@ -117,7 +107,8 @@
         <button
           bind:this={collectButton}
           type="button"
-          class="min-h-16 w-full rounded-control bg-signal text-[22px] font-bold text-signal-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary active:brightness-95"
+          class="min-h-16 w-full rounded-control bg-signal text-[22px] font-bold text-signal-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary active:brightness-95 aria-disabled:opacity-60"
+          aria-disabled={busy}
           onclick={() => {
             oncollect(drop.id);
           }}>Collect</button
@@ -136,9 +127,10 @@
     {#if ondropagain && canDropAgain(subject.trip, drop)}
       <button
         type="button"
-        class="min-h-14 w-full rounded-control border-2 border-primary text-[19px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted"
+        class="min-h-14 w-full rounded-control border-2 border-primary text-[19px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted aria-disabled:opacity-60"
+        aria-disabled={busy}
         onclick={() => {
-          void dropAgain(ondropagain);
+          save(ondropagain);
         }}>Drop {KIND_NAMES[stored].toLowerCase()} again here</button
       >
     {/if}

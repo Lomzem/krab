@@ -2,6 +2,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { doctor } from './doctor';
+import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
 import {
@@ -103,9 +104,7 @@ test('finding gear on the Map tab and from the Gear list', async ({
   await expect(page.getByText('Position ready')).toBeVisible();
   log('fresh context; made-up mid-ocean fix; Position ready');
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'dropped' })
-  ).toContainText('Pot 1 dropped');
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
   log('tap Drop pot on the Map tab; saved toast visible');
 
   const map = page.getByRole('region', { name: 'Map', exact: true });

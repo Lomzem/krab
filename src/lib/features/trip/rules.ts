@@ -183,18 +183,19 @@ export const editDrop = (
   if (edit.catch && !isCatch(edit.catch)) {
     return Result.fail(new InvalidCatch({ catch: edit.catch }));
   }
-  if (edit.catch && drop.collectedAt === null) {
-    return Result.fail(new NotCollected({ dropId: drop.id }));
+  const trimmed = {
+    label: details.label.trim(),
+    bait: details.bait.trim(),
+    depthFt: details.depthFt,
+    notes: details.notes.trim()
+  };
+  if (drop.collectedAt === null) {
+    return edit.catch
+      ? Result.fail(new NotCollected({ dropId: drop.id }))
+      : Result.succeed(replaceDrop(trip, { ...drop, ...trimmed }));
   }
   return Result.succeed(
-    replaceDrop(trip, {
-      ...drop,
-      label: details.label.trim(),
-      bait: details.bait.trim(),
-      depthFt: details.depthFt,
-      notes: details.notes.trim(),
-      catch: edit.catch
-    })
+    replaceDrop(trip, { ...drop, ...trimmed, catch: edit.catch })
   );
 };
 

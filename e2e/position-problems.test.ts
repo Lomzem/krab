@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect, holdStorage, releaseStorage, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 
 const MIN_TARGET_PX = 44;
@@ -23,11 +24,9 @@ test.describe('with location denied', () => {
     await expectAccessibleInBothThemes(page);
 
     await page.getByRole('button', { name: 'Drop pot' }).click();
-    await expect(
-      page
-        .getByRole('status')
-        .filter({ hasText: 'Pot 1 dropped without a position' })
-    ).toBeVisible();
+    await expect(toastOf(page)).toContainText(
+      'Pot 1 dropped without a position'
+    );
     await expectAccessibleInBothThemes(page);
 
     await page.getByRole('button', { name: 'Gear', exact: true }).click();
@@ -59,9 +58,7 @@ test('while getting a position, Cancel and Save without position are reachable 4
   await expectAccessibleInBothThemes(page);
 
   await save.click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'dropped without a position' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('dropped without a position');
   await expect(page.getByRole('button', { name: /^Drop / })).toBeFocused();
 });
 
@@ -139,28 +136,6 @@ test('Position ready lasts 5 seconds from each fix, is rechecked on resume, then
   await expect.poll(() => gettingPositionShown(page)).toBe(1);
 });
 
-type HeldStorage = { releaseStorage?: boolean };
-
-const holdStorage = () =>
-  new Promise<void>((held) => {
-    const request = indexedDB.open('krab');
-    request.onsuccess = () => {
-      const trips = request.result
-        .transaction('trips', 'readwrite')
-        .objectStore('trips');
-      const keepBusy = () => {
-        if ((window as HeldStorage).releaseStorage) return;
-        trips.count().onsuccess = keepBusy;
-      };
-      keepBusy();
-      held();
-    };
-  });
-
-const releaseStorage = () => {
-  (window as HeldStorage).releaseStorage = true;
-};
-
 test('once a fix arrives, Cancel and Save without position give way to saving feedback until the drop is saved', async ({
   page
 }) => {
@@ -173,7 +148,7 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
     page.getByRole('heading', { name: 'Getting position' })
   ).toBeFocused();
 
-  await page.evaluate(holdStorage);
+  await holdStorage(page);
   const fixTime = await page.evaluate(() => Date.now());
   await page.evaluate(deliverFix, { coords: MADE_UP_SEA, timestamp: fixTime });
 
@@ -184,13 +159,72 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
   await expect(
     page.getByRole('button', { name: 'Save without position' })
   ).toHaveCount(0);
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toHaveCount(0);
+  await expect(toastOf(page)).toBeHidden();
 
-  await page.evaluate(releaseStorage);
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toBeVisible();
+  await releaseStorage(page);
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
+});
+
+type Watching = { hidden: boolean; active: number[]; most: number };
+type WatchingWindow = { watching?: Watching };
+
+const countWatches = () => {
+  const watching: Watching = { hidden: false, active: [], most: 0 };
+  (window as WatchingWindow).watching = watching;
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => (watching.hidden ? 'hidden' : 'visible')
+  });
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    get: () => watching.hidden
+  });
+  const geolocation = navigator.geolocation;
+  const watch = geolocation.watchPosition.bind(geolocation);
+  const clear = geolocation.clearWatch.bind(geolocation);
+  geolocation.watchPosition = (success, error, options) => {
+    const id = watch(success, error, options);
+    watching.active = [...watching.active, id];
+    watching.most = Math.max(watching.most, watching.active.length);
+    return id;
+  };
+  geolocation.clearWatch = (id) => {
+    watching.active = watching.active.filter((other) => other !== id);
+    clear(id);
+  };
+};
+
+const setHidden = (page: Page, hidden: boolean) =>
+  page.evaluate((next) => {
+    const { watching } = window as WatchingWindow;
+    if (watching) watching.hidden = next;
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+
+const watches = (page: Page) =>
+  page.evaluate(() => {
+    const { watching } = window as WatchingWindow;
+    return { active: watching?.active.length, most: watching?.most };
+  });
+
+test('the position watch stops while Krab is hidden and resumes as one watch when it is shown again', async ({
+  page
+}) => {
+  await page.addInitScript(countWatches);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Position ready')).toBeVisible();
+  expect(await watches(page)).toEqual({ active: 1, most: 1 });
+
+  await setHidden(page, true);
+  expect(await watches(page)).toEqual({ active: 0, most: 1 });
+  await setHidden(page, true);
+  expect(await watches(page)).toEqual({ active: 0, most: 1 });
+
+  await setHidden(page, false);
+  expect(await watches(page)).toEqual({ active: 1, most: 1 });
+  await setHidden(page, false);
+  expect(await watches(page)).toEqual({ active: 1, most: 1 });
+  await expect(page.getByText('Position ready')).toBeVisible();
 });

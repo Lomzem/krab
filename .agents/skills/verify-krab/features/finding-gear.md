@@ -41,7 +41,7 @@ Open Krab. The Map tab is the first tab. Turn on location and drop a pot or net;
 ## Gotchas
 
 - MapLibre's unlayered `.maplibregl-map { position: relative }` beats Tailwind's layered utilities. Keep the map container `size-full` inside a separately positioned wrapper, or it collapses to 0 px, which hides the chart and makes gear untappable even though Playwright reports it visible.
-- The Map tab is the default, so the map is mounted before any fix exists. Two `role="status"` regions can coexist (the drop toast and No signal); filter by text.
+- The Map tab is the default, so the map is mounted before any fix exists. The No signal notice is a second status region beside the toast; check toasts with `toastOf(page)` from `e2e/fixtures.ts` (the group inside the status region named `Messages`) rather than any `role="status"`.
 - MapLibre's canvas is a region named "Map view"; the tab's region is "Map". Use `exact: true`.
 - Rapid Zoom in presses interrupt each other's animation and never reach the limit. Press once and wait for the button to become unavailable before pressing again.
 - Both journeys use the real network: NOAA and OpenFreeMap must be reachable from the container. Mid-ocean NOAA tiles are blank (no coverage), so the chart looks like plain sea at `MADE_UP_SEA`.

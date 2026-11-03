@@ -86,16 +86,20 @@ const isStyle = (value: unknown): value is StyleSpecification =>
   'layers' in value &&
   Array.isArray(value.layers);
 
-const fetchStreetStyle = Effect.tryPromise(async () => {
-  const response = await fetch(STREET_STYLE);
-  const remote: unknown = response.ok ? await response.json() : null;
-  return remote;
-});
+const fetchStreetStyle = (signal: AbortSignal) =>
+  Effect.tryPromise(async () => {
+    const response = await fetch(STREET_STYLE, { signal });
+    const remote: unknown = response.ok ? await response.json() : null;
+    return remote;
+  });
 
-const streetStyle = (accuracy: Accuracy): Promise<BaseStyle> =>
+const streetStyle = (
+  accuracy: Accuracy,
+  signal: AbortSignal
+): Promise<BaseStyle> =>
   Effect.runPromise(
     Effect.orElseSucceed(
-      Effect.map(fetchStreetStyle, (remote): BaseStyle => {
+      Effect.map(fetchStreetStyle(signal), (remote): BaseStyle => {
         if (!isStyle(remote)) return offline(accuracy);
         const { sources, layers, ...rest } = remote;
         return {
@@ -107,7 +111,11 @@ const streetStyle = (accuracy: Accuracy): Promise<BaseStyle> =>
     )
   );
 
-export const baseStyle = (base: Base, accuracy: Accuracy) =>
+export const baseStyle = (
+  base: Base,
+  accuracy: Accuracy,
+  signal: AbortSignal
+) =>
   base === 'chart'
     ? Promise.resolve({
         style: withOverlays(
@@ -117,7 +125,7 @@ export const baseStyle = (base: Base, accuracy: Accuracy) =>
         ),
         reachable: true
       })
-    : streetStyle(accuracy);
+    : streetStyle(accuracy, signal);
 
 export const isOverlay = (sourceId: string) => sourceId === ACCURACY_SOURCE;
 

@@ -128,9 +128,5 @@ export const collectedGear = (trip: Trip) =>
     .flatMap((drop) => collectedRow(trip, drop))
     .sort((a, b) => b.collectedAt - a.collectedAt);
 
-export const nearestGear = (
-  trip: Trip,
-  from: LatLon | null,
-  at: number
-): GearRow | null =>
-  gearInWater(trip, from, at).find((row) => row.direction !== null) ?? null;
+export const nearestGear = (rows: readonly GearRow[]): GearRow | null =>
+  rows.find((row) => row.direction !== null) ?? null;

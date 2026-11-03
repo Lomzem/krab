@@ -1,7 +1,6 @@
 import { Effect, Exit, Result } from 'effect';
 import {
   openTripBook,
-  StorageFailed,
   type CannotDropAgain,
   type Clock,
   type Deletion,
@@ -20,6 +19,7 @@ import {
   type NotCollected,
   type PlacedDrop,
   type PositionSource,
+  type StorageFailed,
   type Trip,
   type TripBook
 } from '#lib/features/trip/index.js';
@@ -53,7 +53,7 @@ export type PendingDrop = {
   phase: DropPhase;
 };
 
-export type SaveProblem = 'depth' | 'catch' | 'kind' | 'storage';
+export type SaveProblem = 'depth' | 'catch' | 'kind' | 'gone' | 'storage';
 
 type SaveFailure =
   | DropNotFound
@@ -68,7 +68,7 @@ const PROBLEMS: Record<SaveFailure['_tag'], SaveProblem> = {
   InvalidCatch: 'catch',
   NotCollected: 'catch',
   KindLocked: 'kind',
-  DropNotFound: 'storage',
+  DropNotFound: 'gone',
   StorageFailed: 'storage'
 };
 
@@ -100,10 +100,7 @@ const undoCollectFailure = (
 
 const resultOf = <A, E>(
   effect: Effect.Effect<A, E>
-): Promise<Result.Result<A, E | StorageFailed>> =>
-  Effect.runPromise(Effect.result(effect)).catch((cause: unknown) =>
-    Result.fail(new StorageFailed({ cause }))
-  );
+): Promise<Result.Result<A, E>> => Effect.runPromise(Effect.result(effect));
 
 const openBook = (positions: PositionSource) =>
   Effect.runPromiseExit(
@@ -252,13 +249,9 @@ export class OnWater {
   ): Promise<SaveProblem | null> {
     const book = await this.#book;
     if (!book) return 'storage';
-    const updated = await resultOf(book.updateDrop(dropId, edit));
-    if (Result.isFailure(updated)) return PROBLEMS[updated.failure._tag];
-    this.#show(updated.success);
-    if (!kind) return null;
-    const changed = await resultOf(book.changeKind(dropId, kind));
-    if (Result.isFailure(changed)) return PROBLEMS[changed.failure._tag];
-    this.#show(changed.success.trip);
+    const saved = await resultOf(book.saveDrop(dropId, edit, kind));
+    if (Result.isFailure(saved)) return PROBLEMS[saved.failure._tag];
+    this.#show(saved.success.trip);
     return null;
   }
 

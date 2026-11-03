@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, toastOf } from './fixtures';
 
 const PHONES = [
   {
@@ -25,13 +25,9 @@ for (const { phone, setup } of PHONES) {
     await page.getByRole('button', { name: 'Turn on location' }).click();
     await expect(page.getByText('Position ready')).toBeVisible();
     await page.getByRole('button', { name: 'Drop pot' }).click();
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-    ).toBeVisible();
+    await expect(toastOf(page)).toContainText('Pot 1 dropped');
     await page.getByRole('button', { name: 'Drop pot' }).click();
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Pot 2 dropped' })
-    ).toBeVisible();
+    await expect(toastOf(page)).toContainText('Pot 2 dropped');
 
     expect(errors).toEqual([]);
   });
