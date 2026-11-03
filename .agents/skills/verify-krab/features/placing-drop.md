@@ -28,4 +28,4 @@ Preconditions: fresh context, empty site data, granted emulated location, made-u
 - This flow proves a pot with a granted fix, not net selection, Undo, permission denial or no-fix handling; the existing trip tests own numbering and freshness policy. Extend the map when another journey is required.
 - Ticket 02 has no location-ready indicator. If the emulated fix does not arrive before the tap, the saved-position assertion fails. Report that failure rather than inserting a position. Ticket 03 owns explicit location status.
 - Reload returns to Map, so choose Gear again before asserting restoration.
-- The Gear list's navigation items are also list items; scope the pot row to main.
+- The Gear list's navigation items are also list items; scope the pot row to main. Each row now wraps a button that opens its gear sheet (see [Drop details](drop-details.md)); the `listitem` locator still matches.
