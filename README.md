@@ -1,6 +1,6 @@
 # Krab
 
-A minimal client-rendered SvelteKit shell for future crab gear tracking. It currently shows a title and a shadcn-svelte Badge.
+A client-rendered SvelteKit app for keeping track of crab pots and nets on the water. It currently drops gear at the phone's location, lists gear in the water with distance, direction and time in the water, and restores the active trip from IndexedDB after a reload.
 
 ## Setup
 
@@ -27,7 +27,16 @@ bun run preview --host 127.0.0.1
 
 `check` synchronizes framework types and runs strict Svelte/TypeScript checking. The static adapter writes the deployable site to `build/`, including the client-rendered `index.html` fallback. Configure a future static host to serve that fallback for application routes. Generated `.svelte-kit/` server intermediates are build tooling output; the shipped `build/` directory needs no SvelteKit application server. `preview` serves the production build locally and is not a hosting setup.
 
-Formatting and lint commands are documented in [Code checks](docs/tooling.md). Commit hooks and CI use the shared commands below. There is no service worker or offline cache, product storage, geolocation, map, or authentication in this shell. No product test framework is installed; this foundation is verified through the real install, development, check, and build commands.
+Formatting, lint and test commands are documented in [Code checks](docs/tooling.md). Commit hooks and CI use the shared commands below. There is no service worker or offline cache, map, or authentication yet.
+
+## Tests
+
+```sh
+bun run test:unit
+bun run test:e2e:container
+```
+
+`test:unit` runs Vitest against the trip module's public interface over `fake-indexeddb`, with a fixed clock and position source. `test:e2e:container` builds the site and runs the Playwright WebKit suite with iPhone emulation, an emulated made-up position and axe (WCAG 2.2 AA, light and dark) inside the official `mcr.microsoft.com/playwright:v1.64.1-noble` image, because WebKit does not launch natively on every Linux host. It needs Docker. Where WebKit runs natively (as in CI), `bun run build && bun run test:e2e` runs the same suite directly. Test output goes to the ignored `test-results/`.
 
 ## Installation assets
 
@@ -39,15 +48,18 @@ Installation metadata does not provide offline startup. No service worker or off
 
 ## Code organization
 
-- `src/routes/` contains thin SvelteKit routes that compose feature UI. The scaffold placeholder lives directly in the route until a real feature exists.
-- Future `src/lib/features/<feature>/` directories own each feature's UI, domain logic, Effect services, and private browser integrations together. Consume another feature through its intended public boundary.
+- `src/routes/` contains thin SvelteKit routes that compose feature UI.
+- `src/lib/features/<feature>/` directories own each feature's UI, domain logic, Effect services, and private browser integrations together. Consume another feature through its `index.ts`.
+  - `trip/` owns the trip record, the drop rules, the GPS freshness policy and IndexedDB storage. Its interface takes a clock, a position source and an `IDBFactory`, and returns Effect values with typed storage failures.
+  - `location/` wraps `watchPosition` as the production position source and stops watching while the page is hidden.
+  - `on-water/` is the on-water UI: bottom tabs, the first-launch location explanation, the Drop control, the Gear list and the Undo toast. It never touches IndexedDB directly.
 - Extract shared browser integrations when multiple features need them.
 - `src/lib/utils.ts` and future shared helpers contain genuinely reusable, domain-independent code.
 - `src/lib/components/ui/` contains maintained shadcn-svelte components; `components.json` configures their paths. They follow the same general coding policies as other owned code.
 
-Do not create empty feature directories or speculative abstractions. SvelteKit 3 uses `#lib/*` package subpath imports, configured in `package.json`. Configuration lives in `vite.config.ts`, including Tailwind's Vite plugin and SvelteKit's static adapter. Global Tailwind theme tokens and the Badge's Nova styles live in `src/app.css`. The copied component's source and license are recorded in [the attribution](docs/third-party/shadcn-svelte.md).
+Do not create empty feature directories or speculative abstractions. SvelteKit 3 uses `#lib/*` package subpath imports, configured in `package.json`. Configuration lives in `vite.config.ts`, including Tailwind's Vite plugin and SvelteKit's static adapter. Global Tailwind theme tokens (light and dark, following the system setting) and the Badge's Nova styles live in `src/app.css`. The copied component's source and license are recorded in [the attribution](docs/third-party/shadcn-svelte.md). The Barlow font is self-hosted from `@fontsource/barlow` under the SIL Open Font License; see [the Barlow attribution](docs/third-party/barlow.md).
 
-See [GLOSSARY.md](GLOSSARY.md) and [the phone-only active-trip decision](docs/adr/0001-phone-only-active-trip-data.md) before product work. These record future direction; the scaffold does not implement it.
+See [GLOSSARY.md](GLOSSARY.md), [the phone-only active-trip decision](docs/adr/0001-phone-only-active-trip-data.md) and [keeping past trips on the phone](docs/adr/0002-keep-past-trips-on-the-phone.md) before product work.
 
 ## Dependencies and documentation
 
@@ -70,9 +82,10 @@ bun run secrets:staged
 bun run format:check
 bun run lint
 bun run check
+bun run test:unit
 ```
 
-The scanner reads the staged Git diff, including index content that differs from the working copy. It runs before policy checks to prevent their diagnostics from printing a detected staged value. Fix a finding in the index and rerun the commit; checks never rewrite or stage files. Gitleaks uses its upstream detection rules; a passing scan is limited to those rules.
+The end-to-end suite is too slow for the hook and runs in CI. The scanner reads the staged Git diff, including index content that differs from the working copy. It runs before policy checks to prevent their diagnostics from printing a detected staged value. Fix a finding in the index and rerun the commit; checks never rewrite or stage files. Gitleaks uses its upstream detection rules; a passing scan is limited to those rules.
 
 ```sh
 bun run secrets:history
