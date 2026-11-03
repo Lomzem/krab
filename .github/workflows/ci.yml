@@ -45,7 +45,13 @@ jobs:
         run: bun run test:policy
       - name: Verify hook and secret-scan behavior
         run: bun run test:security
+      - name: Run unit tests
+        run: bun run test:unit
       - name: Build static site
         run: bun run build
       - name: Check emitted installation assets
         run: bun run check:assets
+      - name: Install WebKit for end-to-end tests
+        run: bunx --no-install playwright install --with-deps webkit
+      - name: Run end-to-end tests
+        run: bun run test:e2e

@@ -2,13 +2,16 @@
 
 Use Bun 1.4.4 and the Node version in `.node-version`. Install the pinned tools with `bun install --frozen-lockfile`.
 
-| Command                | Behavior                                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------------------- |
-| `bun run format`       | Format supported source, configuration, and Markdown; sort Tailwind classes using `src/app.css` |
-| `bun run format:check` | Check formatting without rewriting files                                                        |
-| `bun run lint`         | Run the absolute comment check and then ESLint                                                  |
-| `bun run check`        | Synchronize SvelteKit and check the whole TypeScript/Svelte project, including tooling          |
-| `bun run test:policy`  | Exercise paired valid/invalid inputs through those real commands in a disposable checkout       |
+| Command                      | Behavior                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------- |
+| `bun run format`             | Format supported source, configuration, and Markdown; sort Tailwind classes using `src/app.css` |
+| `bun run format:check`       | Check formatting without rewriting files                                                        |
+| `bun run lint`               | Run the absolute comment check and then ESLint                                                  |
+| `bun run check`              | Synchronize SvelteKit and check the whole TypeScript/Svelte project, including tooling          |
+| `bun run test:policy`        | Exercise paired valid/invalid inputs through those real commands in a disposable checkout       |
+| `bun run test:unit`          | Run the Vitest suites under `src/**/*.test.ts`                                                  |
+| `bun run test:e2e`           | Run the Playwright suite in `e2e/` against `vite preview` of an existing build                  |
+| `bun run test:e2e:container` | Build, then run `test:e2e` inside the pinned Playwright Docker image                            |
 
 ESLint uses the official Svelte parser with the TypeScript script parser, project service, and consistent `.svelte` extensions. Strict type-aware TypeScript rules reject explicit and unsafe any; the whole-project check rejects implicit any. Code blocks have maximum depth three, nested callbacks maximum depth two, and nested ternaries are forbidden. Throw and try statements are forbidden; Effect failure and recovery APIs remain valid.
 
@@ -17,6 +20,12 @@ ESLint uses the official Svelte parser with the TypeScript script parser, projec
 The independent comment check inspects parser comment tokens/nodes for script code, Svelte markup and scripts, CSS (including embedded styles), HTML (including embedded scripts/styles), JSON/JSONC, YAML, and TOML. Ignore files use their line grammar: a leading unescaped `#` denotes a comment; `\#` is a literal pattern. Strings and URLs remain data. ESLint inline configuration and Svelte comment directives cannot disable the check. No suppression comments are permitted, including TypeScript directives. Markdown prose is allowed. Dependencies, Git internals, `.scratch`, `.svelte-kit`, and `build` are excluded; copied UI and these tooling/test files are maintained source.
 
 The policy table is the primary proof owner for project rule wiring and comment coverage. Each row records its observable contract, intended diagnostic, and credible wiring regression. Paired controls share the real command and disposable tree. Invalid programs exist only as string data and temporary files. Hook lifecycle, staged/history secret scans, and emitted installation assets have separate owners because they exercise different boundaries. This is not a copy of upstream parser/rule test suites, a product test framework, or device verification.
+
+## Product tests
+
+Vitest 5.1.0 runs in the Node environment. Trip storage tests use `fake-indexeddb` 6.2.7 with a fresh `IDBFactory` per test, passed through the trip module's public interface, so no global is patched.
+
+Playwright 1.64.1 runs one WebKit project with the `iPhone 17` descriptor, a granted geolocation permission and a made-up mid-ocean position. `@axe-core/playwright` 4.14.0 scans with the `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` and `wcag22aa` tags in both colour schemes. The suite uses the list reporter and writes only to the ignored `test-results/`; traces, screenshots and videos are off so no position can leak into artifacts. The container runner mounts the checkout into `mcr.microsoft.com/playwright:v1.64.1-noble`, runs as the current user and uses the checkout's own `node_modules`. The image tag must match the installed `@playwright/test` version.
 
 ## Primary references
 
