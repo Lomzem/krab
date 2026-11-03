@@ -6,6 +6,7 @@
     KIND_NAMES,
     timeInWater,
     type Catch,
+    type Drop,
     type DropEdit,
     type Kind
   } from '#lib/features/trip/index.js';
@@ -34,6 +35,7 @@
     onsave,
     oncollect,
     ondropagain,
+    direction,
     children
   }: {
     subject: SheetSubject;
@@ -44,6 +46,7 @@
     onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     oncollect?: (dropId: string) => void;
     ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
+    direction?: Snippet<[Drop]>;
     children?: Snippet;
   } = $props();
 
@@ -99,10 +102,13 @@
 <form id={formId} class="grid gap-6" onsubmit={submit} novalidate>
   {#if collectedAt === null}
     <div class="grid gap-3">
-      <p class="text-[17px] text-muted-foreground">
-        <span aria-hidden="true">{inWater.short} in the water</span>
-        <span class="sr-only">In the water for {inWater.spoken}</span>
-      </p>
+      <div class="flex min-h-11 items-center justify-between gap-3">
+        <p class="text-[17px] text-muted-foreground">
+          <span aria-hidden="true">{inWater.short} in the water</span>
+          <span class="sr-only">In the water for {inWater.spoken}</span>
+        </p>
+        {@render direction?.(drop)}
+      </div>
       {#if oncollect}
         <button
           bind:this={collectButton}

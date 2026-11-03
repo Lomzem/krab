@@ -1,26 +1,11 @@
-import { Effect } from 'effect';
+import {
+  readSetting as read,
+  writeSetting as write
+} from '#lib/local-setting.js';
 import type { Kind } from '#lib/features/trip/index.js';
 
 const KIND_KEY = 'krab.drop-kind';
 const EXPLAINED_KEY = 'krab.location-explained';
-
-const read = (key: string) =>
-  Effect.runSync(
-    Effect.orElseSucceed(
-      Effect.try(() => localStorage.getItem(key)),
-      () => null
-    )
-  );
-
-const write = (key: string, value: string) => {
-  Effect.runSync(
-    Effect.ignore(
-      Effect.try(() => {
-        localStorage.setItem(key, value);
-      })
-    )
-  );
-};
 
 export const savedKind = (): Kind => (read(KIND_KEY) === 'net' ? 'net' : 'pot');
 

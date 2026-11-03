@@ -9,7 +9,8 @@ export default defineConfig({
     'placing-drop.ts',
     'finding-gear.ts',
     'collecting.ts',
-    'drop-details.ts'
+    'drop-details.ts',
+    'compass.ts'
   ],
   outputDir: '../test-results/verify-krab-lock/artifacts',
   workers: 1,

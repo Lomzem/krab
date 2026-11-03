@@ -1,4 +1,8 @@
 <script lang="ts">
+  import {
+    CompassArrow,
+    type CompassState
+  } from '#lib/features/compass/index.js';
   import type { Base, Camera, MapPlace } from '#lib/features/map/index.js';
   import {
     compassPoint,
@@ -9,13 +13,14 @@
     type GearRow,
     type Trip
   } from '#lib/features/trip/index.js';
-  import BearingArrow from './BearingArrow.svelte';
   import GearIcon from './GearIcon.svelte';
 
   let {
     trip,
     fix,
     courseDeg,
+    compass,
+    oncompass,
     now,
     base = $bindable('chart'),
     camera = $bindable(null),
@@ -26,6 +31,8 @@
     trip: Trip | null;
     fix: Fix | null;
     courseDeg: number | null;
+    compass: CompassState;
+    oncompass: () => void;
     now: number;
     base?: Base;
     camera?: Camera | null;
@@ -43,16 +50,20 @@
     )
   );
   const rough = $derived(fix && roughness(fix));
+  const headingDeg = $derived(
+    compass.kind === 'usable' ? Math.round(compass.trueHeadingDeg) % 360 : null
+  );
+  const course = $derived(headingDeg === null ? courseDeg : null);
   const me = $derived(
     fix && {
       at: fix,
       accuracyM: fix.accuracyM,
       rough: rough !== null,
-      courseDeg,
+      courseDeg: course,
       label: [
         'Your position',
         rough && `rough, within about ${rough.spoken}`,
-        courseDeg !== null && `heading ${compassPoint(courseDeg)[0]}`
+        course !== null && `heading ${compassPoint(course)[0]}`
       ]
         .filter(Boolean)
         .join(', ')
@@ -91,7 +102,12 @@
           Nearest to you
         </p>
       </div>
-      <BearingArrow degrees={direction.bearingDeg} />
+      <CompassArrow
+        bearingDeg={direction.bearingDeg}
+        point={direction.point}
+        {compass}
+        ontoggle={oncompass}
+      />
       <div class="text-right" aria-hidden="true">
         <p class="text-[21px] leading-tight font-bold tabular-nums">
           {direction.distance}
@@ -108,7 +124,15 @@
     {#await import('#lib/features/map/ChartMap.svelte')}
       <p class="px-4 pt-4 text-[17px] text-muted-foreground">Loading map</p>
     {:then { default: ChartMap }}
-      <ChartMap bind:base bind:camera {places} {me} {show} {onshown}>
+      <ChartMap
+        bind:base
+        bind:camera
+        {places}
+        {me}
+        {headingDeg}
+        {show}
+        {onshown}
+      >
         {#snippet pin(id: string)}
           {@const row = rowsById.get(id)}
           {#if row}

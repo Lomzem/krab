@@ -20,6 +20,7 @@
     ondropagain,
     returnFocus,
     actions,
+    direction,
     endAction
   }: {
     subject: SheetSubject | null;
@@ -32,6 +33,7 @@
     ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     returnFocus: () => HTMLElement | null | undefined;
     actions?: Snippet<[Drop]>;
+    direction?: Snippet<[Drop]>;
     endAction?: Snippet<[Drop]>;
   } = $props();
 </script>
@@ -60,6 +62,7 @@
         {onsave}
         {oncollect}
         {ondropagain}
+        {direction}
       >
         {@render actions?.(subject.drop)}
       </GearDetailsForm>
