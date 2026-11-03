@@ -9,8 +9,18 @@ export class PositionWatch implements PositionSource {
   permission = $state<LocationPermission>('prompt');
   #watchId: number | null = null;
   #wanted = false;
+  #listeners: (() => void)[] = [];
 
   readonly latest = () => this.fix;
+
+  readonly denied = () => this.permission === 'denied';
+
+  readonly subscribe = (listener: () => void) => {
+    this.#listeners = [...this.#listeners, listener];
+    return () => {
+      this.#listeners = this.#listeners.filter((other) => other !== listener);
+    };
+  };
 
   start() {
     if (this.#wanted) return;
@@ -48,9 +58,16 @@ export class PositionWatch implements PositionSource {
       accuracyM: position.coords.accuracy,
       at: position.timestamp
     };
+    this.#tell();
   };
 
   readonly #onError = (error: GeolocationPositionError) => {
-    if (error.code === PERMISSION_DENIED) this.permission = 'denied';
+    if (error.code !== PERMISSION_DENIED) return;
+    this.permission = 'denied';
+    this.#tell();
   };
+
+  #tell() {
+    for (const listener of this.#listeners) listener();
+  }
 }

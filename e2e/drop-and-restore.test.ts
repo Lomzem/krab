@@ -1,18 +1,6 @@
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { MADE_UP_SEA } from '../playwright.config';
-
-const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
-
-const expectAccessibleInBothThemes = async (page: Page) => {
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme });
-    const { violations } = await new AxeBuilder({ page })
-      .withTags(WCAG_22_AA)
-      .analyze();
-    expect(violations, `${colorScheme} theme`).toEqual([]);
-  }
-};
+import { expectAccessibleInBothThemes } from './accessibility';
 
 const coordinateText = [
   String(MADE_UP_SEA.latitude),
@@ -44,6 +32,7 @@ test('a pot dropped with a granted fix is listed under Gear and survives a reloa
   await expectAccessibleInBothThemes(page);
 
   await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Position ready')).toBeVisible();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(page.getByRole('status')).toContainText('Pot 1 dropped');
   await expectAccessibleInBothThemes(page);
