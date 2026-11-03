@@ -820,7 +820,7 @@ it('removes the trip with its only drop, and restoring brings back the same trip
   expect(next.name).toBe('Pot 3');
 });
 
-it('deletes and restores the only drop of a past trip', async () => {
+it('deletes and restores the only drop of a past trip, and the restored trip is stored', async () => {
   const { open, idb } = withoutLocation();
   const book = await open();
   const past: Trip = {
@@ -838,8 +838,13 @@ it('deletes and restores the only drop of a past trip', async () => {
   const restored = await run(book.restoreDrop(deleted.deletion));
   await run(book.restoreDrop(deleted.deletion));
 
+  const stored: unknown = await withStoredTrips(idb, 'readonly', (trips) =>
+    trips.get('trip-past')
+  );
+
   expect([deleted.name, deleted.trip]).toEqual(['Net 4', null]);
   expect(restored.trip).toEqual(past);
+  expect(stored).toEqual(past);
   expect(await run(book.activeTrip())).toEqual(active.trip);
 });
 
