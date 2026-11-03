@@ -165,3 +165,66 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
 });
+
+type Watching = { hidden: boolean; active: number[]; most: number };
+type WatchingWindow = { watching?: Watching };
+
+const countWatches = () => {
+  const watching: Watching = { hidden: false, active: [], most: 0 };
+  (window as WatchingWindow).watching = watching;
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => (watching.hidden ? 'hidden' : 'visible')
+  });
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    get: () => watching.hidden
+  });
+  const geolocation = navigator.geolocation;
+  const watch = geolocation.watchPosition.bind(geolocation);
+  const clear = geolocation.clearWatch.bind(geolocation);
+  geolocation.watchPosition = (success, error, options) => {
+    const id = watch(success, error, options);
+    watching.active = [...watching.active, id];
+    watching.most = Math.max(watching.most, watching.active.length);
+    return id;
+  };
+  geolocation.clearWatch = (id) => {
+    watching.active = watching.active.filter((other) => other !== id);
+    clear(id);
+  };
+};
+
+const setHidden = (page: Page, hidden: boolean) =>
+  page.evaluate((next) => {
+    const { watching } = window as WatchingWindow;
+    if (watching) watching.hidden = next;
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+
+const watches = (page: Page) =>
+  page.evaluate(() => {
+    const { watching } = window as WatchingWindow;
+    return { active: watching?.active.length, most: watching?.most };
+  });
+
+test('the position watch stops while Krab is hidden and resumes as one watch when it is shown again', async ({
+  page
+}) => {
+  await page.addInitScript(countWatches);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Position ready')).toBeVisible();
+  expect(await watches(page)).toEqual({ active: 1, most: 1 });
+
+  await setHidden(page, true);
+  expect(await watches(page)).toEqual({ active: 0, most: 1 });
+  await setHidden(page, true);
+  expect(await watches(page)).toEqual({ active: 0, most: 1 });
+
+  await setHidden(page, false);
+  expect(await watches(page)).toEqual({ active: 1, most: 1 });
+  await setHidden(page, false);
+  expect(await watches(page)).toEqual({ active: 1, most: 1 });
+  await expect(page.getByText('Position ready')).toBeVisible();
+});
