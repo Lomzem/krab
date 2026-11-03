@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { IDBDatabase, IDBFactory } from 'fake-indexeddb';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, assert, expect, it, vi } from 'vitest';
 import { gearInWater, openTripBook, type Fix, type TripBook } from './index';
 
 const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
@@ -224,7 +224,7 @@ it('flags a fix worse than 50 m as rough, in feet, on the drop and its gear row'
   ]);
 });
 
-it('reports a failed save as not saved, stores nothing, and retries the same drop', async () => {
+it('stores nothing when a save fails, and replaying its Retry saves that drop once under one number', async () => {
   const { state, open, advance, report } = harness();
   state.fix = { ...SEA, accuracyM: 7, at: T0 - 1000 };
   const book = await open();
@@ -233,18 +233,33 @@ it('reports a failed save as not saved, stores nothing, and retries the same dro
   const attempt = await run(book.placeDrop('pot'));
   const failure = await run(Effect.flip(attempt.result));
   const afterFailure = await run(book.activeTrip());
+  assert(failure._tag === 'DropNotSaved');
   advance(30_000);
   report({ lat: 0.01, lon: -140, accuracyM: 4, at: state.now });
-  const retried =
-    failure._tag === 'DropNotSaved' ? await run(failure.retry) : null;
-  const active = await run(book.activeTrip());
+  const first = await run(failure.retry);
+  const unrelated = await place(book, 'pot');
+  const again = await run(failure.retry);
+  const concurrent = await run(
+    Effect.all([failure.retry, failure.retry], { concurrency: 'unbounded' })
+  );
+  const reopened = await run((await open()).activeTrip());
+  const next = await place(book, 'pot');
 
-  expect(failure._tag).toBe('DropNotSaved');
   expect(afterFailure).toBeNull();
-  expect(retried?.name).toBe('Pot 1');
-  expect(retried?.drop.placedAt).toBe(T0);
-  expect(retried?.drop.position).toEqual({ lat: 0, lon: -140, accuracyM: 7 });
-  expect(active?.drops).toEqual([retried?.drop]);
+  expect(first.name).toBe('Pot 1');
+  expect(first.drop.placedAt).toBe(T0);
+  expect(first.drop.position).toEqual({ lat: 0, lon: -140, accuracyM: 7 });
+  expect(
+    [again, ...concurrent].map((replay) => [replay.drop.id, replay.name])
+  ).toEqual([
+    [first.drop.id, 'Pot 1'],
+    [first.drop.id, 'Pot 1'],
+    [first.drop.id, 'Pot 1']
+  ]);
+  expect(unrelated.name).toBe('Pot 2');
+  expect(reopened?.drops).toEqual([first.drop, unrelated.drop]);
+  expect(reopened?.gear.map((gear) => gear.number)).toEqual([1, 2]);
+  expect(next.name).toBe('Pot 3');
 });
 
 it('records gear number, tap time and a fresh fix', async () => {

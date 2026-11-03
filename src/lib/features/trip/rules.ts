@@ -23,20 +23,41 @@ const newTrip = (startedAt: number): Trip => ({
   next: { pot: 1, net: 1 }
 });
 
+export type DropCommand = {
+  dropId: string;
+  gearId: string;
+  kind: Kind;
+  tapAt: number;
+};
+
+export const dropCommand = (kind: Kind, tapAt: number): DropCommand => ({
+  dropId: crypto.randomUUID(),
+  gearId: crypto.randomUUID(),
+  kind,
+  tapAt
+});
+
+const recorded = (trips: Trip[], command: DropCommand) => {
+  for (const trip of trips) {
+    const drop = trip.drops.find((item) => item.id === command.dropId);
+    const gear = drop && trip.gear.find((item) => item.id === drop.gearId);
+    if (drop && gear) return { trip, drop, gear, isNew: false };
+  }
+  return null;
+};
+
 export const placeDrop = (
-  active: Trip | null,
-  kind: Kind,
-  tapAt: number,
+  trips: Trip[],
+  command: DropCommand,
   where: Located
 ) => {
-  const base = active ?? newTrip(tapAt);
-  const gear: Gear = {
-    id: crypto.randomUUID(),
-    kind,
-    number: base.next[kind]
-  };
+  const done = recorded(trips, command);
+  if (done) return done;
+  const { kind, tapAt } = command;
+  const base = activeOf(trips) ?? newTrip(tapAt);
+  const gear: Gear = { id: command.gearId, kind, number: base.next[kind] };
   const drop: Drop = {
-    id: crypto.randomUUID(),
+    id: command.dropId,
     gearId: gear.id,
     placedAt: tapAt,
     position: where.position,
@@ -55,7 +76,7 @@ export const placeDrop = (
     drops: [...base.drops, drop],
     next: { ...base.next, [kind]: gear.number + 1 }
   };
-  return { trip, drop, gear };
+  return { trip, drop, gear, isNew: true };
 };
 
 export const undoDrop = (active: Trip, dropId: string): Trip | null => {

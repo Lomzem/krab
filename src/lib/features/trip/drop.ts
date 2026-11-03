@@ -1,5 +1,11 @@
 import { Data, Deferred, Effect, Fiber } from 'effect';
-import { activeOf, gearName, placeDrop, type Located } from './rules';
+import {
+  dropCommand,
+  gearName,
+  placeDrop,
+  type DropCommand,
+  type Located
+} from './rules';
 import { roughness, type SpokenText } from './queries';
 import { readModifyWrite, type StorageFailed } from './storage';
 import type { Drop, Fix, Kind, PositionSource, Trip, TripDeps } from './types';
@@ -45,15 +51,14 @@ const settledAt = (positions: PositionSource, tapAt: number) => {
 
 const store = (
   db: IDBDatabase,
-  kind: Kind,
-  tapAt: number,
+  command: DropCommand,
   where: Located
 ): Effect.Effect<PlacedDrop, DropNotSaved> =>
   Effect.mapError(
     readModifyWrite(db, (trips) => {
-      const placed = placeDrop(activeOf(trips), kind, tapAt, where);
+      const placed = placeDrop(trips, command, where);
       return {
-        put: [placed.trip],
+        put: placed.isNew ? [placed.trip] : [],
         remove: [],
         result: {
           trip: placed.trip,
@@ -66,7 +71,7 @@ const store = (
     (cause) =>
       new DropNotSaved({
         cause,
-        retry: Effect.suspend(() => store(db, kind, tapAt, where))
+        retry: Effect.suspend(() => store(db, command, where))
       })
   );
 
@@ -83,6 +88,7 @@ const listen = (
 export const startDrop = (deps: TripDeps, db: IDBDatabase, kind: Kind) =>
   Effect.suspend(() => {
     const tapAt = deps.clock.now();
+    const command = dropCommand(kind, tapAt);
     const atTap = settledAt(deps.positions, tapAt);
     const choice = Deferred.makeUnsafe<Located, DropCancelled>();
     if (atTap) Deferred.doneUnsafe(choice, Effect.succeed(atTap));
@@ -101,9 +107,7 @@ export const startDrop = (deps: TripDeps, db: IDBDatabase, kind: Kind) =>
         })
       )
     );
-    const work = Effect.flatMap(where, (found) =>
-      store(db, kind, tapAt, found)
-    );
+    const work = Effect.flatMap(where, (found) => store(db, command, found));
     return Effect.map(Effect.forkDetach(work), (fiber): DropAttempt => ({
       gettingPosition: () => waiting,
       saveWithoutPosition: () => {
