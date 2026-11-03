@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Countdown } from './countdown';
-  import type { Notice } from './on-water.svelte';
+  import type { Notice, Retry } from './on-water.svelte';
 
   const UNDO_MS = 8000;
   const NOTE_MS = 4000;
@@ -8,17 +8,19 @@
   let {
     notice,
     onundo,
+    onretry,
     ondismiss
   }: {
     notice: Notice | null;
     onundo: (undo: NonNullable<Notice['undo']>) => void;
+    onretry: (retry: Retry) => void;
     ondismiss: (key: number) => void;
   } = $props();
 
   let countdown: Countdown | null = null;
 
   $effect(() => {
-    if (!notice) return;
+    if (!notice || notice.retry) return;
     const { key } = notice;
     const current = new Countdown(notice.undo ? UNDO_MS : NOTE_MS, () => {
       ondismiss(key);
@@ -51,7 +53,7 @@
         onfocusin={hold('focus')}
         onfocusout={release('focus')}
       >
-        <p class="flex-1 text-[17px] font-semibold">{notice.text}</p>
+        <p class="flex-1 py-1.5 text-[17px] font-semibold">{notice.text}</p>
         {#if notice.undo}
           {@const undo = notice.undo}
           <button
@@ -60,6 +62,24 @@
             onclick={() => {
               onundo(undo);
             }}>Undo</button
+          >
+        {/if}
+        {#if notice.retry}
+          {@const retry = notice.retry}
+          {@const key = notice.key}
+          <button
+            type="button"
+            class="min-h-11 min-w-11 rounded-control px-4 text-[17px] font-bold text-primary-foreground underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tab-mark"
+            onclick={() => {
+              onretry(retry);
+            }}>Retry</button
+          >
+          <button
+            type="button"
+            class="min-h-11 min-w-11 rounded-control px-3 text-[17px] font-semibold text-primary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tab-mark"
+            onclick={() => {
+              ondismiss(key);
+            }}>Dismiss</button
           >
         {/if}
       </div>

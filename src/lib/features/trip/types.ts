@@ -1,3 +1,5 @@
+import type { Effect } from 'effect';
+
 export type Kind = 'pot' | 'net';
 
 export type NoPosition = 'denied' | 'no-fix' | 'skipped';
@@ -32,9 +34,16 @@ export type Trip = {
 
 export type Fix = Position & { at: number };
 
-export type Clock = { now: () => number };
+export type Clock = {
+  now: () => number;
+  sleepUntil: (at: number) => Effect.Effect<void>;
+};
 
-export type PositionSource = { latest: () => Fix | null };
+export type PositionSource = {
+  latest: () => Fix | null;
+  denied: () => boolean;
+  subscribe: (listener: () => void) => () => void;
+};
 
 export type TripDeps = {
   clock: Clock;

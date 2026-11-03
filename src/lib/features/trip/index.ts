@@ -1,12 +1,19 @@
 import { Effect } from 'effect';
-import { activeOf, gearName, placeDrop, undoDrop } from './rules';
+import {
+  DropCancelled,
+  DropNotSaved,
+  startDrop,
+  type DropAttempt,
+  type PlacedDrop
+} from './drop';
+import { activeOf, undoDrop } from './rules';
 import {
   openDatabase,
   readModifyWrite,
   readTrips,
   StorageFailed
 } from './storage';
-import type { Drop, Kind, Trip, TripDeps } from './types';
+import type { Kind, Trip, TripDeps } from './types';
 
 export type {
   Clock,
@@ -20,38 +27,27 @@ export type {
   Trip,
   TripDeps
 } from './types';
-export { StorageFailed };
+export { DropCancelled, DropNotSaved, StorageFailed };
+export type { DropAttempt, PlacedDrop };
 export { KIND_NAMES, KINDS } from './rules';
-export { gearInWater, type Direction, type GearRow } from './queries';
+export {
+  gearInWater,
+  roughness,
+  type Direction,
+  type GearRow,
+  type SpokenText
+} from './queries';
 export type { LatLon } from './geo';
-
-export type PlacedDrop = { trip: Trip; drop: Drop; name: string };
 
 export type TripBook = {
   activeTrip: () => Effect.Effect<Trip | null, StorageFailed>;
-  placeDrop: (kind: Kind) => Effect.Effect<PlacedDrop, StorageFailed>;
+  placeDrop: (kind: Kind) => Effect.Effect<DropAttempt>;
   undoDrop: (dropId: string) => Effect.Effect<Trip | null, StorageFailed>;
 };
 
 const bookFor = (deps: TripDeps, db: IDBDatabase): TripBook => ({
   activeTrip: () => Effect.map(readTrips(db), activeOf),
-  placeDrop: (kind) =>
-    Effect.suspend(() => {
-      const tapAt = deps.clock.now();
-      const latest = deps.positions.latest();
-      return readModifyWrite(db, (trips) => {
-        const placed = placeDrop(activeOf(trips), kind, tapAt, latest);
-        return {
-          put: [placed.trip],
-          remove: [],
-          result: {
-            trip: placed.trip,
-            drop: placed.drop,
-            name: gearName(placed.gear)
-          }
-        };
-      });
-    }),
+  placeDrop: (kind) => startDrop(deps, db, kind),
   undoDrop: (dropId) =>
     readModifyWrite(db, (trips) => {
       const active = activeOf(trips);

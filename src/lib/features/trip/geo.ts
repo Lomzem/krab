@@ -3,6 +3,8 @@ export type LatLon = { lat: number; lon: number };
 const EARTH_RADIUS_M = 6_371_008.8;
 const FEET_PER_METRE = 1 / 0.3048;
 
+export const metresToFeet = (metres: number) => metres * FEET_PER_METRE;
+
 const radians = (deg: number) => (deg * Math.PI) / 180;
 const degrees = (rad: number) => (rad * 180) / Math.PI;
 
