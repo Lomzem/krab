@@ -6,6 +6,13 @@
 - Extract shared modules when multiple features need them.
 - Keep framework routes thin; compose feature modules there.
 
+## Rules
+
+| Rule                                                                                                                                                                                                                 | Enforced by                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| New maintained language or container surfaces accept legitimate data and reject comments through the existing policy owner: extend `scripts/policy.test.ts` rather than adding another policy suite.                 | `bun run test:policy` and `bun run lint` (`scripts/check-comments.ts`), both in CI                                    |
+| Claimed independent contracts get sensitive proof at their primary boundary. UI timing such as Undo lifetime and holds is proven through the real toast with a controlled clock, without test-only production seams. | `e2e/undo.test.ts` under `bun run test:e2e` (CI) and `bun run test:e2e:container`; review applies the test-audit gate |
+
 ## Agent skills
 
 ### Issue tracker

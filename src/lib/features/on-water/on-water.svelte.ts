@@ -2,25 +2,35 @@ import { Effect, Exit, Result } from 'effect';
 import {
   openTripBook,
   StorageFailed,
+  type Clock,
   type Deletion,
-  type DropNotFound,
+  type DropAttempt,
+  type DropCancelled,
   type DropEdit,
+  type DropNotFound,
+  type DropNotSaved,
   type InvalidDepth,
-  type KindLocked,
   type Kind,
+  type KindLocked,
+  type PlacedDrop,
   type PositionSource,
   type Trip,
   type TripBook
 } from '#lib/features/trip/index.js';
 
+export type Retry = Effect.Effect<PlacedDrop, DropNotSaved>;
+
 export type Offer =
   | { action: 'none' }
   | { action: 'undo-drop'; dropId: string; name: string }
-  | { action: 'restore'; deletion: Deletion; name: string };
+  | { action: 'restore'; deletion: Deletion; name: string }
+  | { action: 'retry'; retry: Retry };
 
-export type Undo = Exclude<Offer, { action: 'none' }>;
+export type Undo = Extract<Offer, { action: 'undo-drop' | 'restore' }>;
 
 export type Notice = { key: number; text: string; offer: Offer };
+
+export type Acquiring = { kind: Kind; attempt: DropAttempt };
 
 export type SaveProblem = 'depth' | 'kind' | 'storage';
 
@@ -33,7 +43,22 @@ const PROBLEMS: Record<SaveFailure['_tag'], SaveProblem> = {
   StorageFailed: 'storage'
 };
 
-const outcome = <A, E>(
+const clock: Clock = {
+  now: () => Date.now(),
+  sleepUntil: (at) =>
+    Effect.suspend(() => Effect.sleep(Math.max(0, at - Date.now())))
+};
+
+const droppedText = (placed: PlacedDrop) => {
+  if (placed.rough) {
+    return `${placed.name} dropped. Rough position, within about ${placed.rough.short}.`;
+  }
+  if (!placed.drop.position)
+    return `${placed.name} dropped without a position.`;
+  return `${placed.name} dropped`;
+};
+
+const resultOf = <A, E>(
   effect: Effect.Effect<A, E>
 ): Promise<Result.Result<A, E | StorageFailed>> =>
   Effect.runPromise(Effect.result(effect)).catch((cause: unknown) =>
@@ -43,7 +68,7 @@ const outcome = <A, E>(
 const openBook = (positions: PositionSource) =>
   Effect.runPromiseExit(
     openTripBook({
-      clock: { now: () => Date.now() },
+      clock,
       positions,
       idb: indexedDB
     })
@@ -63,6 +88,7 @@ export class OnWater {
   trip = $state.raw<Trip | null>(null);
   ready = $state(false);
   notice = $state.raw<Notice | null>(null);
+  acquiring = $state<Acquiring | null>(null);
   readonly #book: Promise<TripBook | null>;
   #persistAsked = false;
   #noticeKey = 0;
@@ -73,19 +99,42 @@ export class OnWater {
   }
 
   async drop(kind: Kind) {
+    if (this.acquiring) return false;
     const book = await this.#book;
     if (!book) {
       this.#say("Couldn't save the drop. Storage isn't available.");
+      return false;
+    }
+    const attempt = await Effect.runPromise(book.placeDrop(kind));
+    const waited = attempt.gettingPosition();
+    if (waited) this.acquiring = { kind, attempt };
+    const outcome = await Effect.runPromise(Effect.result(attempt.result));
+    this.acquiring = null;
+    this.#settle(outcome);
+    return waited;
+  }
+
+  async retry(retry: Retry) {
+    this.notice = null;
+    this.#settle(await Effect.runPromise(Effect.result(retry)));
+  }
+
+  #settle(outcome: Result.Result<PlacedDrop, DropCancelled | DropNotSaved>) {
+    if (Result.isFailure(outcome)) {
+      const failure = outcome.failure;
+      if (failure._tag === 'DropCancelled') {
+        this.#say('Drop cancelled. Nothing was saved.');
+        return;
+      }
+      this.#say("Couldn't save the drop, so nothing was saved.", {
+        action: 'retry',
+        retry: failure.retry
+      });
       return;
     }
-    const exit = await Effect.runPromiseExit(book.placeDrop(kind));
-    if (Exit.isFailure(exit)) {
-      this.#say("Couldn't save the drop. Try again.");
-      return;
-    }
-    const placed = exit.value;
+    const placed = outcome.success;
     this.trip = placed.trip;
-    this.#say(`${placed.name} dropped`, {
+    this.#say(droppedText(placed), {
       action: 'undo-drop',
       dropId: placed.drop.id,
       name: placed.name
@@ -109,7 +158,7 @@ export class OnWater {
       this.#say(`${undo.name} removed`);
       return;
     }
-    const restored = await outcome(book.restoreDrop(undo.deletion));
+    const restored = await resultOf(book.restoreDrop(undo.deletion));
     if (Result.isFailure(restored)) {
       const retry = restored.failure._tag === 'StorageFailed';
       this.#say(
@@ -132,11 +181,11 @@ export class OnWater {
   ): Promise<SaveProblem | null> {
     const book = await this.#book;
     if (!book) return 'storage';
-    const updated = await outcome(book.updateDrop(dropId, edit));
+    const updated = await resultOf(book.updateDrop(dropId, edit));
     if (Result.isFailure(updated)) return PROBLEMS[updated.failure._tag];
     this.#show(updated.success);
     if (!kind) return null;
-    const changed = await outcome(book.changeKind(dropId, kind));
+    const changed = await resultOf(book.changeKind(dropId, kind));
     if (Result.isFailure(changed)) return PROBLEMS[changed.failure._tag];
     this.#show(changed.success.trip);
     return null;
@@ -145,7 +194,7 @@ export class OnWater {
   async remove(dropId: string) {
     const book = await this.#book;
     if (!book) return false;
-    const deleted = await outcome(book.deleteDrop(dropId));
+    const deleted = await resultOf(book.deleteDrop(dropId));
     if (Result.isFailure(deleted)) {
       const alreadyGone = deleted.failure._tag === 'DropNotFound';
       if (alreadyGone) return true;

@@ -23,7 +23,7 @@ const excluded = new Set([
 let failures = 0;
 function report(file: string, position: Position) {
   console.error(
-    `${file}:${String(position.line)}:${String(position.column)} policy/no-comments Comments are forbidden.`
+    `${file}:${String(position.line)}:${String(position.column)} policy/no-comments Remove the comment; put rationale in docs/adr/ or the ticket Comments instead.`
   );
   failures += 1;
 }

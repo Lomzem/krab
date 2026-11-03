@@ -17,7 +17,7 @@ Place a pot, choose Gear in the bottom navigation, then tap the pot's row. The s
 
 ## Driving it with Playwright
 
-Preconditions: launch and doctor from the parent skill; fresh context; complete the placing-drop Explain and Drop steps first. `bun scripts/verify-krab/run.ts` does not yet execute this journey (its config matches only `placing-drop.ts`), so report it as unverified until a recipe drives these steps and records the evidence below.
+Preconditions: launch and doctor from the parent skill; fresh context; complete the placing-drop Explain and Drop steps first, including the `Position ready` wait before each tap on Drop. `bun scripts/verify-krab/run.ts` does not yet execute this journey (its config matches only `placing-drop.ts`), so report it as unverified until a recipe drives these steps and records the evidence below.
 
 - **Open:** click Gear, then `page.getByRole('main').getByRole('button').filter({ hasText: 'Pot 1' })`. Require `page.getByRole('dialog')` with heading `Pot 1`, focus inside the dialog, and `getByLabel('Depth')` with `inputmode="decimal"`. Capture the sheet and its ARIA snapshot.
 - **Draft:** fill `getByLabel('Label')`, press Escape. Require the dialog hidden, the Pot 1 row focused, and IndexedDB unchanged from before the sheet opened.
@@ -29,6 +29,7 @@ Preconditions: launch and doctor from the parent skill; fresh context; complete 
 ## Gotchas
 
 - The kind radios are visually hidden; click their visible label text instead of calling `check()`.
+- A row may carry a second line, `Rough position, within about …`, when the fix was rough; it is part of the row button's name, so filter rows by gear name rather than matching the whole name.
 - Every list row is now a button inside its list item. Scope rows to `main`, because the navigation buttons are also buttons.
 - The kind-locked refusal needs a gear dropped twice, which has no UI until ticket 05 (drop again). Do not seed records to reach it; the trip module tests own that rule.
 - `e2e/gear-sheet.test.ts` is a product test run by `bun run test:e2e:container`. It is not verification evidence for this map.

@@ -1,12 +1,15 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { PositionWatch } from '#lib/features/location/index.js';
   import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
   import DropControl from './DropControl.svelte';
   import GearList from './GearList.svelte';
   import { sheetSubject } from './gear-sheet';
   import GearSheet from './GearSheet.svelte';
+  import GettingPosition from './GettingPosition.svelte';
   import LocationIntro from './LocationIntro.svelte';
-  import { OnWater, type Undo } from './on-water.svelte';
+  import LocationStatus from './LocationStatus.svelte';
+  import { OnWater, type Retry, type Undo } from './on-water.svelte';
   import {
     locationExplained,
     rememberLocationExplained,
@@ -60,7 +63,17 @@
 
   const drop = () => {
     now = Date.now();
-    void water.drop(kind);
+    void water.drop(kind).then(async (waited) => {
+      if (!waited) return;
+      await tick();
+      dropButton?.focus();
+    });
+  };
+
+  const retry = (target: Retry) => {
+    void water.retry(target).then(() => {
+      dropButton?.focus();
+    });
   };
 
   const undo = (target: Undo) => {
@@ -130,13 +143,22 @@
   <UndoToast
     notice={water.notice}
     onundo={undo}
+    onretry={retry}
     ondismiss={(key: number) => {
       water.dismiss(key);
     }}
   />
 
-  {#if tab !== 'trips'}
+  {#if water.acquiring}
+    {@const { attempt } = water.acquiring}
+    <GettingPosition
+      kind={water.acquiring.kind}
+      oncancel={attempt.cancel}
+      onskip={attempt.saveWithoutPosition}
+    />
+  {:else if tab !== 'trips'}
     {#if explained}
+      <LocationStatus permission={watch.permission} fix={watch.fix} />
       <DropControl bind:kind bind:button={dropButton} ondrop={drop} />
     {:else}
       <LocationIntro onallow={allowLocation} />

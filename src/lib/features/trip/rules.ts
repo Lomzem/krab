@@ -1,8 +1,20 @@
 import { Result } from 'effect';
 import { AnotherTripActive, InvalidDepth, KindLocked } from './failures';
-import type { Deletion, Drop, DropEdit, Fix, Gear, Kind, Trip } from './types';
+import type {
+  Deletion,
+  Drop,
+  DropEdit,
+  Gear,
+  Kind,
+  NoPosition,
+  Position,
+  Trip
+} from './types';
 
-export const FRESH_FIX_MS = 5000;
+export type Located = {
+  position: Position | null;
+  noPosition: NoPosition | null;
+};
 
 export const KINDS: readonly Kind[] = ['pot', 'net'];
 export const KIND_NAMES: Record<Kind, string> = { pot: 'Pot', net: 'Net' };
@@ -22,14 +34,11 @@ const newTrip = (startedAt: number): Trip => ({
   next: { pot: 1, net: 1 }
 });
 
-const freshFix = (fix: Fix | null, tapAt: number) =>
-  fix !== null && tapAt - fix.at <= FRESH_FIX_MS ? fix : null;
-
 export const placeDrop = (
   active: Trip | null,
   kind: Kind,
   tapAt: number,
-  latest: Fix | null
+  where: Located
 ) => {
   const base = active ?? newTrip(tapAt);
   const gear: Gear = {
@@ -37,13 +46,12 @@ export const placeDrop = (
     kind,
     number: base.next[kind]
   };
-  const fix = freshFix(latest, tapAt);
   const drop: Drop = {
     id: crypto.randomUUID(),
     gearId: gear.id,
     placedAt: tapAt,
-    position: fix && { lat: fix.lat, lon: fix.lon, accuracyM: fix.accuracyM },
-    noPosition: fix ? null : 'no-fix',
+    position: where.position,
+    noPosition: where.noPosition,
     label: '',
     bait: '',
     depthFt: null,
