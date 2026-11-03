@@ -339,8 +339,13 @@ it('stores nothing when a save fails, and replaying its Retry saves that drop on
   expect(next.name).toBe('Pot 3');
 });
 
+type DropFields = Pick<
+  Drop,
+  'id' | 'gearId' | 'placedAt' | 'label' | 'bait' | 'depthFt' | 'notes'
+>;
+
 it('types a drop location as a position or a reason, never both or neither', () => {
-  type Placed<L> = Omit<Drop, 'position' | 'noPosition'> & L;
+  type Placed<L> = DropFields & { collectedAt: null; catch: null } & L;
 
   expectTypeOf<
     Placed<{ position: Position; noPosition: null }>
@@ -366,6 +371,20 @@ it('types a catch as not recorded or both counts, never one count alone', () => 
     DropEdit['catch']
   >();
   expectTypeOf<{ kept: number }>().not.toExtend<DropEdit['catch']>();
+});
+
+it('types a catch as belonging only to a collected drop', () => {
+  type Pulled<C> = DropFields & { position: null; noPosition: 'skipped' } & C;
+  type Counted = { kept: number; released: number };
+
+  expectTypeOf<Pulled<{ collectedAt: null; catch: null }>>().toExtend<Drop>();
+  expectTypeOf<Pulled<{ collectedAt: number; catch: null }>>().toExtend<Drop>();
+  expectTypeOf<
+    Pulled<{ collectedAt: number; catch: Counted }>
+  >().toExtend<Drop>();
+  expectTypeOf<
+    Pulled<{ collectedAt: null; catch: Counted }>
+  >().not.toExtend<Drop>();
 });
 
 it('fails a save on a connection that closed as not saved, and Retry saves it once on a fresh connection', async () => {
@@ -417,6 +436,10 @@ it.each([
   [
     'both a position and a reason',
     { position: { ...SEA, accuracyM: 5 }, noPosition: 'denied' }
+  ],
+  [
+    'a catch while its gear is in the water',
+    { collectedAt: null, catch: { kept: 2, released: 1 } }
   ],
   ['a half-recorded catch', { catch: { kept: 2, released: null } }],
   ['a negative count', { catch: { kept: 0, released: -1 } }],
