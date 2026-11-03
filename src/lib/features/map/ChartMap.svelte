@@ -270,8 +270,8 @@
   });
 </script>
 
-<div class="relative h-full min-h-64 overflow-hidden bg-[#d4e3ec]">
-  <div class="absolute inset-0">
+<div class="relative isolate h-full min-h-64 overflow-hidden bg-[#d4e3ec]">
+  <div class="absolute inset-0 z-0">
     <div bind:this={container} class="size-full"></div>
   </div>
 
@@ -349,7 +349,7 @@
     {/if}
 
     <div
-      class="absolute inset-x-3 top-3 grid gap-2"
+      class="absolute inset-x-3 top-3 z-1 grid gap-2"
       style:pointer-events="none"
     >
       {#if availability === 'unavailable'}
