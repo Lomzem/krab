@@ -6,6 +6,7 @@ import { expectAccessibleInBothThemes } from './accessibility';
 const CHART_TILE =
   /\/MarineChart_Services_NOAACharts\/default\/default028mm\/(\d+)\/\d+\/\d+\.png$/;
 const NOAA_TOP_LEVEL = 14;
+const OPEN_FREE_MAP = 'https://tiles.openfreemap.org/';
 
 const dropPotAndOpenMap = async (page: Page) => {
   await page.goto('/');
@@ -42,6 +43,15 @@ const MADE_UP_SEA_FORMS = [
   ...writtenForms(MADE_UP_SEA.longitude)
 ];
 
+const expectNoPositionIn = (requested: string[]) => {
+  for (const url of requested.map((url) => decodeURIComponent(url))) {
+    expect(url.toLowerCase()).not.toContain('bbox');
+    for (const written of MADE_UP_SEA_FORMS) {
+      expect(url).not.toContain(written);
+    }
+  }
+};
+
 test('the Map tab shows gear and my position from the phone and asks NOAA only for fixed-grid tiles up to its top level', async ({
   context,
   page
@@ -66,12 +76,59 @@ test('the Map tab shows gear and my position from the phone and asks NOAA only f
     expect(url).toMatch(CHART_TILE);
     expect(chartLevel(url)).toBeLessThanOrEqual(NOAA_TOP_LEVEL);
   }
-  for (const url of requested.map((url) => decodeURIComponent(url))) {
-    expect(url.toLowerCase()).not.toContain('bbox');
-    for (const written of MADE_UP_SEA_FORMS) {
-      expect(url).not.toContain(written);
-    }
+  expectNoPositionIn(requested);
+});
+
+test('on the Street map, panning, zooming, Show on map and reload send no position to OpenFreeMap', async ({
+  context,
+  page
+}) => {
+  const requested: string[] = [];
+  context.on('request', (request) => requested.push(request.url()));
+  const streetTiles = () =>
+    requested.filter(
+      (url) => url.startsWith(OPEN_FREE_MAP) && url.endsWith('.png')
+    );
+  const streetStyles = () =>
+    requested.filter(
+      (url) => url.startsWith(OPEN_FREE_MAP) && !url.endsWith('.png')
+    );
+  const streetMap = mapArea(page).getByRole('button', { name: 'Street map' });
+  const chooseStreet = async () => {
+    const before = streetTiles().length;
+    await streetMap.click();
+    await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => streetTiles().length).toBeGreaterThan(before);
+  };
+  await dropPotAndOpenMap(page);
+  await chooseStreet();
+
+  const mapView = mapArea(page).getByRole('region', { name: 'Map view' });
+  for (const key of ['ArrowLeft', 'ArrowLeft', 'ArrowUp']) {
+    await mapView.press(key);
   }
+  await mapArea(page).getByRole('button', { name: 'Zoom out' }).click();
+  await mapArea(page).getByRole('button', { name: 'Zoom in' }).click();
+
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page
+    .getByRole('main')
+    .getByRole('button')
+    .filter({ hasText: 'Pot 1' })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Show on map' })
+    .click();
+  await expect(potOnMap(page)).toBeFocused();
+  await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+
+  await page.reload();
+  await chooseStreet();
+  await expect(potOnMap(page)).toBeVisible();
+
+  expect(streetStyles().length).toBeGreaterThanOrEqual(2);
+  expectNoPositionIn(requested);
 });
 
 test('without signal the Map tab says so while the toast still expires, still shows gear and my position, and recovers when the phone reconnects', async ({
