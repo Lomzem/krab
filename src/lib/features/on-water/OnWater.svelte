@@ -1,10 +1,17 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { keepScreenAwakeWhile } from '#lib/features/app-shell/index.js';
+  import {
+    Compass,
+    CompassArrow,
+    compassChoice,
+    deviceCompass
+  } from '#lib/features/compass/index.js';
   import { PositionWatch } from '#lib/features/location/index.js';
   import type { Base, Camera } from '#lib/features/map/index.js';
   import {
     canUndoCollect,
+    gearInWater,
     type Drop,
     type DropEdit,
     type Kind
@@ -43,6 +50,12 @@
   const watch = new PositionWatch();
   const water = new OnWater(watch);
   keepScreenAwakeWhile(() => water.trip !== null);
+  const compass = new Compass({
+    sensor: deviceCompass,
+    choice: compassChoice,
+    position: watch.latest,
+    now: Date.now
+  });
 
   let tab = $state<Tab>('map');
   let kind = $state(savedKind());
@@ -62,6 +75,13 @@
     operation?.sheet === sheet ? operation : null
   );
   const busy = $derived(sheetOperation?.pending ?? false);
+  const sheetDirection = $derived(
+    subject && water.trip
+      ? (gearInWater(water.trip, watch.fix, now).find(
+          (row) => row.drop.id === subject.drop.id
+        )?.direction ?? null)
+      : null
+  );
 
   $effect(() => {
     const timer = setInterval(() => {
@@ -81,8 +101,19 @@
   });
 
   $effect(() => {
+    compass.start();
+    return () => {
+      compass.stop();
+    };
+  });
+
+  $effect(() => {
     saveKind(kind);
   });
+
+  const toggleCompass = () => {
+    compass.toggle();
+  };
 
   const allowLocation = () => {
     rememberLocationExplained();
@@ -204,6 +235,8 @@
           trip={water.trip}
           fix={watch.fix}
           courseDeg={watch.courseDeg}
+          compass={$compass}
+          oncompass={toggleCompass}
           {now}
           bind:base
           bind:camera
@@ -219,6 +252,7 @@
         <GearList
           trip={water.trip}
           from={watch.fix}
+          compass={$compass}
           {now}
           onopen={opensFrom('list')}
         />
@@ -251,6 +285,29 @@
             show(target.id);
           }}>Show on map</button
         >
+      {/if}
+    {/snippet}
+    {#snippet direction()}
+      {#if sheetDirection}
+        <div class="flex items-center gap-2">
+          <CompassArrow
+            bearingDeg={sheetDirection.bearingDeg}
+            point={sheetDirection.point}
+            compass={$compass}
+            ontoggle={toggleCompass}
+          />
+          <div class="text-right" aria-hidden="true">
+            <p class="text-[21px] leading-tight font-bold tabular-nums">
+              {sheetDirection.distance}
+            </p>
+            <p class="text-[14px] font-semibold text-muted-foreground">
+              {sheetDirection.pointShort}
+            </p>
+          </div>
+          <span class="sr-only"
+            >{sheetDirection.distanceSpoken} {sheetDirection.point}</span
+          >
+        </div>
       {/if}
     {/snippet}
     {#snippet endAction(target: Drop)}

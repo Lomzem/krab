@@ -35,6 +35,7 @@
     camera = $bindable(null),
     places,
     me,
+    headingDeg = null,
     show,
     onshown,
     pin
@@ -43,6 +44,7 @@
     camera?: Camera | null;
     places: MapPlace[];
     me: MyPosition | null;
+    headingDeg?: number | null;
     show: string | null;
     onshown: () => void;
     pin: Snippet<[string]>;
@@ -298,6 +300,26 @@
           use:marker={me.at}
         >
           <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
+            {#if headingDeg !== null}
+              <defs>
+                <radialGradient
+                  id="heading-cone"
+                  cx="22"
+                  cy="22"
+                  r="21"
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop offset="0.3" stop-color="#1d4ed8" stop-opacity="0.4" />
+                  <stop offset="1" stop-color="#1d4ed8" stop-opacity="0" />
+                </radialGradient>
+              </defs>
+              <path
+                d="M22 22 11.5 3.8a21 21 0 0 1 21 0Z"
+                fill="url(#heading-cone)"
+                style:transform={`rotate(${String(headingDeg)}deg)`}
+                style:transform-origin="22px 22px"
+              />
+            {/if}
             {#if me.courseDeg !== null}
               <path
                 d="M22 22 13 2a20 20 0 0 1 18 0Z"

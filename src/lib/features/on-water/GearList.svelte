@@ -1,22 +1,28 @@
 <script lang="ts">
   import {
+    arrowDeg,
+    BearingArrow,
+    type CompassState
+  } from '#lib/features/compass/index.js';
+  import {
     collectedGear,
     gearCounts,
     gearInWater,
     type LatLon,
     type Trip
   } from '#lib/features/trip/index.js';
-  import BearingArrow from './BearingArrow.svelte';
   import GearIcon from './GearIcon.svelte';
 
   let {
     trip,
     from,
+    compass,
     now,
     onopen
   }: {
     trip: Trip | null;
     from: LatLon | null;
+    compass: CompassState;
     now: number;
     onopen: (dropId: string, opener: HTMLElement) => void;
   } = $props();
@@ -72,7 +78,9 @@
           </div>
           {#if row.direction}
             <div class="flex items-center gap-2">
-              <BearingArrow degrees={row.direction.bearingDeg} />
+              <BearingArrow
+                degrees={arrowDeg(row.direction.bearingDeg, compass)}
+              />
               <div class="text-right" aria-hidden="true">
                 <p class="text-[21px] leading-tight font-bold tabular-nums">
                   {row.direction.distance}
