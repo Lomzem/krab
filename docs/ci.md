@@ -30,10 +30,11 @@ bun run test:unit
 bun run build
 bun run check:assets
 bunx --no-install playwright install --with-deps webkit
+bun run build:next
 bun run test:e2e
 ```
 
-Frozen installation runs prepare to synchronize framework types and activate Lefthook. Security setup installs official native Gitleaks 8.30.1 with pinned archive SHA-256 verification. Both scanner commands fully redact findings and report only path/line/rule. No Gitleaks Action, license key, cloud-service credential, or paid scanner is required. Policy commands, the disposable hook/index/history scenarios, and the emitted-asset checker retain their existing proof ownership; CI introduces no duplicate suite. Unit tests run before the build. The end-to-end suite runs last against the built site: the pinned Playwright CLI installs WebKit and its Ubuntu system packages on the runner, then `vite preview` serves `build/`. Locally, `bun run test:e2e:container` runs the same suite in the matching Playwright image.
+Frozen installation runs prepare to synchronize framework types and activate Lefthook. Security setup installs official native Gitleaks 8.30.1 with pinned archive SHA-256 verification. Both scanner commands fully redact findings and report only path/line/rule. No Gitleaks Action, license key, cloud-service credential, or paid scanner is required. Policy commands, the disposable hook/index/history scenarios, and the emitted-asset checker retain their existing proof ownership; CI introduces no duplicate suite. Unit tests run before the build. The end-to-end suite runs last against the built site: the pinned Playwright CLI installs WebKit and its Ubuntu system packages on the runner, then `build:next` keeps that build as the previous version and builds a newer one for the update test. `vite preview` and the test's static host serve the builds. Locally, `bun run test:e2e:container` runs the same suite in the matching Playwright image.
 
 ## CodeRabbit
 
