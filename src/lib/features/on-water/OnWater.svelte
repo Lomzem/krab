@@ -8,6 +8,7 @@
   import { sheetSubject } from './gear-sheet';
   import GearSheet from './GearSheet.svelte';
   import GettingPosition from './GettingPosition.svelte';
+  import SavingDrop from './SavingDrop.svelte';
   import LocationIntro from './LocationIntro.svelte';
   import LocationStatus from './LocationStatus.svelte';
   import { OnWater, type Retry, type Undo } from './on-water.svelte';
@@ -151,13 +152,15 @@
     }}
   />
 
-  {#if water.acquiring}
-    {@const { attempt } = water.acquiring}
+  {#if water.pending?.phase === 'acquiring'}
+    {@const { attempt } = water.pending}
     <GettingPosition
-      kind={water.acquiring.kind}
+      kind={water.pending.kind}
       oncancel={attempt.cancel}
       onskip={attempt.saveWithoutPosition}
     />
+  {:else if water.pending}
+    <SavingDrop />
   {:else if tab !== 'trips'}
     {#if explained}
       <LocationStatus permission={watch.permission} fix={watch.fix} />

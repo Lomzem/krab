@@ -4,6 +4,7 @@ import {
   DropNotSaved,
   startDrop,
   type DropAttempt,
+  type DropPhase,
   type PlacedDrop
 } from './drop';
 import {
@@ -54,7 +55,7 @@ export {
   KindLocked,
   StorageFailed
 };
-export type { DropAttempt, PlacedDrop };
+export type { DropAttempt, DropPhase, PlacedDrop };
 export { canChangeKind, gearName, KIND_NAMES, KINDS } from './rules';
 export { availability, type Availability } from './availability';
 export {

@@ -168,13 +168,13 @@ it('waits for a late fix and stores it with the tap time', async () => {
   const book = await open();
 
   const attempt = await run(book.placeDrop('pot'));
-  const waitingAtTap = attempt.gettingPosition();
+  const phaseAtTap = attempt.phase();
   advance(12_000);
   report({ lat: 0.0001, lon: -140, accuracyM: 9, at: state.now });
   const placed = await run(attempt.result);
 
-  expect(waitingAtTap).toBe(true);
-  expect(attempt.gettingPosition()).toBe(false);
+  expect(phaseAtTap).toBe('acquiring');
+  expect(attempt.phase()).toBe('settled');
   expect(placed.drop.placedAt).toBe(T0);
   expect(placed.drop.position).toEqual({
     lat: 0.0001,
@@ -191,11 +191,11 @@ it('saves without a position 20 s after the tap when no fix arrives', async () =
 
   const attempt = await run(book.placeDrop('net'));
   advance(19_999);
-  const waitingJustBefore = attempt.gettingPosition();
+  const phaseJustBefore = attempt.phase();
   advance(1);
   const placed = await run(attempt.result);
 
-  expect(waitingJustBefore).toBe(true);
+  expect(phaseJustBefore).toBe('acquiring');
   expect(placed.name).toBe('Net 1');
   expect(placed.drop.placedAt).toBe(T0);
   expect(placed.drop.position).toBeNull();
@@ -216,7 +216,7 @@ it('stores nothing when the wait is cancelled, even if a fix arrives later', asy
   const active = await run(book.activeTrip());
 
   expect(failure._tag).toBe('DropCancelled');
-  expect(attempt.gettingPosition()).toBe(false);
+  expect(attempt.phase()).toBe('settled');
   expect(active).toBeNull();
 });
 
@@ -259,10 +259,10 @@ it('records the denied reason without waiting when location is denied, even over
   deny();
 
   const attempt = await run(book.placeDrop('net'));
-  const waitedAtTap = attempt.gettingPosition();
+  const phaseAtTap = attempt.phase();
   const placed = await run(attempt.result);
 
-  expect(waitedAtTap).toBe(false);
+  expect(phaseAtTap).toBe('saving');
   expect(placed.drop.position).toBeNull();
   expect(placed.drop.noPosition).toBe('denied');
 });
@@ -464,14 +464,14 @@ it('uses a fix exactly 5 s old at once, but waits when the fix is older', async 
 
   state.fix = { ...SEA, accuracyM: 8, at: T0 - 5000 };
   const fresh = await run(book.placeDrop('pot'));
-  const freshWaits = fresh.gettingPosition();
+  const freshPhase = fresh.phase();
   const placed = await run(fresh.result);
   state.fix = { ...SEA, accuracyM: 8, at: T0 - 5001 };
   const stale = await run(book.placeDrop('net'));
 
-  expect(freshWaits).toBe(false);
+  expect(freshPhase).toBe('saving');
   expect(placed.drop.position).toEqual({ lat: 0, lon: -140, accuracyM: 8 });
-  expect(stale.gettingPosition()).toBe(true);
+  expect(stale.phase()).toBe('acquiring');
 });
 
 it('removes the drop but keeps the trip while other drops remain', async () => {

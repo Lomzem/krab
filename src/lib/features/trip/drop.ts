@@ -29,8 +29,11 @@ export class DropNotSaved extends Data.TaggedError('DropNotSaved')<{
   readonly retry: Effect.Effect<PlacedDrop, DropNotSaved>;
 }> {}
 
+export type DropPhase = 'acquiring' | 'saving' | 'settled';
+
 export type DropAttempt = {
-  readonly gettingPosition: () => boolean;
+  readonly phase: () => DropPhase;
+  readonly subscribe: (listener: () => void) => () => void;
   readonly saveWithoutPosition: () => void;
   readonly cancel: () => void;
   readonly result: Effect.Effect<PlacedDrop, DropCancelled | DropNotSaved>;
@@ -91,6 +94,25 @@ const listen = (
     if (found) Deferred.doneUnsafe(choice, Effect.succeed(found));
   });
 
+const observedPhase = (initial: DropPhase) => {
+  let phase = initial;
+  let listeners: (() => void)[] = [];
+  return {
+    current: () => phase,
+    enter: (next: DropPhase) =>
+      Effect.sync(() => {
+        phase = next;
+        for (const listener of listeners) listener();
+      }),
+    subscribe: (listener: () => void) => {
+      listeners = [...listeners, listener];
+      return () => {
+        listeners = listeners.filter((other) => other !== listener);
+      };
+    }
+  };
+};
+
 export const startDrop = (deps: TripDeps, storage: TripStorage, kind: Kind) =>
   Effect.suspend(() => {
     const tapAt = deps.clock.now();
@@ -98,26 +120,28 @@ export const startDrop = (deps: TripDeps, storage: TripStorage, kind: Kind) =>
     const atTap = settledAt(deps.positions, tapAt);
     const choice = Deferred.makeUnsafe<Located, DropCancelled>();
     if (atTap) Deferred.doneUnsafe(choice, Effect.succeed(atTap));
-    let waiting = atTap === null;
-    const unsubscribe = waiting
-      ? listen(deps.positions, tapAt, choice)
-      : () => undefined;
+    const phase = observedPhase(atTap ? 'saving' : 'acquiring');
+    const unsubscribe = atTap
+      ? () => undefined
+      : listen(deps.positions, tapAt, choice);
     const where = Effect.raceFirst(
       Deferred.await(choice),
       Effect.as(deps.clock.sleepUntil(tapAt + FIX_WAIT_MS), NO_FIX)
     ).pipe(
       Effect.ensuring(
         Effect.sync(() => {
-          waiting = false;
           unsubscribe();
         })
       )
     );
-    const work = Effect.flatMap(where, (found) =>
-      store(storage, command, found)
+    const work = where.pipe(
+      Effect.tap(() => phase.enter('saving')),
+      Effect.flatMap((found) => store(storage, command, found)),
+      Effect.ensuring(phase.enter('settled'))
     );
     return Effect.map(Effect.forkDetach(work), (fiber): DropAttempt => ({
-      gettingPosition: () => waiting,
+      phase: phase.current,
+      subscribe: phase.subscribe,
       saveWithoutPosition: () => {
         Deferred.doneUnsafe(choice, Effect.succeed(SKIPPED));
       },

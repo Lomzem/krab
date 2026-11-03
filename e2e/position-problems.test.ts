@@ -136,3 +136,55 @@ test('Position ready lasts 5 seconds from each fix, is rechecked on resume, then
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect.poll(() => gettingPositionShown(page)).toBe(1);
 });
+
+type HeldStorage = { releaseStorage?: boolean };
+
+const holdStorage = () =>
+  new Promise<void>((held) => {
+    const request = indexedDB.open('krab');
+    request.onsuccess = () => {
+      const trips = request.result
+        .transaction('trips', 'readwrite')
+        .objectStore('trips');
+      const keepBusy = () => {
+        if ((window as HeldStorage).releaseStorage) return;
+        trips.count().onsuccess = keepBusy;
+      };
+      keepBusy();
+      held();
+    };
+  });
+
+const releaseStorage = () => {
+  (window as HeldStorage).releaseStorage = true;
+};
+
+test('once a fix arrives, Cancel and Save without position give way to saving feedback until the drop is saved', async ({
+  page
+}) => {
+  await page.addInitScript(holdFixes);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding your position')).toBeVisible();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Getting position' })
+  ).toBeFocused();
+
+  await page.evaluate(holdStorage);
+  const fixTime = await page.evaluate(() => Date.now());
+  await page.evaluate(deliverFix, { coords: MADE_UP_SEA, timestamp: fixTime });
+
+  await expect(
+    page.getByRole('heading', { name: 'Saving drop' })
+  ).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Save without position' })
+  ).toHaveCount(0);
+  await expect(page.getByRole('status')).not.toContainText('Pot 1 dropped');
+
+  await page.evaluate(releaseStorage);
+  await expect(page.getByRole('status')).toContainText('Pot 1 dropped');
+  await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
+});
