@@ -3,7 +3,12 @@
   import { keepScreenAwakeWhile } from '#lib/features/app-shell/index.js';
   import { PositionWatch } from '#lib/features/location/index.js';
   import type { Base, Camera } from '#lib/features/map/index.js';
-  import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
+  import {
+    canUndoCollect,
+    type Drop,
+    type DropEdit,
+    type Kind
+  } from '#lib/features/trip/index.js';
   import DropControl from './DropControl.svelte';
   import GearList from './GearList.svelte';
   import { sheetSubject, type SheetOrigin } from './gear-sheet';
@@ -69,13 +74,15 @@
     explained = true;
   };
 
+  const focusDropAfterWait = async (waited: boolean) => {
+    if (!waited) return;
+    await tick();
+    dropButton?.focus();
+  };
+
   const drop = () => {
     now = Date.now();
-    void water.drop(kind).then(async (waited) => {
-      if (!waited) return;
-      await tick();
-      dropButton?.focus();
-    });
+    void water.drop(kind).then(focusDropAfterWait);
   };
 
   const retry = (target: Retry) => {
@@ -111,6 +118,12 @@
     showOnMap = dropId;
     tab = 'map';
     closeSheet();
+  };
+
+  const dropAgain = (dropId: string) => {
+    closeSheet();
+    now = Date.now();
+    void water.dropAgain(dropId).then(focusDropAfterWait);
   };
 
   const deleteDrop = (dropId: string) => {
@@ -157,9 +170,14 @@
 
   <GearSheet
     {subject}
+    {now}
     onclose={closeSheet}
     onsave={(dropId: string, edit: DropEdit, nextKind: Kind | null) =>
       water.save(dropId, edit, nextKind)}
+    oncollect={(dropId: string) => {
+      void water.collect(dropId);
+    }}
+    ondropagain={dropAgain}
     returnFocus={sheetReturnFocus}
   >
     {#snippet actions(target: Drop)}
@@ -174,13 +192,24 @@
       {/if}
     {/snippet}
     {#snippet endAction(target: Drop)}
-      <button
-        type="button"
-        class="min-h-13 rounded-control border-2 border-destructive px-4 text-[18px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        onclick={() => {
-          deleteDrop(target.id);
-        }}>Delete drop</button
-      >
+      {#if subject && canUndoCollect(subject.trip, target)}
+        {@const { name } = subject}
+        <button
+          type="button"
+          class="min-h-13 rounded-control border-2 border-primary px-4 text-[18px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          onclick={() => {
+            void water.undoCollect(target.id, name);
+          }}>Undo collect</button
+        >
+      {:else}
+        <button
+          type="button"
+          class="min-h-13 rounded-control border-2 border-destructive px-4 text-[18px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          onclick={() => {
+            deleteDrop(target.id);
+          }}>Delete drop</button
+        >
+      {/if}
     {/snippet}
   </GearSheet>
 

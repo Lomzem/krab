@@ -1,12 +1,18 @@
 import { Data, Deferred, Effect, Fiber, Result } from 'effect';
 import { availability } from './availability';
-import { dropCommand, gearName, placeDrop, type DropCommand } from './rules';
+import { CannotDropAgain } from './failures';
+import {
+  dropCommand,
+  gearName,
+  placeDrop,
+  type DropCommand,
+  type DropTarget
+} from './rules';
 import { roughness, type SpokenText } from './queries';
 import type { StorageFailed, TripStorage } from './storage';
 import type {
   Drop,
   Fix,
-  Kind,
   Located,
   PositionSource,
   Trip,
@@ -26,7 +32,7 @@ export class DropCancelled extends Data.TaggedError('DropCancelled') {}
 
 export class DropNotSaved extends Data.TaggedError('DropNotSaved')<{
   readonly cause: StorageFailed;
-  readonly retry: Effect.Effect<PlacedDrop, DropNotSaved>;
+  readonly retry: Effect.Effect<PlacedDrop, DropNotSaved | CannotDropAgain>;
 }> {}
 
 export type DropPhase = 'acquiring' | 'saving' | 'settled';
@@ -36,7 +42,10 @@ export type DropAttempt = {
   readonly subscribe: (listener: () => void) => () => void;
   readonly saveWithoutPosition: () => void;
   readonly cancel: () => void;
-  readonly result: Effect.Effect<PlacedDrop, DropCancelled | DropNotSaved>;
+  readonly result: Effect.Effect<
+    PlacedDrop,
+    DropCancelled | DropNotSaved | CannotDropAgain
+  >;
 };
 
 const located = (fix: Fix): Located => ({
@@ -62,11 +71,10 @@ const store = (
   storage: TripStorage,
   command: DropCommand,
   where: Located
-): Effect.Effect<PlacedDrop, DropNotSaved> =>
-  Effect.mapError(
-    storage.readModifyWrite((trips) => {
-      const placed = placeDrop(trips, command, where);
-      return Result.succeed({
+): Effect.Effect<PlacedDrop, DropNotSaved | CannotDropAgain> =>
+  storage
+    .readModifyWrite((trips) =>
+      Result.map(placeDrop(trips, command, where), (placed) => ({
         put: placed.isNew ? [placed.trip] : [],
         remove: [],
         result: {
@@ -75,14 +83,18 @@ const store = (
           name: gearName(placed.gear),
           rough: roughness(placed.drop.position)
         }
-      });
-    }),
-    (cause) =>
-      new DropNotSaved({
-        cause,
-        retry: Effect.suspend(() => store(storage, command, where))
-      })
-  );
+      }))
+    )
+    .pipe(
+      Effect.catchTag('StorageFailed', (cause) =>
+        Effect.fail(
+          new DropNotSaved({
+            cause,
+            retry: Effect.suspend(() => store(storage, command, where))
+          })
+        )
+      )
+    );
 
 const listen = (
   positions: PositionSource,
@@ -113,10 +125,14 @@ const observedPhase = (initial: DropPhase) => {
   };
 };
 
-export const startDrop = (deps: TripDeps, storage: TripStorage, kind: Kind) =>
+export const startDrop = (
+  deps: TripDeps,
+  storage: TripStorage,
+  target: DropTarget
+) =>
   Effect.suspend(() => {
     const tapAt = deps.clock.now();
-    const command = dropCommand(kind, tapAt);
+    const command = dropCommand(target, tapAt);
     const atTap = settledAt(deps.positions, tapAt);
     const choice = Deferred.makeUnsafe<Located, DropCancelled>();
     if (atTap) Deferred.doneUnsafe(choice, Effect.succeed(atTap));

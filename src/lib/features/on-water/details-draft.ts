@@ -1,4 +1,4 @@
-import type { Drop, DropEdit } from '#lib/features/trip/index.js';
+import type { Catch, Drop, DropEdit } from '#lib/features/trip/index.js';
 
 export type DetailsDraft = {
   label: string;
@@ -26,11 +26,15 @@ const depthOf = (text: string) => {
   return trimmed === '' ? null : Number(trimmed);
 };
 
-export const editOf = (draft: DetailsDraft): DropEdit => ({
+export const editOf = (
+  draft: DetailsDraft,
+  recorded: Catch | null
+): DropEdit => ({
   details: {
     label: draft.label,
     bait: draft.bait,
     depthFt: depthOf(draft.depth),
     notes: draft.notes
-  }
+  },
+  catch: recorded
 });

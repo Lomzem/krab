@@ -1,13 +1,22 @@
-import { Result } from 'effect';
-import { AnotherTripActive, InvalidDepth, KindLocked } from './failures';
-import type {
-  Deletion,
-  Drop,
-  DropEdit,
-  Gear,
-  Kind,
-  Located,
-  Trip
+import { Result, Schema } from 'effect';
+import {
+  AnotherTripActive,
+  CannotDropAgain,
+  DroppedAgain,
+  InvalidCatch,
+  InvalidDepth,
+  KindLocked,
+  NotCollected
+} from './failures';
+import {
+  Catch,
+  type Deletion,
+  type Drop,
+  type DropEdit,
+  type Gear,
+  type Kind,
+  type Located,
+  type Trip
 } from './types';
 
 export const KINDS: readonly Kind[] = ['pot', 'net'];
@@ -28,52 +37,74 @@ const newTrip = (startedAt: number): Trip => ({
   next: { pot: 1, net: 1 }
 });
 
+export type DropTarget = { kind: Kind } | { again: string };
+
 export type DropCommand = {
   dropId: string;
-  gearId: string;
-  kind: Kind;
   tapAt: number;
+  target: { kind: Kind; gearId: string } | { again: string };
 };
 
-export const dropCommand = (kind: Kind, tapAt: number): DropCommand => ({
+export const dropCommand = (
+  target: DropTarget,
+  tapAt: number
+): DropCommand => ({
   dropId: crypto.randomUUID(),
-  gearId: crypto.randomUUID(),
-  kind,
-  tapAt
+  tapAt,
+  target:
+    'kind' in target
+      ? { kind: target.kind, gearId: crypto.randomUUID() }
+      : { again: target.again }
 });
 
-const recorded = (trips: readonly Trip[], command: DropCommand) => {
-  for (const trip of trips) {
-    const drop = trip.drops.find((item) => item.id === command.dropId);
-    const gear = drop && trip.gear.find((item) => item.id === drop.gearId);
-    if (drop && gear) return { trip, drop, gear, isNew: false };
-  }
-  return null;
+export type Placed = { trip: Trip; drop: Drop; gear: Gear; isNew: boolean };
+
+const recorded = (trips: readonly Trip[], dropId: string): Placed | null => {
+  const found = locateDrop(trips, dropId);
+  const gear = found?.trip.gear.find((item) => item.id === found.drop.gearId);
+  return found && gear
+    ? { trip: found.trip, drop: found.drop, gear, isNew: false }
+    : null;
 };
 
-export const placeDrop = (
+const isLatest = (trip: Trip, drop: Drop) =>
+  trip.drops.findLast((item) => item.gearId === drop.gearId)?.id === drop.id;
+
+const isLatestCollected = (trip: Trip, drop: Drop) =>
+  trip.endedAt === null && drop.collectedAt !== null && isLatest(trip, drop);
+
+export const canDropAgain = isLatestCollected;
+
+export const canUndoCollect = isLatestCollected;
+
+const newDrop = (
+  command: DropCommand,
+  gear: Gear,
+  where: Located,
+  copied: Pick<Drop, 'label' | 'bait' | 'depthFt'>
+): Drop => ({
+  id: command.dropId,
+  gearId: gear.id,
+  placedAt: command.tapAt,
+  ...where,
+  ...copied,
+  notes: '',
+  collectedAt: null,
+  catch: null
+});
+
+const NOTHING_COPIED = { label: '', bait: '', depthFt: null };
+
+const placeNew = (
   trips: readonly Trip[],
   command: DropCommand,
+  target: { kind: Kind; gearId: string },
   where: Located
-) => {
-  const done = recorded(trips, command);
-  if (done) return done;
-  const { kind, tapAt } = command;
-  const base = activeOf(trips) ?? newTrip(tapAt);
-  const gear: Gear = { id: command.gearId, kind, number: base.next[kind] };
-  const drop: Drop = {
-    id: command.dropId,
-    gearId: gear.id,
-    placedAt: tapAt,
-    ...where,
-    label: '',
-    bait: '',
-    depthFt: null,
-    notes: '',
-    collectedAt: null,
-    kept: null,
-    released: null
-  };
+): Placed => {
+  const base = activeOf(trips) ?? newTrip(command.tapAt);
+  const { kind } = target;
+  const gear: Gear = { id: target.gearId, kind, number: base.next[kind] };
+  const drop = newDrop(command, gear, where, NOTHING_COPIED);
   const trip: Trip = {
     ...base,
     gear: [...base.gear, gear],
@@ -81,6 +112,37 @@ export const placeDrop = (
     next: { ...base.next, [kind]: gear.number + 1 }
   };
   return { trip, drop, gear, isNew: true };
+};
+
+const placeAgain = (
+  trips: readonly Trip[],
+  command: DropCommand,
+  sourceId: string,
+  where: Located
+): Result.Result<Placed, CannotDropAgain> => {
+  const active = activeOf(trips);
+  const source = active && locateDrop([active], sourceId);
+  const gear = source?.trip.gear.find((item) => item.id === source.drop.gearId);
+  if (!source || !gear || !canDropAgain(source.trip, source.drop)) {
+    return Result.fail(new CannotDropAgain({ dropId: sourceId }));
+  }
+  const { label, bait, depthFt } = source.drop;
+  const drop = newDrop(command, gear, where, { label, bait, depthFt });
+  const trip = { ...source.trip, drops: [...source.trip.drops, drop] };
+  return Result.succeed({ trip, drop, gear, isNew: true });
+};
+
+export const placeDrop = (
+  trips: readonly Trip[],
+  command: DropCommand,
+  where: Located
+): Result.Result<Placed, CannotDropAgain> => {
+  const done = recorded(trips, command.dropId);
+  if (done) return Result.succeed(done);
+  const { target } = command;
+  return 'kind' in target
+    ? Result.succeed(placeNew(trips, command, target, where))
+    : placeAgain(trips, command, target.again, where);
 };
 
 export const withoutDrop = (trip: Trip, dropId: string): Trip | null => {
@@ -102,27 +164,56 @@ export const locateDrop = (trips: readonly Trip[], dropId: string) => {
 const badDepth = (depthFt: number | null): depthFt is number =>
   depthFt !== null && !(Number.isFinite(depthFt) && depthFt >= 0);
 
+const isCatch = Schema.is(Catch);
+
+const replaceDrop = (trip: Trip, changed: Drop): Trip => ({
+  ...trip,
+  drops: trip.drops.map((drop) => (drop.id === changed.id ? changed : drop))
+});
+
 export const editDrop = (
   trip: Trip,
-  dropId: string,
+  drop: Drop,
   edit: DropEdit
-): Result.Result<Trip, InvalidDepth> => {
+): Result.Result<Trip, InvalidDepth | InvalidCatch | NotCollected> => {
   const { details } = edit;
   if (badDepth(details.depthFt)) {
     return Result.fail(new InvalidDepth({ depthFt: details.depthFt }));
   }
-  const drops = trip.drops.map((drop) =>
-    drop.id === dropId
-      ? {
-          ...drop,
-          label: details.label.trim(),
-          bait: details.bait.trim(),
-          depthFt: details.depthFt,
-          notes: details.notes.trim()
-        }
-      : drop
+  if (edit.catch && !isCatch(edit.catch)) {
+    return Result.fail(new InvalidCatch({ catch: edit.catch }));
+  }
+  if (edit.catch && drop.collectedAt === null) {
+    return Result.fail(new NotCollected({ dropId: drop.id }));
+  }
+  return Result.succeed(
+    replaceDrop(trip, {
+      ...drop,
+      label: details.label.trim(),
+      bait: details.bait.trim(),
+      depthFt: details.depthFt,
+      notes: details.notes.trim(),
+      catch: edit.catch
+    })
   );
-  return Result.succeed({ ...trip, drops });
+};
+
+export const collectDrop = (trip: Trip, drop: Drop, at: number) =>
+  drop.collectedAt === null
+    ? replaceDrop(trip, { ...drop, collectedAt: at })
+    : null;
+
+export const uncollectDrop = (
+  trip: Trip,
+  drop: Drop
+): Result.Result<Trip | null, DroppedAgain> => {
+  if (drop.collectedAt === null) return Result.succeed(null);
+  if (!isLatest(trip, drop)) {
+    return Result.fail(new DroppedAgain({ dropId: drop.id }));
+  }
+  return Result.succeed(
+    replaceDrop(trip, { ...drop, collectedAt: null, catch: null })
+  );
 };
 
 export const canChangeKind = (trip: Trip, gearId: string) =>
