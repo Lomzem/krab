@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import {
@@ -261,7 +261,30 @@ test('a Street style still loading when Chart is chosen again or the Map tab clo
   await expect(noSignal(page)).toBeHidden();
 });
 
-test('gear on the map opens its sheet without Show on map, and Show on map from the Gear list returns to that gear', async ({
+const offCentre = async (page: Page, target: Locator) => {
+  const view = await mapArea(page)
+    .getByRole('region', { name: 'Map view' })
+    .boundingBox();
+  const box = await target.boundingBox();
+  if (!view || !box) return Number.POSITIVE_INFINITY;
+  return Math.hypot(
+    box.x + box.width / 2 - (view.x + view.width / 2),
+    box.y + box.height / 2 - (view.y + view.height / 2)
+  );
+};
+
+const panAway = async (page: Page, target: Locator) => {
+  const mapView = mapArea(page).getByRole('region', { name: 'Map view' });
+  for (const key of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown']) {
+    await mapView.press(key);
+  }
+  await expect.poll(() => offCentre(page, target)).toBeGreaterThan(50);
+};
+
+const CENTRED_PX = 3;
+
+test('gear on the map opens its sheet without Show on map; with my position elsewhere, Show on map centres that gear and Centre on my position centres me', async ({
+  context,
   page
 }) => {
   await dropPotAndOpenMap(page);
@@ -276,6 +299,14 @@ test('gear on the map opens its sheet without Show on map, and Show on map from 
   await expect(sheet).toBeHidden();
   await expect(potOnMap(page)).toBeFocused();
 
+  await context.setGeolocation({
+    latitude: MADE_UP_SEA.latitude + 0.02,
+    longitude: MADE_UP_SEA.longitude,
+    accuracy: 8
+  });
+  await expect(potOnMap(page)).toHaveAccessibleName(/miles/);
+  await panAway(page, potOnMap(page));
+
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await page
     .getByRole('main')
@@ -288,7 +319,17 @@ test('gear on the map opens its sheet without Show on map, and Show on map from 
     page.getByRole('button', { name: 'Map', exact: true })
   ).toHaveAttribute('aria-current', 'page');
   await expect(potOnMap(page)).toBeFocused();
-  await expect(potOnMap(page)).toBeInViewport();
+  await expect
+    .poll(() => offCentre(page, potOnMap(page)))
+    .toBeLessThan(CENTRED_PX);
+
+  await panAway(page, myPosition(page));
+  await mapArea(page)
+    .getByRole('button', { name: 'Centre on my position' })
+    .click();
+  await expect
+    .poll(() => offCentre(page, myPosition(page)))
+    .toBeLessThan(CENTRED_PX);
 });
 
 test('while moving with a rough fix, my position reads as rough with my heading', async ({
