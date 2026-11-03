@@ -290,7 +290,7 @@ test('remembered on but needing access again, it waits north-up until a tap', as
   expectHeading(read(90), 90 + NOAA_ARCTIC_D_2025);
 });
 
-test('hiding the page waits, and readings after it come back point again', async () => {
+test('a sensor pause waits north-up, and the next readings point again', async () => {
   const { read, hide, compass } = await turnedOn();
   read(90);
   hide();
