@@ -54,6 +54,8 @@
   let failed = $state(false);
   let availability = $state<'loading' | 'available' | 'unavailable'>('loading');
   let generation = 0;
+  let request: AbortController | null = null;
+  let awaitingStyle = false;
   let baseSources = new Set<string>();
   let zoom = $state(camera?.zoom ?? 2);
   let followFix = false;
@@ -91,18 +93,35 @@
     else fitPlaces();
   };
 
-  const apply = async (wanted: Base) => {
+  const startGeneration = () => {
     generation += 1;
-    const current = generation;
+    request?.abort();
+    request = null;
+    awaitingStyle = false;
     baseSources = new Set();
+    return generation;
+  };
+
+  const apply = async (wanted: Base) => {
+    const current = startGeneration();
+    const loading = new AbortController();
+    request = loading;
     if (availability === 'available') availability = 'loading';
-    const next = await baseStyle(wanted, latest);
+    const next = await baseStyle(wanted, latest, loading.signal);
     if (!map || current !== generation) return;
+    request = null;
     map.setStyle(next.style, { diff: false });
+    awaitingStyle = true;
     baseSources = new Set(
       Object.keys(next.style.sources).filter((id) => !isOverlay(id))
     );
     if (!next.reachable) availability = 'unavailable';
+  };
+
+  const fallBack = () => {
+    startGeneration();
+    map?.setStyle(noBaseStyle(latest), { diff: false });
+    availability = 'unavailable';
   };
 
   const fromBase = (sourceId: unknown) =>
@@ -173,6 +192,10 @@
     created.keyboard.disableRotation();
     created.on('error', (event) => {
       const sourceId = 'sourceId' in event ? event.sourceId : null;
+      if (awaitingStyle && typeof sourceId !== 'string') {
+        fallBack();
+        return;
+      }
       if (fromBase(sourceId) && lostConnection(event.error)) {
         availability = 'unavailable';
       }
@@ -188,6 +211,7 @@
       }
     });
     created.on('style.load', () => {
+      awaitingStyle = false;
       void created.getSource<GeoJSONSource>(ACCURACY_SOURCE)?.setData(latest);
     });
     created.on('moveend', () => {
@@ -206,6 +230,7 @@
     }
     ready = true;
     return () => {
+      startGeneration();
       window.removeEventListener('online', reconnect);
       markers.clear();
       created.remove();

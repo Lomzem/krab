@@ -171,6 +171,96 @@ test('without signal the Map tab says so while the toast still expires, still sh
   await expect(potOnMap(page)).toBeVisible();
 });
 
+const streetMapButton = (page: Page) =>
+  mapArea(page).getByRole('button', { name: 'Street map' });
+const noSignal = (page: Page) =>
+  mapArea(page).getByRole('status').filter({ hasText: 'No signal' });
+
+test('a Street style the map cannot use falls back to the plain map with the warning, gear still shown and no page error', async ({
+  page,
+  providers
+}) => {
+  const errors: Error[] = [];
+  page.on('pageerror', (error) => errors.push(error));
+  const streetMap = streetMapButton(page);
+  await dropPotAndOpenMap(page);
+  await expect(noSignal(page)).toBeHidden();
+
+  for (const unusable of [
+    {
+      version: 8,
+      sources: null,
+      layers: [{ id: 'street', type: 'raster', source: 'street' }]
+    },
+    {
+      version: 8,
+      sources: {
+        street: {
+          type: 'raster',
+          tiles: ['https://tiles.openfreemap.org/krab-e2e/{z}/{x}/{y}.png'],
+          tileSize: 256
+        }
+      },
+      layers: [{ id: 'street', type: 'no-such-layer', source: 'street' }]
+    }
+  ]) {
+    providers.serve(unusable);
+    await streetMap.click();
+    await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+    await expect(noSignal(page)).toBeVisible();
+    await expect(potOnMap(page)).toBeVisible();
+    await expect(myPosition(page)).toBeVisible();
+    providers.serve();
+    await streetMap.click();
+    await expect(noSignal(page)).toBeHidden();
+  }
+  expect(errors).toEqual([]);
+});
+
+test('a Street style still loading when Chart is chosen again or the Map tab closes is cancelled and never shown', async ({
+  context,
+  page,
+  providers
+}) => {
+  const requested: string[] = [];
+  const cancelled: string[] = [];
+  context.on('request', (request) => requested.push(request.url()));
+  context.on('requestfailed', (request) => {
+    if (request.url().startsWith(OPEN_FREE_MAP)) cancelled.push(request.url());
+  });
+  const streetTiles = () =>
+    requested.filter(
+      (url) => url.startsWith(OPEN_FREE_MAP) && url.endsWith('.png')
+    );
+  const chartTiles = () => requested.filter((url) => CHART_TILE.test(url));
+  const streetMap = streetMapButton(page);
+  await dropPotAndOpenMap(page);
+
+  providers.hold();
+  await streetMap.click();
+  await expect.poll(() => providers.held()).toBeGreaterThan(0);
+  await streetMap.click();
+  await expect(streetMap).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => cancelled.length).toBe(1);
+  const chartBefore = chartTiles().length;
+  providers.serve();
+  await expect.poll(() => chartTiles().length).toBeGreaterThan(chartBefore);
+  await expect(noSignal(page)).toBeHidden();
+  expect(streetTiles()).toEqual([]);
+
+  providers.hold();
+  const heldBefore = providers.held();
+  await streetMap.click();
+  await expect.poll(() => providers.held()).toBeGreaterThan(heldBefore);
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await expect.poll(() => cancelled.length).toBe(2);
+  providers.serve();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => streetTiles().length).toBeGreaterThan(0);
+  await expect(noSignal(page)).toBeHidden();
+});
+
 test('gear on the map opens its sheet without Show on map, and Show on map from the Gear list returns to that gear', async ({
   page
 }) => {

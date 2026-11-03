@@ -23,26 +23,27 @@ const STREET_STYLE = {
 const CORS = { 'access-control-allow-origin': '*' };
 
 export type Providers = {
-  serve: () => void;
+  serve: (streetStyle?: unknown) => void;
   cutOff: () => void;
   hold: () => void;
   held: () => number;
 };
 
-const fulfil = (route: Route) =>
+const fulfil = (route: Route, streetStyle: unknown) =>
   new URL(route.request().url()).pathname.endsWith('.png')
     ? route.fulfill({
         contentType: 'image/png',
         headers: CORS,
         body: CLEAR_PNG
       })
-    : route.fulfill({ json: STREET_STYLE, headers: CORS });
+    : route.fulfill({ json: streetStyle, headers: CORS });
 
 export const test = base.extend<{ providers: Providers }>({
   serviceWorkers: 'block',
   providers: [
     async ({ context }, use) => {
       let mode: 'serve' | 'cutOff' | 'hold' = 'serve';
+      let served: unknown = STREET_STYLE;
       const waiting: Route[] = [];
       const answer = async (route: Route) => {
         if (mode === 'hold') {
@@ -50,16 +51,17 @@ export const test = base.extend<{ providers: Providers }>({
           return;
         }
         await (mode === 'serve'
-          ? fulfil(route)
+          ? fulfil(route, served)
           : route.abort('internetdisconnected'));
       };
       await context.route(NOAA, answer);
       await context.route(OPEN_FREE_MAP, answer);
       await use({
-        serve: () => {
+        serve: (streetStyle = STREET_STYLE) => {
           mode = 'serve';
+          served = streetStyle;
           for (const route of waiting.splice(0)) {
-            fulfil(route).catch(() => undefined);
+            fulfil(route, served).catch(() => undefined);
           }
         },
         cutOff: () => {
