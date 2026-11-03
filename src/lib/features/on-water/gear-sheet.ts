@@ -4,6 +4,7 @@ import {
   type Gear,
   type Trip
 } from '#lib/features/trip/index.js';
+import type { SaveProblem } from './on-water.svelte';
 
 export type SheetSubject = {
   trip: Trip;
@@ -16,6 +17,12 @@ export type SheetOrigin = {
   dropId: string;
   from: 'list' | 'map';
   opener: HTMLElement;
+};
+
+export type SheetOperation = {
+  sheet: SheetOrigin;
+  pending: boolean;
+  problem: SaveProblem | null;
 };
 
 export const sheetSubject = (

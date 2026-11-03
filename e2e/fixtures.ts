@@ -60,3 +60,30 @@ export const test = base.extend<{ providers: Providers }>({
 
 export const toastOf = (page: Page) =>
   page.getByRole('status', { name: 'Messages' }).getByRole('group');
+
+type HeldStorage = { releaseStorage?: boolean };
+
+export const holdStorage = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<void>((held) => {
+        const request = indexedDB.open('krab');
+        request.onsuccess = () => {
+          const trips = request.result
+            .transaction('trips', 'readwrite')
+            .objectStore('trips');
+          const keepBusy = () => {
+            if ((window as HeldStorage).releaseStorage) return;
+            trips.count().onsuccess = keepBusy;
+          };
+          (window as HeldStorage).releaseStorage = false;
+          keepBusy();
+          held();
+        };
+      })
+  );
+
+export const releaseStorage = (page: Page) =>
+  page.evaluate(() => {
+    (window as HeldStorage).releaseStorage = true;
+  });

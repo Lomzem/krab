@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test, toastOf } from './fixtures';
+import { expect, holdStorage, releaseStorage, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 
 const MIN_TARGET_PX = 44;
@@ -136,28 +136,6 @@ test('Position ready lasts 5 seconds from each fix, is rechecked on resume, then
   await expect.poll(() => gettingPositionShown(page)).toBe(1);
 });
 
-type HeldStorage = { releaseStorage?: boolean };
-
-const holdStorage = () =>
-  new Promise<void>((held) => {
-    const request = indexedDB.open('krab');
-    request.onsuccess = () => {
-      const trips = request.result
-        .transaction('trips', 'readwrite')
-        .objectStore('trips');
-      const keepBusy = () => {
-        if ((window as HeldStorage).releaseStorage) return;
-        trips.count().onsuccess = keepBusy;
-      };
-      keepBusy();
-      held();
-    };
-  });
-
-const releaseStorage = () => {
-  (window as HeldStorage).releaseStorage = true;
-};
-
 test('once a fix arrives, Cancel and Save without position give way to saving feedback until the drop is saved', async ({
   page
 }) => {
@@ -170,7 +148,7 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
     page.getByRole('heading', { name: 'Getting position' })
   ).toBeFocused();
 
-  await page.evaluate(holdStorage);
+  await holdStorage(page);
   const fixTime = await page.evaluate(() => Date.now());
   await page.evaluate(deliverFix, { coords: MADE_UP_SEA, timestamp: fixTime });
 
@@ -183,7 +161,7 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
   ).toHaveCount(0);
   await expect(toastOf(page)).toBeHidden();
 
-  await page.evaluate(releaseStorage);
+  await releaseStorage(page);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
 });

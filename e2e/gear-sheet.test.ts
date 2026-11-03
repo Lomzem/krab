@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test, toastOf } from './fixtures';
+import { expect, holdStorage, releaseStorage, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 
 const gearRow = (page: Page, name: string) =>
@@ -83,4 +83,51 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(toastOf(page)).toContainText('Pot 1 restored');
   await pot1.click();
   await expect(label).toHaveValue('red float');
+});
+
+test('while a sheet action is storing, the sheet ignores its other actions, and finishing after another gear opens leaves that sheet and its draft alone', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const heading = (name: string) => sheet.getByRole('heading', { name });
+  const label = sheet.getByLabel('Label');
+  const save = sheet.getByRole('button', { name: 'Save' });
+  const deleteDrop = sheet.getByRole('button', { name: 'Delete drop' });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Position ready')).toBeVisible();
+  for (const name of ['Pot 1', 'Pot 2']) {
+    await page.getByRole('button', { name: 'Drop pot' }).click();
+    await expect(toastOf(page)).toContainText(`${name} dropped`);
+  }
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await gearRow(page, 'Pot 1').click();
+  await label.fill('red float');
+  await holdStorage(page);
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await expect(deleteDrop).toHaveAttribute('aria-disabled', 'true');
+  await deleteDrop.click({ force: true });
+  await releaseStorage(page);
+  await expect(sheet).toBeHidden();
+  await gearRow(page, 'Pot 1').click();
+  await expect(heading('Pot 1')).toBeVisible();
+  await expect(label).toHaveValue('red float');
+
+  await holdStorage(page);
+  await deleteDrop.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await gearRow(page, 'Pot 2').click();
+  await expect(heading('Pot 2')).toBeVisible();
+  await expect(save).not.toHaveAttribute('aria-disabled', 'true');
+  await label.fill('blue buoy');
+  await releaseStorage(page);
+
+  await expect(toastOf(page)).toContainText('Pot 1 deleted');
+  await expect(heading('Pot 2')).toBeVisible();
+  await expect(label).toHaveValue('blue buoy');
 });

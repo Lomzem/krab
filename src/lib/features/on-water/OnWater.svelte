@@ -11,14 +11,23 @@
   } from '#lib/features/trip/index.js';
   import DropControl from './DropControl.svelte';
   import GearList from './GearList.svelte';
-  import { sheetSubject, type SheetOrigin } from './gear-sheet';
+  import {
+    sheetSubject,
+    type SheetOperation,
+    type SheetOrigin
+  } from './gear-sheet';
   import GearSheet from './GearSheet.svelte';
   import GettingPosition from './GettingPosition.svelte';
   import SavingDrop from './SavingDrop.svelte';
   import LocationIntro from './LocationIntro.svelte';
   import LocationStatus from './LocationStatus.svelte';
   import MapTab from './MapTab.svelte';
-  import { OnWater, type Retry, type Undo } from './on-water.svelte';
+  import {
+    OnWater,
+    type Retry,
+    type SaveProblem,
+    type Undo
+  } from './on-water.svelte';
   import {
     locationExplained,
     rememberLocationExplained,
@@ -46,7 +55,13 @@
   let showOnMap = $state<string | null>(null);
   let mapTabButton = $state<HTMLButtonElement>();
 
+  let operation = $state.raw<SheetOperation | null>(null);
+
   const subject = $derived(sheetSubject(water.trip, sheet?.dropId ?? null));
+  const sheetOperation = $derived(
+    operation?.sheet === sheet ? operation : null
+  );
+  const busy = $derived(sheetOperation?.pending ?? false);
 
   $effect(() => {
     const timer = setInterval(() => {
@@ -114,22 +129,70 @@
     return returnTo?.isConnected ? returnTo : dropButton;
   };
 
+  const operate = async <A,>(
+    work: () => Promise<A>,
+    settle: (result: A) => SaveProblem | null
+  ) => {
+    const origin = sheet;
+    if (!origin || busy) return;
+    operation = { sheet: origin, pending: true, problem: null };
+    const result = await work();
+    if (operation.sheet !== origin) return;
+    const problem = sheet === origin ? settle(result) : null;
+    operation = { sheet: origin, pending: false, problem };
+  };
+
+  const closeWhenSaved = (problem: SaveProblem | null) => {
+    if (problem === null) closeSheet();
+    return problem;
+  };
+
+  const save = (dropId: string, edit: DropEdit, nextKind: Kind | null) => {
+    void operate(() => water.save(dropId, edit, nextKind), closeWhenSaved);
+  };
+
   const show = (dropId: string) => {
+    if (busy) return;
     showOnMap = dropId;
     tab = 'map';
     closeSheet();
   };
 
-  const dropAgain = (dropId: string) => {
-    closeSheet();
-    now = Date.now();
-    void water.dropAgain(dropId).then(focusDropAfterWait);
+  const dropAgain = (dropId: string, edit: DropEdit, nextKind: Kind | null) => {
+    void operate(
+      () => water.save(dropId, edit, nextKind),
+      (problem) => {
+        if (problem !== null) return problem;
+        closeSheet();
+        now = Date.now();
+        void water.dropAgain(dropId).then(focusDropAfterWait);
+        return null;
+      }
+    );
   };
 
   const deleteDrop = (dropId: string) => {
-    void water.remove(dropId).then((deleted) => {
-      if (deleted) closeSheet();
-    });
+    void operate(
+      () => water.remove(dropId),
+      (deleted) => {
+        if (deleted) closeSheet();
+        return null;
+      }
+    );
+  };
+
+  const collect = (dropId: string) => {
+    void operate(
+      () => water.collect(dropId),
+      () => null
+    );
+  };
+
+  const undoCollect = (dropId: string, name: string) => {
+    void operate(
+      () => water.undoCollect(dropId, name),
+      () => null
+    );
   };
 </script>
 
@@ -171,12 +234,10 @@
   <GearSheet
     {subject}
     {now}
+    operation={sheetOperation}
     onclose={closeSheet}
-    onsave={(dropId: string, edit: DropEdit, nextKind: Kind | null) =>
-      water.save(dropId, edit, nextKind)}
-    oncollect={(dropId: string) => {
-      void water.collect(dropId);
-    }}
+    onsave={save}
+    oncollect={collect}
     ondropagain={dropAgain}
     returnFocus={sheetReturnFocus}
   >
@@ -184,7 +245,8 @@
       {#if sheet?.from === 'list' && target.position}
         <button
           type="button"
-          class="min-h-13 w-full rounded-control border-2 border-primary px-4 text-[18px] font-bold text-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          class="min-h-13 w-full rounded-control border-2 border-primary px-4 text-[18px] font-bold text-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+          aria-disabled={busy}
           onclick={() => {
             show(target.id);
           }}>Show on map</button
@@ -196,15 +258,17 @@
         {@const { name } = subject}
         <button
           type="button"
-          class="min-h-13 rounded-control border-2 border-primary px-4 text-[18px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          class="min-h-13 rounded-control border-2 border-primary px-4 text-[18px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+          aria-disabled={busy}
           onclick={() => {
-            void water.undoCollect(target.id, name);
+            undoCollect(target.id, name);
           }}>Undo collect</button
         >
       {:else}
         <button
           type="button"
-          class="min-h-13 rounded-control border-2 border-destructive px-4 text-[18px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          class="min-h-13 rounded-control border-2 border-destructive px-4 text-[18px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+          aria-disabled={busy}
           onclick={() => {
             deleteDrop(target.id);
           }}>Delete drop</button

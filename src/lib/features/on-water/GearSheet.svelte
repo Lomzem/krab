@@ -1,10 +1,9 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
-  import type { SheetSubject } from './gear-sheet';
+  import type { SheetOperation, SheetSubject } from './gear-sheet';
   import GearDetailsForm from './GearDetailsForm.svelte';
   import GearIcon from './GearIcon.svelte';
-  import type { SaveProblem } from './on-water.svelte';
   import Sheet from './Sheet.svelte';
 
   const TITLE_ID = 'gear-sheet-title';
@@ -14,6 +13,7 @@
     subject,
     editKind = true,
     now,
+    operation,
     onclose,
     onsave,
     oncollect,
@@ -25,14 +25,11 @@
     subject: SheetSubject | null;
     editKind?: boolean;
     now: number;
+    operation: SheetOperation | null;
     onclose: () => void;
-    onsave: (
-      dropId: string,
-      edit: DropEdit,
-      kind: Kind | null
-    ) => Promise<SaveProblem | null>;
+    onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     oncollect?: (dropId: string) => void;
-    ondropagain?: (dropId: string) => void;
+    ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     returnFocus: () => HTMLElement | null | undefined;
     actions?: Snippet<[Drop]>;
     endAction?: Snippet<[Drop]>;
@@ -59,8 +56,8 @@
         formId={FORM_ID}
         {editKind}
         {now}
+        {operation}
         {onsave}
-        onsaved={onclose}
         {oncollect}
         {ondropagain}
       >
@@ -73,7 +70,8 @@
     <button
       type="submit"
       form={FORM_ID}
-      class="min-h-13 flex-1 rounded-control bg-primary px-4 text-[18px] font-bold text-primary-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      aria-disabled={operation?.pending ?? false}
+      class="min-h-13 flex-1 rounded-control bg-primary px-4 text-[18px] font-bold text-primary-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
       >Save</button
     >
     {#if subject}
