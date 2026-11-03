@@ -40,7 +40,9 @@ test('collecting a pot records its catch, survives reload, and drops it again', 
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Position ready')).toBeVisible();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Pot 1 dropped');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
+  ).toBeVisible();
   log('made-up mid-ocean fix; tap Drop pot; Pot 1 dropped');
   await capture('01-dropped');
 
@@ -97,7 +99,9 @@ test('collecting a pot records its catch, survives reload, and drops it again', 
   await collectedRow(page).click();
   await sheet.getByRole('button', { name: 'Drop pot again here' }).click();
   await expect(sheet).toBeHidden();
-  await expect(page.getByRole('status')).toContainText('Pot 1 dropped');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
+  ).toBeVisible();
   await expect(inWaterRow(page)).toBeVisible();
   const again = await readTrips(page);
   const drops = again[0]?.drops ?? [];

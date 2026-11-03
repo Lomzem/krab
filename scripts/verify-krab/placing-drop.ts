@@ -30,7 +30,9 @@ for (const entry of ['Map', 'Gear']) {
       await page.getByRole('button', { name: 'Gear', exact: true }).click();
     await capture('02-before-drop');
     await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Pot 1 dropped');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'dropped' })
+    ).toContainText('Pot 1 dropped');
     log('tap Drop pot; saved toast visible');
     await capture('03-dropped');
     await page.getByRole('button', { name: 'Gear', exact: true }).click();
@@ -78,9 +80,9 @@ test('placing a drop with location denied saves it without a position', async ({
   await capture('01-location-off');
   keep('indexeddb-before.json', await readTrips(page));
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText(
-    'Pot 1 dropped without a position'
-  );
+  await expect(
+    page.getByRole('status').filter({ hasText: 'dropped' })
+  ).toContainText('Pot 1 dropped without a position');
   log('tap Drop pot; toast says saved without a position');
   await capture('02-dropped');
   await page.getByRole('button', { name: 'Gear', exact: true }).click();

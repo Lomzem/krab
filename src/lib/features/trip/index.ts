@@ -77,12 +77,14 @@ export {
   KINDS,
   type DropTarget
 } from './rules';
+export { compassPoint } from './format';
 export { availability, type Availability } from './availability';
 export {
   catchText,
   collectedGear,
   gearCounts,
   gearInWater,
+  nearestGear,
   roughness,
   timeInWater,
   type CollectedRow,
