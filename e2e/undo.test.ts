@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const START = new Date('2031-03-04T05:00:00Z');
 const PAUSED = new Date('2031-03-04T06:00:00Z');

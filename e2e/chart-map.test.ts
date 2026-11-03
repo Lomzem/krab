@@ -1,38 +1,11 @@
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
 
-const NOAA = 'https://gis.charttools.noaa.gov/**';
-const OPEN_FREE_MAP = 'https://tiles.openfreemap.org/**';
 const CHART_TILE =
   /\/MarineChart_Services_NOAACharts\/default\/default028mm\/(\d+)\/\d+\/\d+\.png$/;
 const NOAA_TOP_LEVEL = 14;
-const CLEAR_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==',
-  'base64'
-);
-
-test.use({ serviceWorkers: 'block' });
-
-const servedTiles = async (context: BrowserContext) => {
-  await context.unrouteAll();
-  await context.route(NOAA, (route) =>
-    route.fulfill({
-      contentType: 'image/png',
-      headers: { 'access-control-allow-origin': '*' },
-      body: CLEAR_PNG
-    })
-  );
-  await context.route(OPEN_FREE_MAP, (route) => route.abort());
-};
-
-const noSignal = async (context: BrowserContext) => {
-  await context.unrouteAll();
-  await context.route(NOAA, (route) => route.abort('internetdisconnected'));
-  await context.route(OPEN_FREE_MAP, (route) =>
-    route.abort('internetdisconnected')
-  );
-};
 
 const dropPotAndOpenMap = async (page: Page) => {
   await page.goto('/');
@@ -77,7 +50,6 @@ test('the Map tab shows gear and my position from the phone and asks NOAA only f
 }) => {
   const requested: string[] = [];
   context.on('request', (request) => requested.push(request.url()));
-  await servedTiles(context);
   await dropPotAndOpenMap(page);
 
   await expect(potOnMap(page)).toBeVisible();
@@ -106,9 +78,10 @@ test('the Map tab shows gear and my position from the phone and asks NOAA only f
 
 test('without signal the Map tab says so, still shows gear and my position, and recovers when the phone reconnects', async ({
   context,
-  page
+  page,
+  providers
 }) => {
-  await noSignal(context);
+  providers.cutOff();
   await dropPotAndOpenMap(page);
 
   const notice = mapArea(page)
@@ -119,7 +92,7 @@ test('without signal the Map tab says so, still shows gear and my position, and 
   await expect(myPosition(page)).toBeVisible();
   await expectAccessibleInBothThemes(page);
 
-  await servedTiles(context);
+  providers.serve();
   await context.setOffline(true);
   await context.setOffline(false);
   await expect(notice).toBeHidden();
@@ -127,10 +100,8 @@ test('without signal the Map tab says so, still shows gear and my position, and 
 });
 
 test('gear on the map opens its sheet without Show on map, and Show on map from the Gear list returns to that gear', async ({
-  context,
   page
 }) => {
-  await servedTiles(context);
   await dropPotAndOpenMap(page);
   const sheet = page.getByRole('dialog');
   const showOnMap = sheet.getByRole('button', { name: 'Show on map' });
@@ -158,10 +129,8 @@ test('gear on the map opens its sheet without Show on map, and Show on map from 
 });
 
 test('while moving with a rough fix, my position reads as rough with my heading', async ({
-  context,
   page
 }) => {
-  await servedTiles(context);
   await page.addInitScript((sea) => {
     navigator.geolocation.watchPosition = (success) => {
       success({

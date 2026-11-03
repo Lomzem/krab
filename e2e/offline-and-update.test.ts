@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import type { BrowserContext, Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { CURRENT_BUILD, PREVIOUS_BUILD } from './builds';
 import { siteAt, type Site } from './static-host';
+
+test.use({ serviceWorkers: 'allow' });
 
 const sites: Site[] = [];
 
