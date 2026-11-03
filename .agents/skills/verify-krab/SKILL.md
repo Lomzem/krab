@@ -9,7 +9,7 @@ Read [features/README.md](features/README.md), then the feature being verified. 
 
 ## Launch
 
-Prerequisites: Bun 1.4.4, the repository's Node version, Docker running, and `mcr.microsoft.com/playwright:v1.64.1-noble` already pulled. From a fresh checkout:
+Prerequisites: Bun 1.4.4, the repository's Node version, Docker running, and the Playwright image already pulled: `mcr.microsoft.com/playwright:v<installed @playwright/test version>-noble`, resolved by `scripts/playwright-image.ts`. From a fresh checkout:
 
 ```sh
 bun install --frozen-lockfile
@@ -25,7 +25,7 @@ Isolation: container network and fresh browser contexts isolate other checkouts.
 
 ## Doctor
 
-The run first checks `docker info` and `docker image inspect mcr.microsoft.com/playwright:v1.64.1-noble` without pulling or changing Docker. Before every journey, the read-only doctor in `scripts/verify-krab/doctor.ts` reads the preview PID receipt, `/proc/<pid>/cmdline`, its socket descriptors and TCP listener table. It requires that this run's strict-port Vite process owns the listener on 127.0.0.1:4173. The result is `doctor.json` beside each journey's artifacts.
+The run first checks `docker info` and `docker image inspect` on that image without pulling or changing Docker. Before every journey, the read-only doctor in `scripts/verify-krab/doctor.ts` reads the preview PID receipt, `/proc/<pid>/cmdline`, its socket descriptors and TCP listener table. It requires that this run's strict-port Vite process owns the listener on 127.0.0.1:4173. The result is `doctor.json` beside each journey's artifacts.
 
 While a run is active, invoke the same read-only checks from another terminal:
 
