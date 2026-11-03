@@ -594,19 +594,21 @@ it('sorts by great-circle distance with bearing, compass point and distance text
   expect(rows[2]?.direction?.feet).toBeCloseTo(392.9, 1);
 });
 
-it('finds the nearest gear with a position, or none without my position', async () => {
+it('finds the nearest gear in the water with a position, skipping closer collected gear, or none without my position', async () => {
   const { state, open } = harness();
   const book = await open();
+  const pulled = await dropAt(book, state, 'pot', { north: 0.0001, east: 0 });
   await dropAt(book, state, 'pot', { north: 0.0005, east: 0 });
   await dropAt(book, state, 'net', null);
-  const last = await dropAt(book, state, 'net', { north: 0, east: 0.0003 });
+  await dropAt(book, state, 'net', { north: 0, east: 0.0003 });
+  const { trip } = await run(book.collect(pulled.drop.id));
 
-  const nearest = nearestGear(last.trip, SEA, state.now);
+  const nearest = nearestGear(gearInWater(trip, SEA, state.now));
 
   expect(nearest?.name).toBe('Net 2');
   expect(nearest?.direction?.feet).toBeCloseTo(109.44, 1);
   expect(nearest?.direction?.bearingDeg).toBeCloseTo(90, 3);
-  expect(nearestGear(last.trip, null, state.now)).toBeNull();
+  expect(nearestGear(gearInWater(trip, null, state.now))).toBeNull();
 });
 
 it('has no nearest gear when no gear in the water has a position', async () => {
@@ -614,7 +616,7 @@ it('has no nearest gear when no gear in the water has a position', async () => {
   const book = await open();
   const last = await dropAt(book, state, 'pot', null);
 
-  expect(nearestGear(last.trip, SEA, state.now)).toBeNull();
+  expect(nearestGear(gearInWater(last.trip, SEA, state.now))).toBeNull();
 });
 
 it('formats time in the water as minutes, hours and days', async () => {
