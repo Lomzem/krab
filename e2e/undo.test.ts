@@ -3,13 +3,25 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 const START = new Date('2031-03-04T05:00:00Z');
 const PAUSED = new Date('2031-03-04T06:00:00Z');
 
+test.use({ permissions: [] });
+
 const toastOf = (page: Page) => page.getByRole('status').getByRole('group');
 const undoOf = (page: Page) =>
   toastOf(page).getByRole('button', { name: 'Undo' });
 
 const dropPot = async (page: Page, name: string) => {
   await page.getByRole('button', { name: 'Drop pot' }).click();
-  await expect(toastOf(page)).toContainText(`${name} dropped`);
+  await expect
+    .poll(
+      async () => {
+        await page.clock.runFor(0);
+        return toastOf(page)
+          .filter({ hasText: `${name} dropped` })
+          .count();
+      },
+      { message: `${name} was not saved while the clock was paused` }
+    )
+    .toBe(1);
   await page.mouse.move(0, 0);
 };
 
