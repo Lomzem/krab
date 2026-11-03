@@ -31,5 +31,5 @@ Preconditions: launch and doctor from the parent skill; fresh context; complete 
 - The kind radios are visually hidden; click their visible label text instead of calling `check()`.
 - A row may carry a second line, `Rough position, within about …`, when the fix was rough; it is part of the row button's name, so filter rows by gear name rather than matching the whole name.
 - Every list row is now a button inside its list item. Scope rows to `main`, because the navigation buttons are also buttons.
-- The kind-locked refusal needs a gear dropped twice, which has no UI until ticket 05 (drop again). Do not seed records to reach it; the trip module tests own that rule.
+- The kind-locked refusal needs a gear dropped twice: collect it and use `Drop pot again here` (see [Collecting](collecting.md)). Do not seed records to reach it; the trip module tests own that rule.
 - `e2e/gear-sheet.test.ts` is a product test run by `bun run test:e2e:container`. It is not verification evidence for this map.

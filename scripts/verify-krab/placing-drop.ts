@@ -1,66 +1,15 @@
 #!/usr/bin/env bun
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
-import { writeFileSync, appendFileSync } from 'node:fs';
+import { expect, test } from '@playwright/test';
 import { doctor } from './doctor';
+import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
-import type { Trip } from '../../src/lib/features/trip/types';
-
-const readTrips = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise<Trip[]>((resolve, reject) => {
-        const request = indexedDB.open('krab');
-        request.onerror = () => {
-          reject(new Error('Cannot read Krab IndexedDB'));
-        };
-        request.onsuccess = () => {
-          const db = request.result;
-          const read = db
-            .transaction('trips', 'readonly')
-            .objectStore('trips')
-            .getAll();
-          read.onsuccess = () => {
-            resolve(read.result as Trip[]);
-            db.close();
-          };
-          read.onerror = () => {
-            reject(new Error('Cannot read trips'));
-            db.close();
-          };
-        };
-      })
-  );
-
-const recorder = (page: Page, info: TestInfo, entry: string) => ({
-  log: (action: string) => {
-    appendFileSync(
-      info.outputPath('actions.jsonl'),
-      JSON.stringify({
-        at: new Date().toISOString(),
-        feature: 'placing-drop',
-        entry,
-        action
-      }) + '\n'
-    );
-  },
-  capture: async (name: string) => {
-    await page.screenshot({ path: info.outputPath(`${name}.png`) });
-    writeFileSync(
-      info.outputPath(`${name}.aria.txt`),
-      await page.locator('body').ariaSnapshot()
-    );
-  },
-  keep: (name: string, value: unknown) => {
-    writeFileSync(info.outputPath(name), JSON.stringify(value, null, 2));
-  }
-});
 
 for (const entry of ['Map', 'Gear']) {
   test(`placing a drop from ${entry} survives reload`, async ({
     page,
     context
   }, info) => {
-    const { log, capture, keep } = recorder(page, info, entry);
+    const { log, capture, keep } = recorder(page, info, 'placing-drop', entry);
     keep('doctor.json', doctor());
     log('doctor passed: our preview process owns 4173');
     await page.goto('/');
@@ -115,7 +64,7 @@ test('placing a drop with location denied saves it without a position', async ({
   page,
   context
 }, info) => {
-  const { log, capture, keep } = recorder(page, info, 'Denied');
+  const { log, capture, keep } = recorder(page, info, 'placing-drop', 'Denied');
   keep('doctor.json', doctor());
   log('doctor passed: our preview process owns 4173');
   await context.clearPermissions();
