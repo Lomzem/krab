@@ -165,3 +165,74 @@ test('a Collect toast lasts 8 seconds and Undo within it puts only that gear bac
   await expect(inWater('Pot 2')).toBeVisible();
   await expect(inWater('Pot 1')).toHaveCount(0);
 });
+
+const openNewerStorageVersion = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<void>((opened, failed) => {
+        const request = indexedDB.open('krab', 2);
+        request.onsuccess = () => {
+          request.result.close();
+          opened();
+        };
+        request.onerror = () => {
+          failed(new Error('could not open krab at version 2'));
+        };
+      })
+  );
+
+const deleteStorage = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<void>((deleted, failed) => {
+        const request = indexedDB.deleteDatabase('krab');
+        request.onsuccess = () => {
+          deleted();
+        };
+        request.onerror = () => {
+          failed(new Error('could not delete krab'));
+        };
+      })
+  );
+
+test('a failed save offers Retry and Dismiss until one is chosen, and Retry saves the drop once storage works again', async ({
+  page
+}) => {
+  const failedSave = toastOf(page).filter({ hasText: "Couldn't save" });
+  const retry = failedSave.getByRole('button', { name: 'Retry' });
+  const failDrop = async () => {
+    await page.getByRole('button', { name: 'Drop pot' }).click();
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(0);
+        return failedSave.count();
+      })
+      .toBe(1);
+    await page.mouse.move(0, 0);
+    await page.clock.runFor(60_000);
+    await expect(retry).toBeVisible();
+  };
+
+  await openWithPausedClock(page);
+  await openNewerStorageVersion(page);
+
+  await failDrop();
+  await failedSave.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(toastOf(page)).toBeHidden();
+
+  await failDrop();
+  await deleteStorage(page);
+  await retry.click();
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(0);
+      return toastOf(page).filter({ hasText: 'Pot 1 dropped' }).count();
+    })
+    .toBe(1);
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const rows = page.getByRole('main').getByRole('listitem');
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText('Pot 1');
+});
