@@ -14,12 +14,14 @@
     notice,
     onundo,
     onretry,
-    ondismiss
+    ondismiss,
+    covers = $bindable(0)
   }: {
     notice: Notice | null;
     onundo: (undo: Undo) => void;
     onretry: (retry: Retry) => void;
     ondismiss: (key: number) => void;
+    covers?: number;
   } = $props();
 
   let countdown: Countdown | null = null;
@@ -50,7 +52,9 @@
   <div
     role="status"
     aria-label="Messages"
-    class="absolute inset-x-3 bottom-3 flex justify-center"
+    class="absolute inset-x-3 bottom-0 flex justify-center"
+    class:pb-3={notice}
+    bind:clientHeight={covers}
   >
     {#if notice}
       <div

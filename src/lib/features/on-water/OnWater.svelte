@@ -69,6 +69,10 @@
   let showOnMap = $state<string | null>(null);
   let mapFilter = $state({ ...DEFAULT_MAP_FILTER });
   let mapTabButton = $state<HTMLButtonElement>();
+  let toastCovers = $state(0);
+  const listClearance = $derived(
+    tab === 'map' ? undefined : `${String(toastCovers)}px`
+  );
 
   let operation = $state.raw<SheetOperation | null>(null);
 
@@ -232,7 +236,11 @@
 </script>
 
 <div class="flex h-dvh flex-col bg-background font-sans text-foreground">
-  <main class="min-h-0 flex-1 overflow-y-auto">
+  <main
+    class="min-h-0 flex-1 overflow-y-auto"
+    style:padding-bottom={listClearance}
+    style:scroll-padding-bottom={listClearance}
+  >
     {#if tab === 'map'}
       {#if water.ready}
         <MapTab
@@ -346,6 +354,7 @@
     ondismiss={(key: number) => {
       water.dismiss(key);
     }}
+    bind:covers={toastCovers}
   />
 
   {#if water.pending?.phase === 'acquiring'}
