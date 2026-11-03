@@ -6,6 +6,7 @@ import { deliverFix, holdFixes } from './held-geolocation';
 
 const MIN_TARGET_PX = 44;
 const LATE_EVENING = new Date('2031-06-10T23:40:00-04:00');
+const POT_2_IN_FOR_58_MINUTES = new Date('2031-06-11T01:09:00-04:00');
 
 const dropPotAt = async (page: Page, north: number, name: string) => {
   await deliverFix(page, {
@@ -118,7 +119,29 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
     filter.getByRole('checkbox', { name: 'Collected gear' })
   ).toBeChecked();
   await expect(days.getByRole('radio', { name: 'All' })).toBeChecked();
+  await filter.getByRole('checkbox', { name: 'Collected gear' }).uncheck();
   await closeFilter();
+  await expect(pin(/^Pot 1,/)).toHaveCount(0);
+  await expect(pin(/^Pot 2, Day 2,/)).toBeVisible();
+  await openFilter();
+  await filter.getByRole('checkbox', { name: 'Collected gear' }).check();
+  await closeFilter();
+  await expect(collected).toBeVisible();
+
+  await page.clock.pauseAt(POT_2_IN_FOR_58_MINUTES);
+  await page.clock.runFor('00:59');
+  const timeLabel = mapArea.getByText('59m', { exact: true });
+  await expect(timeLabel).toBeVisible();
+  for (const shown of [false, true]) {
+    await openFilter();
+    await filter
+      .getByRole('checkbox', { name: 'Time in the water' })
+      .setChecked(shown);
+    await closeFilter();
+    await expect(timeLabel).toHaveCount(shown ? 1 : 0);
+    await expect(pin(/^Pot 2, Day 2,/)).toBeVisible();
+  }
+  await page.clock.resume();
 
   await tab('Gear').click();
   await day2.getByRole('button', { name: /Pot 2/ }).click();

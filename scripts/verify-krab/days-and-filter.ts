@@ -7,6 +7,7 @@ import { MADE_UP_SEA } from '../../playwright.config';
 import { deliverFix, holdFixes } from '../../e2e/held-geolocation';
 
 const LATE_EVENING = new Date('2031-06-10T23:40:00-04:00');
+const POT_2_IN_FOR_58_MINUTES = new Date('2031-06-11T01:09:00-04:00');
 
 const dropPotAt = async (page: Page, north: number, name: string) => {
   await deliverFix(page, {
@@ -133,10 +134,35 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
   ).toBeChecked();
   await expect(days.getByRole('radio', { name: 'All' })).toBeChecked();
   log('filter after Show on map: Collected gear on, All days');
-  await alsoShow.getByRole('checkbox', { name: 'Time in the water' }).uncheck();
-  await capture('07-filter-after-show');
+  await alsoShow.getByRole('checkbox', { name: 'Collected gear' }).uncheck();
   await closeFilter();
-  await capture('08-no-time-labels');
+  await expect(pin(/^Pot 1,/)).toHaveCount(0);
+  await expect(pin(/^Pot 2, Day 2,/)).toBeVisible();
+  log(
+    'Collected gear off over All days: collected Pot 1 pin gone, Pot 2 stays'
+  );
+  await capture('07-collected-off');
+  await openFilter();
+  await alsoShow.getByRole('checkbox', { name: 'Collected gear' }).check();
+  await closeFilter();
+  await expect(collected).toBeVisible();
+  log('Collected gear back on: collected Pot 1 pin back');
+
+  await page.clock.pauseAt(POT_2_IN_FOR_58_MINUTES);
+  await page.clock.runFor('00:59');
+  const timeLabel = mapArea.getByText('59m', { exact: true });
+  await expect(timeLabel).toBeVisible();
+  await openFilter();
+  await alsoShow.getByRole('checkbox', { name: 'Time in the water' }).uncheck();
+  await capture('08-filter-time-off');
+  await closeFilter();
+  await expect(timeLabel).toHaveCount(0);
+  await expect(pin(/^Pot 2, Day 2,/)).toBeVisible();
+  log(
+    'Time in the water off: the 59m label under Pot 2 is gone, the pin stays'
+  );
+  await capture('09-no-time-labels');
+  await page.clock.resume();
 
   await page.reload();
   await openFilter();

@@ -35,14 +35,16 @@ Drop gear late in the evening, then drop again after midnight. The Gear tab show
 6. Open Filter: All is checked. Capture `04-filter-sheet`. Check Today, Done: the Pot 1 pin is gone and Pot 2 stays. Capture `05-today-only`.
 7. Gear tab, region Day 1, Pot 1, Collect, Escape. Map tab, Filter, untick Collected gear, Done.
 8. Gear tab, region Collected, Pot 1, Show on map: `/^Pot 1, Day 1, collected/` is focused beside Pot 2. Capture `06-show-on-map-collected`.
-9. Open Filter: Collected gear checked and All checked. Untick Time in the water. Capture `07-filter-after-show`; Done; capture `08-no-time-labels`.
-10. Reload, open Filter: Time in the water is checked again.
-11. Evidence: `indexeddb-before.json`, `indexeddb-after.json` (two drops either side of local midnight and no stored day), `requests.json` (no position in any URL), screenshots and ARIA snapshots.
+9. Open Filter: Collected gear checked and All checked. Untick Collected gear, Done: with All days the collected Pot 1 pin is gone and Pot 2 stays. Capture `07-collected-off`. Tick it again: Pot 1 is back.
+10. `page.clock.pauseAt` 01:09 then `runFor('00:59')`, so the next refresh shows the visible `59m` label under Pot 2. Untick Time in the water, capture `08-filter-time-off`, Done: the `59m` label is gone and the Pot 2 pin stays. Capture `09-no-time-labels`, then `page.clock.resume()`.
+11. Reload, open Filter: Time in the water is checked again.
+12. Evidence: `indexeddb-before.json`, `indexeddb-after.json` (two drops either side of local midnight and no stored day), `requests.json` (no position in any URL), screenshots and ARIA snapshots.
 
 ## Gotchas
 
 - With `page.clock` installed, WebKit's emulated geolocation still stamps fixes with real time, so a fix looks stale after a clock jump and a drop waits for a position. Deliver fixes with `deliverFix` from `e2e/held-geolocation.ts`: without a time it stamps the page's `Date.now()`, and an explicit `Date` stamps exactly that. It is a plain module, separate from the e2e `providers` fixture, so live verify still reaches the real map providers.
 - On a multi-day trip, match the Collected region with `exact: true`; a plain name match also finds its "Collected Day N" regions.
+- Prove a filter toggle where nothing else hides the target: Collected gear over All days, and Time in the water on a visible label. The app re-reads the clock every 15 s, so `setFixedTime` leaves an old label; pause, then run the clock to a known time.
 - Day boundaries follow the browser's time zone. Always set `timezoneId`; the container's default is UTC.
 - Pins near each other overlap their time labels. Keep made-up drops about 0.001° apart: closer and labels overlap, farther and a pin can end up hidden under the map controls when Show on map centres the other one. The controls always stay above every pin and keep their taps (collected pins under own position under gear in the water); `e2e/chart-map.test.ts` proves a pin under Filter never takes its tap.
 - The day numbering, gap days and DST cases are proven by `src/lib/features/trip/trip.test.ts` (Vitest pinned to America/New_York). The recipe only shows the screens.
