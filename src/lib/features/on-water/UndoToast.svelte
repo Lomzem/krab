@@ -6,6 +6,7 @@
     none: 4000,
     'undo-drop': 8000,
     restore: 8000,
+    'undo-collect': 8000,
     retry: null
   };
 
@@ -60,7 +61,7 @@
         onfocusout={release('focus')}
       >
         <p class="flex-1 py-1.5 text-[17px] font-semibold">{notice.text}</p>
-        {#if notice.offer.action === 'undo-drop' || notice.offer.action === 'restore'}
+        {#if notice.offer.action !== 'none' && notice.offer.action !== 'retry'}
           {@const undo = notice.offer}
           <button
             type="button"

@@ -13,20 +13,26 @@
   let {
     subject,
     editKind = true,
+    now,
     onclose,
     onsave,
+    oncollect,
+    ondropagain,
     returnFocus,
     actions,
     endAction
   }: {
     subject: SheetSubject | null;
     editKind?: boolean;
+    now: number;
     onclose: () => void;
     onsave: (
       dropId: string,
       edit: DropEdit,
       kind: Kind | null
     ) => Promise<SaveProblem | null>;
+    oncollect?: (dropId: string) => void;
+    ondropagain?: (dropId: string) => void;
     returnFocus: () => HTMLElement | null | undefined;
     actions?: Snippet<[Drop]>;
     endAction?: Snippet<[Drop]>;
@@ -52,8 +58,11 @@
         {subject}
         formId={FORM_ID}
         {editKind}
+        {now}
         {onsave}
         onsaved={onclose}
+        {oncollect}
+        {ondropagain}
       >
         {@render actions?.(subject.drop)}
       </GearDetailsForm>

@@ -1,11 +1,12 @@
 <script lang="ts">
   import {
+    collectedGear,
+    gearCounts,
     gearInWater,
     type LatLon,
     type Trip
   } from '#lib/features/trip/index.js';
   import BearingArrow from './BearingArrow.svelte';
-  import { inWaterText } from './counts';
   import GearIcon from './GearIcon.svelte';
 
   let {
@@ -21,12 +22,18 @@
   } = $props();
 
   const rows = $derived(trip ? gearInWater(trip, from, now) : []);
+  const collected = $derived(trip ? collectedGear(trip) : []);
+  const counts = $derived(trip ? gearCounts(trip) : null);
+
+  const rowClass =
+    'flex min-h-16 w-full items-center gap-3 px-4 py-2 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted';
 </script>
 
 <header class="px-4 pt-5 pb-3">
   <h1 class="text-[34px] leading-tight font-bold">Gear</h1>
-  {#if trip}
-    <p class="text-[17px] text-muted-foreground">{inWaterText(rows.length)}</p>
+  {#if counts}
+    <p class="text-[17px] text-muted-foreground">{counts.inWater}</p>
+    <p class="text-[17px] text-muted-foreground">{counts.collected}</p>
   {/if}
 </header>
 
@@ -36,7 +43,7 @@
       <li class="border-b border-border">
         <button
           type="button"
-          class="flex min-h-16 w-full items-center gap-3 px-4 py-2 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted"
+          class={rowClass}
           onclick={(event) => {
             onopen(row.drop.id, event.currentTarget);
           }}
@@ -87,6 +94,36 @@
       </li>
     {/each}
   </ul>
+  {#if collected.length > 0}
+    <section aria-labelledby="collected-title">
+      <h2 id="collected-title" class="px-4 pt-6 pb-2 text-[22px] font-bold">
+        Collected
+      </h2>
+      <ul class="border-t border-border bg-card">
+        {#each collected as item (item.drop.id)}
+          <li class="border-b border-border">
+            <button
+              type="button"
+              class={rowClass}
+              onclick={(event) => {
+                onopen(item.drop.id, event.currentTarget);
+              }}
+            >
+              <GearIcon kind={item.gear.kind} size={28} />
+              <div class="min-w-0 flex-1">
+                <p class="text-[19px] leading-snug font-semibold">
+                  {item.name}
+                </p>
+                <p class="text-[15px] text-muted-foreground">
+                  {item.catchText}
+                </p>
+              </div>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
 {:else}
   <p class="px-4 text-[17px]">
     No trip running. Drop a pot or a net to start one.

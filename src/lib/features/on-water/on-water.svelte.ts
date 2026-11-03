@@ -2,32 +2,48 @@ import { Effect, Exit, Result } from 'effect';
 import {
   openTripBook,
   StorageFailed,
+  type CannotDropAgain,
   type Clock,
   type Deletion,
   type DropAttempt,
   type DropCancelled,
   type DropEdit,
   type DropNotFound,
+  type DroppedAgain,
   type DropNotSaved,
   type DropPhase,
+  type DropTarget,
+  type InvalidCatch,
   type InvalidDepth,
   type Kind,
   type KindLocked,
+  type NotCollected,
   type PlacedDrop,
   type PositionSource,
   type Trip,
   type TripBook
 } from '#lib/features/trip/index.js';
 
-export type Retry = Effect.Effect<PlacedDrop, DropNotSaved>;
+type DropFailure = DropCancelled | DropNotSaved | CannotDropAgain;
+
+export type Retry = Effect.Effect<
+  PlacedDrop,
+  Exclude<DropFailure, DropCancelled>
+>;
 
 export type Offer =
   | { action: 'none' }
   | { action: 'undo-drop'; dropId: string; name: string }
   | { action: 'restore'; deletion: Deletion; name: string }
+  | { action: 'undo-collect'; dropId: string; name: string }
   | { action: 'retry'; retry: Retry };
 
-export type Undo = Extract<Offer, { action: 'undo-drop' | 'restore' }>;
+export type Undo = Extract<
+  Offer,
+  { action: 'undo-drop' | 'restore' | 'undo-collect' }
+>;
+
+type UndoCollect = Extract<Offer, { action: 'undo-collect' }>;
 
 export type Notice = { key: number; text: string; offer: Offer };
 
@@ -37,12 +53,20 @@ export type PendingDrop = {
   phase: DropPhase;
 };
 
-export type SaveProblem = 'depth' | 'kind' | 'storage';
+export type SaveProblem = 'depth' | 'catch' | 'kind' | 'storage';
 
-type SaveFailure = DropNotFound | InvalidDepth | KindLocked | StorageFailed;
+type SaveFailure =
+  | DropNotFound
+  | InvalidDepth
+  | InvalidCatch
+  | NotCollected
+  | KindLocked
+  | StorageFailed;
 
 const PROBLEMS: Record<SaveFailure['_tag'], SaveProblem> = {
   InvalidDepth: 'depth',
+  InvalidCatch: 'catch',
+  NotCollected: 'catch',
   KindLocked: 'kind',
   DropNotFound: 'storage',
   StorageFailed: 'storage'
@@ -61,6 +85,17 @@ const droppedText = (placed: PlacedDrop) => {
   if (!placed.drop.position)
     return `${placed.name} dropped without a position.`;
   return `${placed.name} dropped`;
+};
+
+const undoCollectFailure = (
+  tag: (DropNotFound | DroppedAgain | StorageFailed)['_tag'],
+  undo: UndoCollect
+): [string, Offer?] => {
+  if (tag === 'DroppedAgain') {
+    return [`Couldn't undo. ${undo.name} has been dropped again since.`];
+  }
+  if (tag === 'DropNotFound') return [`Couldn't undo. ${undo.name} is gone.`];
+  return ["Couldn't undo. Try again.", undo];
 };
 
 const resultOf = <A, E>(
@@ -103,14 +138,26 @@ export class OnWater {
     void this.#load();
   }
 
-  async drop(kind: Kind) {
+  drop(kind: Kind) {
+    return this.#place({ kind }, kind);
+  }
+
+  dropAgain(dropId: string) {
+    const drop = this.trip?.drops.find((item) => item.id === dropId);
+    const gear =
+      drop && this.trip?.gear.find((item) => item.id === drop.gearId);
+    if (!gear) return Promise.resolve(false);
+    return this.#place({ again: dropId }, gear.kind);
+  }
+
+  async #place(target: DropTarget, kind: Kind) {
     if (this.pending) return false;
     const book = await this.#book;
     if (!book) {
       this.#say("Couldn't save the drop. Storage isn't available.");
       return false;
     }
-    const attempt = await Effect.runPromise(book.placeDrop(kind));
+    const attempt = await Effect.runPromise(book.placeDrop(target));
     const waited = attempt.phase() === 'acquiring';
     const unfollow = waited ? this.#follow(kind, attempt) : () => undefined;
     const outcome = await Effect.runPromise(Effect.result(attempt.result));
@@ -133,11 +180,17 @@ export class OnWater {
     this.#settle(await Effect.runPromise(Effect.result(retry)));
   }
 
-  #settle(outcome: Result.Result<PlacedDrop, DropCancelled | DropNotSaved>) {
+  #settle(outcome: Result.Result<PlacedDrop, DropFailure>) {
     if (Result.isFailure(outcome)) {
       const failure = outcome.failure;
       if (failure._tag === 'DropCancelled') {
         this.#say('Drop cancelled. Nothing was saved.');
+        return;
+      }
+      if (failure._tag === 'CannotDropAgain') {
+        this.#say(
+          "Couldn't drop that gear again. It's no longer the latest collected drop, so nothing was saved."
+        );
         return;
       }
       this.#say("Couldn't save the drop, so nothing was saved.", {
@@ -160,6 +213,10 @@ export class OnWater {
   }
 
   async undo(undo: Undo) {
+    if (undo.action === 'undo-collect') {
+      await this.undoCollect(undo.dropId, undo.name);
+      return;
+    }
     const book = await this.#book;
     if (!book) return;
     if (undo.action === 'undo-drop') {
@@ -203,6 +260,52 @@ export class OnWater {
     if (Result.isFailure(changed)) return PROBLEMS[changed.failure._tag];
     this.#show(changed.success.trip);
     return null;
+  }
+
+  async collect(dropId: string) {
+    const book = await this.#book;
+    if (!book) return;
+    const collected = await resultOf(book.collect(dropId));
+    if (Result.isFailure(collected)) {
+      this.#say(
+        collected.failure._tag === 'DropNotFound'
+          ? "Couldn't collect. That drop is gone."
+          : "Couldn't collect. Try again."
+      );
+      return;
+    }
+    const { name, changed } = collected.success;
+    this.#show(collected.success.trip);
+    if (changed)
+      this.#say(`${name} collected`, { action: 'undo-collect', dropId, name });
+  }
+
+  async undoCollect(dropId: string, name: string) {
+    const book = await this.#book;
+    if (!book) return;
+    const undone = await resultOf(book.undoCollect(dropId));
+    if (Result.isFailure(undone)) {
+      this.#say(
+        ...undoCollectFailure(undone.failure._tag, {
+          action: 'undo-collect',
+          dropId,
+          name
+        })
+      );
+      return;
+    }
+    this.#show(undone.success.trip);
+    if (undone.success.changed) {
+      this.#say(`${name} back in the water`);
+      return;
+    }
+    const { notice } = this;
+    if (
+      notice?.offer.action === 'undo-collect' &&
+      notice.offer.dropId === dropId
+    ) {
+      this.notice = null;
+    }
   }
 
   async remove(dropId: string) {

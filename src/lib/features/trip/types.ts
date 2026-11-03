@@ -26,6 +26,11 @@ const Gear = Schema.Struct({
 });
 export type Gear = typeof Gear.Type;
 
+const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+
+export const Catch = Schema.Struct({ kept: Count, released: Count });
+export type Catch = typeof Catch.Type;
+
 const Drop = Located.mapMembers(
   Tuple.map(
     Schema.fieldsAssign({
@@ -37,8 +42,7 @@ const Drop = Located.mapMembers(
       depthFt: Schema.NullOr(Schema.Finite),
       notes: Schema.String,
       collectedAt: Schema.NullOr(Schema.Finite),
-      kept: Schema.NullOr(Schema.Int),
-      released: Schema.NullOr(Schema.Int)
+      catch: Schema.NullOr(Catch)
     })
   )
 );
@@ -75,7 +79,7 @@ export type TripDeps = {
 
 export type DropDetails = Pick<Drop, 'label' | 'bait' | 'depthFt' | 'notes'>;
 
-export type DropEdit = { details: DropDetails };
+export type DropEdit = { details: DropDetails; catch: Catch | null };
 
 export type Deletion = {
   trip: Omit<Trip, 'gear' | 'drops'>;

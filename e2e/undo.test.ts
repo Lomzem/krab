@@ -123,3 +123,45 @@ test('a touch held on the Undo toast holds it past 8 seconds and keeps the remai
   });
   await expectExpiresAfter(page, 6000);
 });
+
+test('a Collect toast lasts 8 seconds and Undo within it puts only that gear back in the water', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const inWater = (name: string) =>
+    page
+      .getByRole('main')
+      .getByRole('button')
+      .filter({ hasText: name })
+      .filter({ hasText: 'in the water' });
+  const collect = async (name: string) => {
+    await inWater(name).click();
+    await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(0);
+        return toastOf(page)
+          .filter({ hasText: `${name} collected` })
+          .count();
+      })
+      .toBe(1);
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    await page.mouse.move(0, 0);
+  };
+
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await dropPot(page, 'Pot 2');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await collect('Pot 1');
+  await expectExpiresAfter(page, 8000);
+
+  await collect('Pot 2');
+  await page.clock.runFor(7999);
+  await undoOf(page).click();
+  await expect(toastOf(page)).toContainText('Pot 2 back in the water');
+  await expect(inWater('Pot 2')).toBeVisible();
+  await expect(inWater('Pot 1')).toHaveCount(0);
+});
