@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 
 const gearTab = (page: Page) =>
@@ -32,9 +32,7 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Position ready')).toBeVisible();
   await page.getByRole('button', { name: 'Drop pot' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await gearTab(page).click();
 
   await inWaterRow(page, 'Pot 1').click();
@@ -91,9 +89,7 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Position ready')).toBeVisible();
   await page.getByRole('button', { name: 'Drop pot' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await gearTab(page).click();
 
   await inWaterRow(page, 'Pot 1').click();
@@ -102,9 +98,7 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await sheet.getByRole('button', { name: 'One more kept' }).click();
   await dropAgain.click();
   await expect(sheet).toBeHidden();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
 
   await expect(collectedRow(page, 'Pot 1')).toContainText('1 kept, 0 released');
   await collectedRow(page, 'Pot 1').click();

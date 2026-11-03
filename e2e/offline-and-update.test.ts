@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BrowserContext, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test, toastOf } from './fixtures';
 import { CURRENT_BUILD, PREVIOUS_BUILD } from './builds';
 import { siteAt, type Site } from './static-host';
 
@@ -35,9 +35,7 @@ const dropPot = async (page: Page) => {
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Position ready')).toBeVisible();
   await page.getByRole('button', { name: 'Drop pot' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
 };
 
 const expectStoredPot = async (page: Page) => {

@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 
 const gearRow = (page: Page, name: string) =>
@@ -19,17 +19,13 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Position ready')).toBeVisible();
   await page.getByRole('button', { name: 'Drop pot' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page
     .getByRole('group', { name: 'Gear to drop' })
     .getByText('Net', { exact: true })
     .click();
   await page.getByRole('button', { name: 'Drop net' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Net 1 dropped' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Net 1 dropped');
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
 
   const pot1 = gearRow(page, 'Pot 1');
@@ -81,14 +77,10 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(
     page.getByRole('button', { name: /^Drop (pot|net)$/ })
   ).toBeFocused();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 deleted' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 deleted');
   await expect(pot1).toHaveCount(0);
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 restored' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 restored');
   await pot1.click();
   await expect(label).toHaveValue('red float');
 });

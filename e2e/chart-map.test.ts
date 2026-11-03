@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
 
@@ -12,9 +12,7 @@ const dropPotAndOpenMap = async (page: Page) => {
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Position ready')).toBeVisible();
   await page.getByRole('button', { name: 'Drop pot' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'dropped' })
-  ).toContainText('Pot 1 dropped');
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.getByRole('button', { name: 'Map', exact: true }).click();
 };
 
@@ -76,7 +74,7 @@ test('the Map tab shows gear and my position from the phone and asks NOAA only f
   }
 });
 
-test('without signal the Map tab says so, still shows gear and my position, and recovers when the phone reconnects', async ({
+test('without signal the Map tab says so while the toast still expires, still shows gear and my position, and recovers when the phone reconnects', async ({
   context,
   page,
   providers
@@ -88,6 +86,9 @@ test('without signal the Map tab says so, still shows gear and my position, and 
     .getByRole('status')
     .filter({ hasText: 'No signal' });
   await expect(notice).toContainText('No signal');
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
+  await expect(notice).toBeVisible();
   await expect(potOnMap(page)).toBeVisible();
   await expect(myPosition(page)).toBeVisible();
   await expectAccessibleInBothThemes(page);

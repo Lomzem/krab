@@ -24,10 +24,11 @@ Preconditions: launch and doctor from the parent skill; fresh context; complete 
 - **Depth:** reopen, fill Depth with `-3` and click `Save`. Require the dialog still open, Depth focused with `aria-invalid="true"` and a non-empty accessible description.
 - **Save:** fill Label `red float` and Depth `12.5`, click `Save`. Require the dialog hidden; read IndexedDB and require the drop's `label: 'red float'` and `depthFt: 12.5`. Reload, choose Gear, reopen Pot 1 and require the same values.
 - **Kind:** after dropping a net, open Net 1, click the visible `Pot` text in group `Gear`, click `Save`. Require a `Pot 2` row and no Net 1 row.
-- **Delete:** open Pot 1, click `Delete drop`. Require the dialog hidden, the `Drop pot` or `Drop net` button focused, status `Pot 1 deleted` and no Pot 1 row. Click `Undo`; require status `Pot 1 restored` and IndexedDB equal to the snapshot taken before the delete.
+- **Delete:** open Pot 1, click `Delete drop`. Require the dialog hidden, the `Drop pot` or `Drop net` button focused, the toast containing `Pot 1 deleted` and no Pot 1 row. Click `Undo`; require the toast to contain `Pot 1 restored` and IndexedDB equal to the snapshot taken before the delete.
 
 ## Gotchas
 
+- Check toasts with `toastOf(page)` from `e2e/fixtures.ts` (the group inside the status region named `Messages`). Other status regions (No signal, catch counts) can be present at the same time.
 - The kind radios are visually hidden; click their visible label text instead of calling `check()`.
 - A row may carry a second line, `Rough position, within about …`, when the fix was rough; it is part of the row button's name, so filter rows by gear name rather than matching the whole name.
 - Every list row is now a button inside its list item. Scope rows to `main`, because the navigation buttons are also buttons.

@@ -1,4 +1,4 @@
-import { test as base, type Route } from '@playwright/test';
+import { test as base, type Page, type Route } from '@playwright/test';
 
 export { expect } from '@playwright/test';
 
@@ -57,3 +57,6 @@ export const test = base.extend<{ providers: Providers }>({
     { auto: true }
   ]
 });
+
+export const toastOf = (page: Page) =>
+  page.getByRole('status', { name: 'Messages' }).getByRole('group');

@@ -47,7 +47,11 @@
 </script>
 
 <div class="pointer-events-none relative h-0">
-  <div role="status" class="absolute inset-x-3 bottom-3 flex justify-center">
+  <div
+    role="status"
+    aria-label="Messages"
+    class="absolute inset-x-3 bottom-3 flex justify-center"
+  >
     {#if notice}
       <div
         role="group"

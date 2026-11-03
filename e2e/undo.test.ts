@@ -1,12 +1,11 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test, toastOf } from './fixtures';
 
 const START = new Date('2031-03-04T05:00:00Z');
 const PAUSED = new Date('2031-03-04T06:00:00Z');
 
 test.use({ permissions: [] });
 
-const toastOf = (page: Page) => page.getByRole('status').getByRole('group');
 const undoOf = (page: Page) =>
   toastOf(page).getByRole('button', { name: 'Undo' });
 

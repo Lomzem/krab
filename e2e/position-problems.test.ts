@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 
 const MIN_TARGET_PX = 44;
@@ -24,11 +24,9 @@ test.describe('with location denied', () => {
     await expectAccessibleInBothThemes(page);
 
     await page.getByRole('button', { name: 'Drop pot' }).click();
-    await expect(
-      page
-        .getByRole('status')
-        .filter({ hasText: 'Pot 1 dropped without a position' })
-    ).toBeVisible();
+    await expect(toastOf(page)).toContainText(
+      'Pot 1 dropped without a position'
+    );
     await expectAccessibleInBothThemes(page);
 
     await page.getByRole('button', { name: 'Gear', exact: true }).click();
@@ -60,9 +58,7 @@ test('while getting a position, Cancel and Save without position are reachable 4
   await expectAccessibleInBothThemes(page);
 
   await save.click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'dropped without a position' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('dropped without a position');
   await expect(page.getByRole('button', { name: /^Drop / })).toBeFocused();
 });
 
@@ -185,13 +181,9 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
   await expect(
     page.getByRole('button', { name: 'Save without position' })
   ).toHaveCount(0);
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toHaveCount(0);
+  await expect(toastOf(page)).toBeHidden();
 
   await page.evaluate(releaseStorage);
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Pot 1 dropped' })
-  ).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
 });
