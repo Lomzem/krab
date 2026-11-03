@@ -59,6 +59,7 @@ export type { DropAttempt, PlacedDrop };
 export { canChangeKind, gearName, KIND_NAMES, KINDS } from './rules';
 export {
   gearInWater,
+  nearestGear,
   roughness,
   type Direction,
   type GearRow,
