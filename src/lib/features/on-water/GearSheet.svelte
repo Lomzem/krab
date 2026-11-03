@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
   import type { SheetOperation, SheetSubject } from './gear-sheet';
+  import DayMarker from './DayMarker.svelte';
   import GearDetailsForm from './GearDetailsForm.svelte';
   import GearIcon from './GearIcon.svelte';
   import Sheet from './Sheet.svelte';
@@ -48,6 +49,11 @@
         <GearIcon kind={subject.gear.kind} size={28} />
         {subject.name}
       </h2>
+      {#if subject.day}
+        <p class="mt-0.5 flex items-center gap-2 text-[17px] font-semibold">
+          <DayMarker day={subject.day.number} />{subject.day.text}
+        </p>
+      {/if}
     {/if}
   {/snippet}
 

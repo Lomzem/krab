@@ -1,5 +1,7 @@
 import {
+  dayOf,
   gearName,
+  type Day,
   type Drop,
   type Gear,
   type Trip
@@ -11,6 +13,7 @@ export type SheetSubject = {
   drop: Drop;
   gear: Gear;
   name: string;
+  day: Day | null;
 };
 
 export type SheetOrigin = {
@@ -32,5 +35,7 @@ export const sheetSubject = (
   if (!trip) return null;
   const drop = trip.drops.find((item) => item.id === dropId);
   const gear = drop && trip.gear.find((item) => item.id === drop.gearId);
-  return drop && gear ? { trip, drop, gear, name: gearName(gear) } : null;
+  return drop && gear
+    ? { trip, drop, gear, name: gearName(gear), day: dayOf(trip, drop) }
+    : null;
 };

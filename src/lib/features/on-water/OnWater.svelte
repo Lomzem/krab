@@ -28,6 +28,7 @@
   import SavingDrop from './SavingDrop.svelte';
   import LocationIntro from './LocationIntro.svelte';
   import LocationStatus from './LocationStatus.svelte';
+  import { DEFAULT_MAP_FILTER, filterToShow } from './map-filter';
   import MapTab from './MapTab.svelte';
   import {
     OnWater,
@@ -66,6 +67,7 @@
   let base = $state<Base>('chart');
   let camera = $state.raw<Camera | null>(null);
   let showOnMap = $state<string | null>(null);
+  let mapFilter = $state({ ...DEFAULT_MAP_FILTER });
   let mapTabButton = $state<HTMLButtonElement>();
 
   let operation = $state.raw<SheetOperation | null>(null);
@@ -182,9 +184,11 @@
     void operate(() => water.save(dropId, edit, nextKind), closeWhenSaved);
   };
 
-  const show = (dropId: string) => {
-    if (busy) return;
-    showOnMap = dropId;
+  const show = (target: Drop) => {
+    if (busy || !water.trip) return;
+    now = Date.now();
+    mapFilter = filterToShow(mapFilter, water.trip, target, now);
+    showOnMap = target.id;
     tab = 'map';
     closeSheet();
   };
@@ -240,6 +244,7 @@
           {now}
           bind:base
           bind:camera
+          bind:filter={mapFilter}
           show={showOnMap}
           onshown={() => {
             showOnMap = null;
@@ -282,7 +287,7 @@
           class="min-h-13 w-full rounded-control border-2 border-primary px-4 text-[18px] font-bold text-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
           aria-disabled={busy}
           onclick={() => {
-            show(target.id);
+            show(target);
           }}>Show on map</button
         >
       {/if}
