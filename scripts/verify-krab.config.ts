@@ -10,7 +10,8 @@ export default defineConfig({
     'finding-gear.ts',
     'collecting.ts',
     'drop-details.ts',
-    'compass.ts'
+    'compass.ts',
+    'days-and-filter.ts'
   ],
   outputDir: '../test-results/verify-krab-lock/artifacts',
   workers: 1,

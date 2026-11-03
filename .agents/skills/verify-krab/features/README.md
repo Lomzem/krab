@@ -20,7 +20,8 @@ Each file has a user-facing introduction and exactly four H2s: Sub-features, How
 
 - [Placing a drop](placing-drop.md): fully driven from both Map and Gear, including restoration, plus a drop with location denied.
 - [Drop details](drop-details.md): journey mapped for ticket 04; not yet driven by the bounded recipe.
-- [Finding gear](finding-gear.md): Map tab, gear sheets from the map, Show on map, street toggle and NOAA chart alignment driven by `finding-gear.ts`; ticket 08 owns the dedicated finding workflow.
+- [Finding gear](finding-gear.md): Map tab, gear sheets from the map, Show on map, street toggle and NOAA chart alignment driven by `finding-gear.ts`.
+- [Days and the Map filter](days-and-map-filter.md): overnight grouping, day markers, the Map filter and Show on map restoring hidden gear, driven by `days-and-filter.ts`.
 - [Collecting](collecting.md): collect, catch, reload, drop again and undo collect fully driven by `collecting.ts`.
 - [Compass](compass.md): toggle, 44 px target, unavailable path and no re-ask driven by `compass.ts`; working-compass checks are manual on an iPhone.
 - [Ending a trip](ending-trip.md): placeholder owned by ticket 09.

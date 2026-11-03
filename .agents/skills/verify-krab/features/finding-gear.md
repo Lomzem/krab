@@ -1,6 +1,6 @@
 # Finding gear
 
-Find gear still in the water on a north-up chart map or in the Gear list. The Map tab shows gear in the water, my position and the nearest gear's distance and direction. Ticket 06 built the map; ticket 08 owns the dedicated finding workflow.
+Find gear still in the water on a north-up chart map or in the Gear list. The Map tab shows gear in the water, my position and the nearest gear's distance and direction. Ticket 06 built the map. Days, day markers, the Map filter and the collected layer are in [Days and the Map filter](days-and-map-filter.md).
 
 ## Sub-features
 
