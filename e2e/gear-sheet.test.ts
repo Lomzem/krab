@@ -1,0 +1,84 @@
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expectAccessibleInBothThemes } from './accessibility';
+
+const gearRow = (page: Page, name: string) =>
+  page.getByRole('main').getByRole('button').filter({ hasText: name });
+
+const focusIsInside = (dialog: Locator) =>
+  dialog.evaluate((element) => element.contains(document.activeElement));
+
+test('the gear sheet keeps edits as a draft, saves details and kind, and deletes with undo', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const label = sheet.getByLabel('Label');
+  const depth = sheet.getByLabel('Depth');
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(page.getByRole('status')).toContainText('Pot 1 dropped');
+  await page
+    .getByRole('group', { name: 'Gear to drop' })
+    .getByText('Net', { exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Drop net' }).click();
+  await expect(page.getByRole('status')).toContainText('Net 1 dropped');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  const pot1 = gearRow(page, 'Pot 1');
+  await pot1.click();
+  await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
+  expect(await focusIsInside(sheet)).toBe(true);
+  await expect(depth).toHaveAttribute('inputmode', 'decimal');
+  await expectAccessibleInBothThemes(page);
+
+  await page.keyboard.press('Shift+Tab');
+  expect(await focusIsInside(sheet)).toBe(true);
+  await page.keyboard.press('Tab');
+  expect(await focusIsInside(sheet)).toBe(true);
+
+  await label.fill('red float');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(pot1).toBeFocused();
+  await pot1.click();
+  await expect(label).toHaveValue('');
+
+  await label.fill('red float');
+  await depth.fill('-3');
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(depth).toBeFocused();
+  await expect(depth).toHaveAttribute('aria-invalid', 'true');
+  await expect(depth).not.toHaveAccessibleDescription('');
+  await depth.fill('12.5');
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+
+  await gearRow(page, 'Net 1').click();
+  await sheet
+    .getByRole('group', { name: 'Gear' })
+    .getByText('Pot', { exact: true })
+    .click();
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(gearRow(page, 'Pot 2')).toBeVisible();
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await pot1.click();
+  await expect(label).toHaveValue('red float');
+  await expect(depth).toHaveValue('12.5');
+
+  await sheet.getByRole('button', { name: 'Delete drop' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(
+    page.getByRole('button', { name: /^Drop (pot|net)$/ })
+  ).toBeFocused();
+  await expect(page.getByRole('status')).toContainText('Pot 1 deleted');
+  await expect(pot1).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByRole('status')).toContainText('Pot 1 restored');
+  await pot1.click();
+  await expect(label).toHaveValue('red float');
+});

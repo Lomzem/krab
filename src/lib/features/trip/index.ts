@@ -47,7 +47,7 @@ export {
   KindLocked,
   StorageFailed
 };
-export { canChangeKind, KIND_NAMES, KINDS } from './rules';
+export { canChangeKind, gearName, KIND_NAMES, KINDS } from './rules';
 export { gearInWater, type Direction, type GearRow } from './queries';
 export type { LatLon } from './geo';
 
