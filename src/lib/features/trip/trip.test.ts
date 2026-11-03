@@ -1,7 +1,15 @@
 import { Effect } from 'effect';
 import { IDBDatabase, IDBFactory } from 'fake-indexeddb';
-import { afterEach, assert, expect, it, vi } from 'vitest';
-import { gearInWater, openTripBook, type Fix, type TripBook } from './index';
+import { afterEach, assert, expect, expectTypeOf, it, vi } from 'vitest';
+import {
+  gearInWater,
+  openTripBook,
+  type Drop,
+  type Fix,
+  type NoPosition,
+  type Position,
+  type TripBook
+} from './index';
 
 const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
 
@@ -260,6 +268,23 @@ it('stores nothing when a save fails, and replaying its Retry saves that drop on
   expect(reopened?.drops).toEqual([first.drop, unrelated.drop]);
   expect(reopened?.gear.map((gear) => gear.number)).toEqual([1, 2]);
   expect(next.name).toBe('Pot 3');
+});
+
+it('types a drop location as a position or a reason, never both or neither', () => {
+  type Placed<L> = Omit<Drop, 'position' | 'noPosition'> & L;
+
+  expectTypeOf<
+    Placed<{ position: Position; noPosition: null }>
+  >().toExtend<Drop>();
+  expectTypeOf<
+    Placed<{ position: null; noPosition: NoPosition }>
+  >().toExtend<Drop>();
+  expectTypeOf<
+    Placed<{ position: Position; noPosition: NoPosition }>
+  >().not.toExtend<Drop>();
+  expectTypeOf<
+    Placed<{ position: null; noPosition: null }>
+  >().not.toExtend<Drop>();
 });
 
 it('records gear number, tap time and a fresh fix', async () => {

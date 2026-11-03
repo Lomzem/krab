@@ -1,36 +1,58 @@
-import type { Effect } from 'effect';
+import { Schema, Tuple, type Effect } from 'effect';
 
-export type Kind = 'pot' | 'net';
+const Kind = Schema.Literals(['pot', 'net']);
+export type Kind = typeof Kind.Type;
 
-export type NoPosition = 'denied' | 'no-fix' | 'skipped';
+const NoPosition = Schema.Literals(['denied', 'no-fix', 'skipped']);
+export type NoPosition = typeof NoPosition.Type;
 
-export type Position = { lat: number; lon: number; accuracyM: number };
+const Position = Schema.Struct({
+  lat: Schema.Finite,
+  lon: Schema.Finite,
+  accuracyM: Schema.Finite
+});
+export type Position = typeof Position.Type;
 
-export type Gear = { id: string; kind: Kind; number: number };
+const Located = Schema.Union([
+  Schema.Struct({ position: Position, noPosition: Schema.Null }),
+  Schema.Struct({ position: Schema.Null, noPosition: NoPosition })
+]);
+export type Located = typeof Located.Type;
 
-export type Drop = {
-  id: string;
-  gearId: string;
-  placedAt: number;
-  position: Position | null;
-  noPosition: NoPosition | null;
-  label: string;
-  bait: string;
-  depthFt: number | null;
-  notes: string;
-  collectedAt: number | null;
-  kept: number | null;
-  released: number | null;
-};
+const Gear = Schema.Struct({
+  id: Schema.String,
+  kind: Kind,
+  number: Schema.Int
+});
+export type Gear = typeof Gear.Type;
 
-export type Trip = {
-  id: string;
-  startedAt: number;
-  endedAt: number | null;
-  gear: Gear[];
-  drops: Drop[];
-  next: Record<Kind, number>;
-};
+const Drop = Located.mapMembers(
+  Tuple.map(
+    Schema.fieldsAssign({
+      id: Schema.String,
+      gearId: Schema.String,
+      placedAt: Schema.Finite,
+      label: Schema.String,
+      bait: Schema.String,
+      depthFt: Schema.NullOr(Schema.Finite),
+      notes: Schema.String,
+      collectedAt: Schema.NullOr(Schema.Finite),
+      kept: Schema.NullOr(Schema.Int),
+      released: Schema.NullOr(Schema.Int)
+    })
+  )
+);
+export type Drop = typeof Drop.Type;
+
+export const Trip = Schema.Struct({
+  id: Schema.String,
+  startedAt: Schema.Finite,
+  endedAt: Schema.NullOr(Schema.Finite),
+  gear: Schema.Array(Gear),
+  drops: Schema.Array(Drop),
+  next: Schema.Struct({ pot: Schema.Int, net: Schema.Int })
+});
+export type Trip = typeof Trip.Type;
 
 export type Fix = Position & { at: number };
 

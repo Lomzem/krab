@@ -1,9 +1,4 @@
-import type { Drop, Gear, Kind, NoPosition, Position, Trip } from './types';
-
-export type Located = {
-  position: Position | null;
-  noPosition: NoPosition | null;
-};
+import type { Drop, Gear, Kind, Located, Trip } from './types';
 
 export const KINDS: readonly Kind[] = ['pot', 'net'];
 export const KIND_NAMES: Record<Kind, string> = { pot: 'Pot', net: 'Net' };
@@ -60,8 +55,7 @@ export const placeDrop = (
     id: command.dropId,
     gearId: gear.id,
     placedAt: tapAt,
-    position: where.position,
-    noPosition: where.noPosition,
+    ...where,
     label: '',
     bait: '',
     depthFt: null,

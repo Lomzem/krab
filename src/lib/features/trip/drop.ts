@@ -1,14 +1,16 @@
 import { Data, Deferred, Effect, Fiber } from 'effect';
-import {
-  dropCommand,
-  gearName,
-  placeDrop,
-  type DropCommand,
-  type Located
-} from './rules';
+import { dropCommand, gearName, placeDrop, type DropCommand } from './rules';
 import { roughness, type SpokenText } from './queries';
 import { readModifyWrite, type StorageFailed } from './storage';
-import type { Drop, Fix, Kind, PositionSource, Trip, TripDeps } from './types';
+import type {
+  Drop,
+  Fix,
+  Kind,
+  Located,
+  PositionSource,
+  Trip,
+  TripDeps
+} from './types';
 
 export const FRESH_FIX_MS = 5000;
 export const FIX_WAIT_MS = 20_000;
