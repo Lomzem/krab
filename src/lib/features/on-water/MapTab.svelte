@@ -118,7 +118,7 @@
           {#if row}
             <button
               type="button"
-              class="group relative grid size-11 place-items-center focus-visible:outline-none"
+              class="group grid size-11 place-items-center focus-visible:outline-none"
               aria-label={pinLabel(row)}
               onclick={(event) => {
                 onopen(id, event.currentTarget);
@@ -129,11 +129,11 @@
               >
                 <GearIcon kind={row.gear.kind} size={17} />{row.gear.number}
               </span>
-              <span
-                class="absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-white/90 px-1 text-[12px] leading-tight font-bold whitespace-nowrap text-[#0f2a44] tabular-nums"
-                aria-hidden="true">{row.timeInWater.short}</span
-              >
             </button>
+            <span
+              class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-white/90 px-1 text-[12px] leading-tight font-bold whitespace-nowrap text-[#0f2a44] tabular-nums"
+              aria-hidden="true">{row.timeInWater.short}</span
+            >
           {/if}
         {/snippet}
       </ChartMap>

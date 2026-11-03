@@ -27,6 +27,7 @@
 
   const SHOW_ZOOM = 15;
   const MAX_ZOOM = 19;
+  const MIN_ZOOM = 0;
   const FIT_PADDING = 64;
 
   let {
@@ -52,6 +53,7 @@
   let ready = $state(false);
   let failed = $state(false);
   let signal = $state<boolean | null>(null);
+  let zoom = $state(camera?.zoom ?? 2);
   let followFix = false;
   let latest: Accuracy = accuracyArea(null, 0, false);
   const markers = new SvelteMap<string, Marker>();
@@ -134,6 +136,7 @@
               style: noBaseStyle(latest),
               center: camera ? lngLat(camera.center) : [0, 0],
               zoom: camera?.zoom ?? 2,
+              minZoom: MIN_ZOOM,
               maxZoom: MAX_ZOOM,
               bearing: 0,
               pitch: 0,
@@ -143,6 +146,7 @@
               pitchWithRotate: false,
               rollEnabled: false,
               attributionControl: { compact: false },
+              locale: { 'Map.Title': 'Map view' },
               transformRequest: (url) => ({ url: chartTileUrl(url) })
             })
         ),
@@ -181,10 +185,8 @@
     });
     created.on('moveend', () => {
       const center = created.getCenter();
-      camera = {
-        center: { lat: center.lat, lon: center.lng },
-        zoom: created.getZoom()
-      };
+      zoom = created.getZoom();
+      camera = { center: { lat: center.lat, lon: center.lng }, zoom };
     });
     const reconnect = () => {
       void apply(base);
@@ -233,7 +235,9 @@
 </script>
 
 <div class="relative h-full min-h-64 overflow-hidden bg-[#d4e3ec]">
-  <div bind:this={container} class="absolute inset-0"></div>
+  <div class="absolute inset-0">
+    <div bind:this={container} class="size-full"></div>
+  </div>
 
   {#if failed}
     <p
@@ -311,7 +315,10 @@
         type="button"
         class="flex size-12 items-center justify-center justify-self-end rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
         aria-label="Zoom in"
-        onclick={() => map?.zoomIn()}
+        aria-disabled={zoom >= MAX_ZOOM}
+        onclick={() => {
+          if (zoom < MAX_ZOOM) map?.zoomIn();
+        }}
       >
         <svg
           class="size-6"
@@ -327,7 +334,10 @@
         type="button"
         class="flex size-12 items-center justify-center justify-self-end rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
         aria-label="Zoom out"
-        onclick={() => map?.zoomOut()}
+        aria-disabled={zoom <= MIN_ZOOM}
+        onclick={() => {
+          if (zoom > MIN_ZOOM) map?.zoomOut();
+        }}
       >
         <svg
           class="size-6"
