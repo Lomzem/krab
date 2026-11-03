@@ -7,12 +7,7 @@ import {
   type PlacedDrop
 } from './drop';
 import { activeOf, undoDrop } from './rules';
-import {
-  openDatabase,
-  readModifyWrite,
-  readTrips,
-  StorageFailed
-} from './storage';
+import { openTripStorage, StorageFailed, type TripStorage } from './storage';
 import type { Kind, Trip, TripDeps } from './types';
 
 export type {
@@ -45,11 +40,11 @@ export type TripBook = {
   undoDrop: (dropId: string) => Effect.Effect<Trip | null, StorageFailed>;
 };
 
-const bookFor = (deps: TripDeps, db: IDBDatabase): TripBook => ({
-  activeTrip: () => Effect.map(readTrips(db), activeOf),
-  placeDrop: (kind) => startDrop(deps, db, kind),
+const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
+  activeTrip: () => Effect.map(storage.readTrips(), activeOf),
+  placeDrop: (kind) => startDrop(deps, storage, kind),
   undoDrop: (dropId) =>
-    readModifyWrite(db, (trips) => {
+    storage.readModifyWrite((trips) => {
       const active = activeOf(trips);
       if (!active?.drops.some((drop) => drop.id === dropId)) {
         return { put: [], remove: [], result: active };
@@ -62,4 +57,4 @@ const bookFor = (deps: TripDeps, db: IDBDatabase): TripBook => ({
 });
 
 export const openTripBook = (deps: TripDeps) =>
-  Effect.map(openDatabase(deps.idb), (db) => bookFor(deps, db));
+  Effect.map(openTripStorage(deps.idb), (storage) => bookFor(deps, storage));

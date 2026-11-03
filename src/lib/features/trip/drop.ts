@@ -1,7 +1,7 @@
 import { Data, Deferred, Effect, Fiber } from 'effect';
 import { dropCommand, gearName, placeDrop, type DropCommand } from './rules';
 import { roughness, type SpokenText } from './queries';
-import { readModifyWrite, type StorageFailed } from './storage';
+import type { StorageFailed, TripStorage } from './storage';
 import type {
   Drop,
   Fix,
@@ -52,12 +52,12 @@ const settledAt = (positions: PositionSource, tapAt: number) => {
 };
 
 const store = (
-  db: IDBDatabase,
+  storage: TripStorage,
   command: DropCommand,
   where: Located
 ): Effect.Effect<PlacedDrop, DropNotSaved> =>
   Effect.mapError(
-    readModifyWrite(db, (trips) => {
+    storage.readModifyWrite((trips) => {
       const placed = placeDrop(trips, command, where);
       return {
         put: placed.isNew ? [placed.trip] : [],
@@ -73,7 +73,7 @@ const store = (
     (cause) =>
       new DropNotSaved({
         cause,
-        retry: Effect.suspend(() => store(db, command, where))
+        retry: Effect.suspend(() => store(storage, command, where))
       })
   );
 
@@ -87,7 +87,7 @@ const listen = (
     if (found) Deferred.doneUnsafe(choice, Effect.succeed(found));
   });
 
-export const startDrop = (deps: TripDeps, db: IDBDatabase, kind: Kind) =>
+export const startDrop = (deps: TripDeps, storage: TripStorage, kind: Kind) =>
   Effect.suspend(() => {
     const tapAt = deps.clock.now();
     const command = dropCommand(kind, tapAt);
@@ -109,7 +109,9 @@ export const startDrop = (deps: TripDeps, db: IDBDatabase, kind: Kind) =>
         })
       )
     );
-    const work = Effect.flatMap(where, (found) => store(db, command, found));
+    const work = Effect.flatMap(where, (found) =>
+      store(storage, command, found)
+    );
     return Effect.map(Effect.forkDetach(work), (fiber): DropAttempt => ({
       gettingPosition: () => waiting,
       saveWithoutPosition: () => {

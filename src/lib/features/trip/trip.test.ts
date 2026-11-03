@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { IDBDatabase, IDBFactory } from 'fake-indexeddb';
+import { IDBDatabase, IDBFactory, IDBTransaction } from 'fake-indexeddb';
 import { afterEach, assert, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   gearInWater,
@@ -77,7 +77,7 @@ const harness = () => {
     tell();
   };
   const open = () => Effect.runPromise(openTripBook(deps));
-  return { state, open, advance, report, deny };
+  return { state, idb, open, advance, report, deny };
 };
 
 type Harness = ReturnType<typeof harness>;
@@ -95,6 +95,42 @@ const abortNextTransaction = () => {
     });
     return tx;
   });
+};
+
+const closeConnectionAtNextTransaction = () => {
+  const spy = vi.spyOn(IDBDatabase.prototype, 'transaction');
+  spy.mockImplementationOnce(function (
+    this: IDBDatabase,
+    ...args: Parameters<IDBDatabase['transaction']>
+  ) {
+    spy.mockRestore();
+    this.close();
+    return this.transaction(...args);
+  });
+};
+
+const request = <A>(make: () => IDBRequest<A>) =>
+  new Promise<A>((resolve, reject) => {
+    const pending = make();
+    pending.onsuccess = () => {
+      resolve(pending.result);
+    };
+    pending.onerror = () => {
+      reject(pending.error ?? new Error('IndexedDB request failed'));
+    };
+  });
+
+const withStoredTrips = async <A>(
+  idb: IDBFactory,
+  mode: IDBTransactionMode,
+  use: (trips: IDBObjectStore) => IDBRequest<A>
+) => {
+  const db = await request(() => idb.open('krab', 1));
+  const result = await request(() =>
+    use(db.transaction('trips', mode).objectStore('trips'))
+  );
+  db.close();
+  return result;
 };
 
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect);
@@ -285,6 +321,91 @@ it('types a drop location as a position or a reason, never both or neither', () 
   expectTypeOf<
     Placed<{ position: null; noPosition: null }>
   >().not.toExtend<Drop>();
+});
+
+it('fails a save on a connection that closed as not saved, and Retry saves it once on a fresh connection', async () => {
+  const { open } = harness();
+  const book = await open();
+  closeConnectionAtNextTransaction();
+
+  const attempt = await run(book.placeDrop('pot'));
+  const failure = await run(Effect.flip(attempt.result));
+  assert(failure._tag === 'DropNotSaved');
+  const retried = await run(failure.retry);
+  const reopened = await run((await open()).activeTrip());
+
+  expect(retried.name).toBe('Pot 1');
+  expect(reopened?.drops).toEqual([retried.drop]);
+});
+
+it('lets another connection delete the database, then saves the next drop on a fresh connection', async () => {
+  const { idb, open } = harness();
+  const book = await open();
+  await place(book, 'pot');
+
+  await request(() => idb.deleteDatabase('krab'));
+  const next = await place(book, 'net');
+  const reopened = await run((await open()).activeTrip());
+
+  expect(next.name).toBe('Net 1');
+  expect(reopened?.drops).toEqual([next.drop]);
+});
+
+it('reports a storage error thrown while starting a save as not saved, and leaves nothing behind', async () => {
+  const { open } = harness();
+  const book = await open();
+  const spy = vi.spyOn(IDBTransaction.prototype, 'objectStore');
+  spy.mockImplementationOnce(function (this: IDBTransaction) {
+    spy.mockRestore();
+    return this.objectStore('a-store-that-was-never-created');
+  });
+
+  const attempt = await run(book.placeDrop('pot'));
+  const failure = await run(Effect.flip(attempt.result));
+  const active = await run(book.activeTrip());
+
+  expect(failure._tag).toBe('DropNotSaved');
+  expect(active).toBeNull();
+});
+
+it('refuses a stored trip whose drop has both a position and a reason, and writes nothing', async () => {
+  const { idb, open } = harness();
+  const book = await open();
+  const contradictory = {
+    id: 'stored-trip',
+    startedAt: T0,
+    endedAt: null,
+    gear: [{ id: 'stored-gear', kind: 'pot', number: 1 }],
+    drops: [
+      {
+        id: 'stored-drop',
+        gearId: 'stored-gear',
+        placedAt: T0,
+        position: { ...SEA, accuracyM: 5 },
+        noPosition: 'denied',
+        label: '',
+        bait: '',
+        depthFt: null,
+        notes: '',
+        collectedAt: null,
+        kept: null,
+        released: null
+      }
+    ],
+    next: { pot: 2, net: 1 }
+  };
+  await withStoredTrips(idb, 'readwrite', (trips) => trips.put(contradictory));
+
+  const read = await run(Effect.flip(book.activeTrip()));
+  const attempt = await run(book.placeDrop('pot'));
+  const failure = await run(Effect.flip(attempt.result));
+  const stored = await withStoredTrips(idb, 'readonly', (trips) =>
+    trips.getAll()
+  );
+
+  expect(read._tag).toBe('StorageFailed');
+  expect(failure._tag).toBe('DropNotSaved');
+  expect(stored).toEqual([contradictory]);
 });
 
 it('records gear number, tap time and a fresh fix', async () => {

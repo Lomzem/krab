@@ -3,7 +3,7 @@ import type { Drop, Gear, Kind, Located, Trip } from './types';
 export const KINDS: readonly Kind[] = ['pot', 'net'];
 export const KIND_NAMES: Record<Kind, string> = { pot: 'Pot', net: 'Net' };
 
-export const activeOf = (trips: Trip[]) =>
+export const activeOf = (trips: readonly Trip[]) =>
   trips.find((trip) => trip.endedAt === null) ?? null;
 
 export const gearName = (gear: Gear) =>
@@ -32,7 +32,7 @@ export const dropCommand = (kind: Kind, tapAt: number): DropCommand => ({
   tapAt
 });
 
-const recorded = (trips: Trip[], command: DropCommand) => {
+const recorded = (trips: readonly Trip[], command: DropCommand) => {
   for (const trip of trips) {
     const drop = trip.drops.find((item) => item.id === command.dropId);
     const gear = drop && trip.gear.find((item) => item.id === drop.gearId);
@@ -42,7 +42,7 @@ const recorded = (trips: Trip[], command: DropCommand) => {
 };
 
 export const placeDrop = (
-  trips: Trip[],
+  trips: readonly Trip[],
   command: DropCommand,
   where: Located
 ) => {
