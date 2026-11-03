@@ -152,6 +152,9 @@ const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect);
 const place = async (book: TripBook, kind: 'pot' | 'net') =>
   run((await run(book.placeDrop({ kind }))).result);
 
+const dropAgain = async (book: TripBook, dropId: string) =>
+  run((await run(book.placeDrop({ again: dropId }))).result);
+
 const dropAt = async (
   book: TripBook,
   state: Harness['state'],
@@ -617,14 +620,21 @@ it('sorts by great-circle distance with bearing, compass point and distance text
   expect(rows[2]?.direction?.feet).toBeCloseTo(392.9, 1);
 });
 
-it('finds the nearest gear in the water with a position, skipping closer collected gear, or none without my position', async () => {
+it('finds the nearest gear in the water with a position, skipping a closer collected drop even once its gear is dropped again, or none without my position', async () => {
   const { state, open } = harness();
   const book = await open();
   const pulled = await dropAt(book, state, 'pot', { north: 0.0001, east: 0 });
   await dropAt(book, state, 'pot', { north: 0.0005, east: 0 });
   await dropAt(book, state, 'net', null);
   await dropAt(book, state, 'net', { north: 0, east: 0.0003 });
-  const { trip } = await run(book.collect(pulled.drop.id));
+  await run(book.collect(pulled.drop.id));
+  state.fix = {
+    lat: SEA.lat + 0.002,
+    lon: SEA.lon,
+    accuracyM: 5,
+    at: state.now
+  };
+  const { trip } = await dropAgain(book, pulled.drop.id);
 
   const nearest = nearestGear(gearInWater(trip, SEA, state.now));
 
@@ -768,9 +778,6 @@ const storeTrip = (idb: IDBFactory, trip: Trip) =>
       reject(request.error ?? new Error('not opened'));
     };
   });
-
-const dropAgain = async (book: TripBook, dropId: string) =>
-  run((await run(book.placeDrop({ again: dropId }))).result);
 
 it('a Save whose kind is locked because the gear was dropped again stores none of its details', async () => {
   const { open } = withoutLocation();
