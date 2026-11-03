@@ -52,7 +52,9 @@
   let map: MapLibre | null = null;
   let ready = $state(false);
   let failed = $state(false);
-  let signal = $state<boolean | null>(null);
+  let availability = $state<'loading' | 'available' | 'unavailable'>('loading');
+  let generation = 0;
+  let baseSources = new Set<string>();
   let zoom = $state(camera?.zoom ?? 2);
   let followFix = false;
   let latest: Accuracy = accuracyArea(null, 0, false);
@@ -90,12 +92,21 @@
   };
 
   const apply = async (wanted: Base) => {
-    signal = null;
+    generation += 1;
+    const current = generation;
+    baseSources = new Set();
+    if (availability === 'available') availability = 'loading';
     const next = await baseStyle(wanted, latest);
-    if (!map || wanted !== base) return;
+    if (!map || current !== generation) return;
     map.setStyle(next.style, { diff: false });
-    if (!next.reachable) signal = false;
+    baseSources = new Set(
+      Object.keys(next.style.sources).filter((id) => !isOverlay(id))
+    );
+    if (!next.reachable) availability = 'unavailable';
   };
+
+  const fromBase = (sourceId: unknown) =>
+    typeof sourceId === 'string' && baseSources.has(sourceId);
 
   const marker = (node: HTMLElement, at: LatLon) => {
     if (!map) return {};
@@ -162,12 +173,8 @@
     created.keyboard.disableRotation();
     created.on('error', (event) => {
       const sourceId = 'sourceId' in event ? event.sourceId : null;
-      if (
-        typeof sourceId === 'string' &&
-        !isOverlay(sourceId) &&
-        lostConnection(event.error)
-      ) {
-        signal = false;
+      if (fromBase(sourceId) && lostConnection(event.error)) {
+        availability = 'unavailable';
       }
     });
     created.on('data', (event) => {
@@ -175,9 +182,9 @@
         event.dataType === 'source' &&
         'tile' in event &&
         event.tile &&
-        !isOverlay(event.sourceId)
+        fromBase(event.sourceId)
       ) {
-        signal = true;
+        availability = 'available';
       }
     });
     created.on('style.load', () => {
@@ -292,7 +299,7 @@
       class="absolute inset-x-3 top-3 grid gap-2"
       style:pointer-events="none"
     >
-      {#if signal === false}
+      {#if availability === 'unavailable'}
         <p
           class="w-full rounded-control border border-border bg-card px-4 py-3 text-[17px] text-foreground shadow"
           role="status"

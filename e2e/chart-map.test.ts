@@ -134,11 +134,15 @@ test('on the Street map, panning, zooming, Show on map and reload send no positi
   expectNoPositionIn(requested);
 });
 
-test('without signal the Map tab says so while the toast still expires, still shows gear and my position, and recovers when the phone reconnects', async ({
+test('without signal the Map tab says so while the toast still expires, still shows gear and my position, keeps saying so through reconnects that load nothing, and clears once a map tile arrives', async ({
   context,
   page,
   providers
 }) => {
+  const reconnect = async () => {
+    await context.setOffline(true);
+    await context.setOffline(false);
+  };
   providers.cutOff();
   await dropPotAndOpenMap(page);
 
@@ -153,9 +157,16 @@ test('without signal the Map tab says so while the toast still expires, still sh
   await expect(myPosition(page)).toBeVisible();
   await expectAccessibleInBothThemes(page);
 
+  providers.hold();
+  await reconnect();
+  await expect.poll(() => providers.held()).toBeGreaterThan(0);
+  await expect(notice).toBeVisible();
+  const firstAttempt = providers.held();
+  await reconnect();
+  await expect.poll(() => providers.held()).toBeGreaterThan(firstAttempt);
+  await expect(notice).toBeVisible();
+
   providers.serve();
-  await context.setOffline(true);
-  await context.setOffline(false);
   await expect(notice).toBeHidden();
   await expect(potOnMap(page)).toBeVisible();
 });

@@ -25,6 +25,8 @@ const CORS = { 'access-control-allow-origin': '*' };
 export type Providers = {
   serve: () => void;
   cutOff: () => void;
+  hold: () => void;
+  held: () => number;
 };
 
 const fulfil = (route: Route) =>
@@ -40,18 +42,33 @@ export const test = base.extend<{ providers: Providers }>({
   serviceWorkers: 'block',
   providers: [
     async ({ context }, use) => {
-      let reachable = true;
-      const answer = (route: Route) =>
-        reachable ? fulfil(route) : route.abort('internetdisconnected');
+      let mode: 'serve' | 'cutOff' | 'hold' = 'serve';
+      const waiting: Route[] = [];
+      const answer = async (route: Route) => {
+        if (mode === 'hold') {
+          waiting.push(route);
+          return;
+        }
+        await (mode === 'serve'
+          ? fulfil(route)
+          : route.abort('internetdisconnected'));
+      };
       await context.route(NOAA, answer);
       await context.route(OPEN_FREE_MAP, answer);
       await use({
         serve: () => {
-          reachable = true;
+          mode = 'serve';
+          for (const route of waiting.splice(0)) {
+            fulfil(route).catch(() => undefined);
+          }
         },
         cutOff: () => {
-          reachable = false;
-        }
+          mode = 'cutOff';
+        },
+        hold: () => {
+          mode = 'hold';
+        },
+        held: () => waiting.length
       });
     },
     { auto: true }
