@@ -41,3 +41,15 @@ export type TripDeps = {
   positions: PositionSource;
   idb: IDBFactory;
 };
+
+export type DropDetails = Pick<Drop, 'label' | 'bait' | 'depthFt' | 'notes'>;
+
+export type DropEdit = { details: DropDetails };
+
+export type Deletion = {
+  trip: Omit<Trip, 'gear' | 'drops'>;
+  drop: Drop;
+  dropIndex: number;
+  gear: Gear;
+  gearIndex: number;
+};
