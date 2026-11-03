@@ -6,20 +6,14 @@ import type {
   DropEdit,
   Gear,
   Kind,
-  NoPosition,
-  Position,
+  Located,
   Trip
 } from './types';
-
-export type Located = {
-  position: Position | null;
-  noPosition: NoPosition | null;
-};
 
 export const KINDS: readonly Kind[] = ['pot', 'net'];
 export const KIND_NAMES: Record<Kind, string> = { pot: 'Pot', net: 'Net' };
 
-export const activeOf = (trips: Trip[]) =>
+export const activeOf = (trips: readonly Trip[]) =>
   trips.find((trip) => trip.endedAt === null) ?? null;
 
 export const gearName = (gear: Gear) =>
@@ -34,24 +28,44 @@ const newTrip = (startedAt: number): Trip => ({
   next: { pot: 1, net: 1 }
 });
 
+export type DropCommand = {
+  dropId: string;
+  gearId: string;
+  kind: Kind;
+  tapAt: number;
+};
+
+export const dropCommand = (kind: Kind, tapAt: number): DropCommand => ({
+  dropId: crypto.randomUUID(),
+  gearId: crypto.randomUUID(),
+  kind,
+  tapAt
+});
+
+const recorded = (trips: readonly Trip[], command: DropCommand) => {
+  for (const trip of trips) {
+    const drop = trip.drops.find((item) => item.id === command.dropId);
+    const gear = drop && trip.gear.find((item) => item.id === drop.gearId);
+    if (drop && gear) return { trip, drop, gear, isNew: false };
+  }
+  return null;
+};
+
 export const placeDrop = (
-  active: Trip | null,
-  kind: Kind,
-  tapAt: number,
+  trips: readonly Trip[],
+  command: DropCommand,
   where: Located
 ) => {
-  const base = active ?? newTrip(tapAt);
-  const gear: Gear = {
-    id: crypto.randomUUID(),
-    kind,
-    number: base.next[kind]
-  };
+  const done = recorded(trips, command);
+  if (done) return done;
+  const { kind, tapAt } = command;
+  const base = activeOf(trips) ?? newTrip(tapAt);
+  const gear: Gear = { id: command.gearId, kind, number: base.next[kind] };
   const drop: Drop = {
-    id: crypto.randomUUID(),
+    id: command.dropId,
     gearId: gear.id,
     placedAt: tapAt,
-    position: where.position,
-    noPosition: where.noPosition,
+    ...where,
     label: '',
     bait: '',
     depthFt: null,
@@ -66,7 +80,7 @@ export const placeDrop = (
     drops: [...base.drops, drop],
     next: { ...base.next, [kind]: gear.number + 1 }
   };
-  return { trip, drop, gear };
+  return { trip, drop, gear, isNew: true };
 };
 
 export const withoutDrop = (trip: Trip, dropId: string): Trip | null => {
@@ -77,7 +91,7 @@ export const withoutDrop = (trip: Trip, dropId: string): Trip | null => {
   return drops.length === 0 ? null : { ...trip, gear, drops };
 };
 
-export const locateDrop = (trips: Trip[], dropId: string) => {
+export const locateDrop = (trips: readonly Trip[], dropId: string) => {
   for (const trip of trips) {
     const index = trip.drops.findIndex((drop) => drop.id === dropId);
     if (index >= 0) return { trip, drop: trip.drops[index], index };
@@ -153,7 +167,7 @@ export const deletionOf = (
   };
 };
 
-const insertAt = <T>(items: T[], index: number, item: T) => [
+const insertAt = <T>(items: readonly T[], index: number, item: T) => [
   ...items.slice(0, index),
   item,
   ...items.slice(index)
@@ -172,7 +186,7 @@ const restoreIn = (trip: Trip, deletion: Deletion): Trip => {
 };
 
 export const restoreDrop = (
-  trips: Trip[],
+  trips: readonly Trip[],
   deletion: Deletion
 ): Result.Result<Trip, AnotherTripActive> => {
   const existing = trips.find((trip) => trip.id === deletion.trip.id);

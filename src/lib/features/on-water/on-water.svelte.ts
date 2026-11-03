@@ -9,6 +9,7 @@ import {
   type DropEdit,
   type DropNotFound,
   type DropNotSaved,
+  type DropPhase,
   type InvalidDepth,
   type Kind,
   type KindLocked,
@@ -30,7 +31,11 @@ export type Undo = Extract<Offer, { action: 'undo-drop' | 'restore' }>;
 
 export type Notice = { key: number; text: string; offer: Offer };
 
-export type Acquiring = { kind: Kind; attempt: DropAttempt };
+export type PendingDrop = {
+  kind: Kind;
+  attempt: DropAttempt;
+  phase: DropPhase;
+};
 
 export type SaveProblem = 'depth' | 'kind' | 'storage';
 
@@ -88,7 +93,7 @@ export class OnWater {
   trip = $state.raw<Trip | null>(null);
   ready = $state(false);
   notice = $state.raw<Notice | null>(null);
-  acquiring = $state<Acquiring | null>(null);
+  pending = $state.raw<PendingDrop | null>(null);
   readonly #book: Promise<TripBook | null>;
   #persistAsked = false;
   #noticeKey = 0;
@@ -99,19 +104,28 @@ export class OnWater {
   }
 
   async drop(kind: Kind) {
-    if (this.acquiring) return false;
+    if (this.pending) return false;
     const book = await this.#book;
     if (!book) {
       this.#say("Couldn't save the drop. Storage isn't available.");
       return false;
     }
     const attempt = await Effect.runPromise(book.placeDrop(kind));
-    const waited = attempt.gettingPosition();
-    if (waited) this.acquiring = { kind, attempt };
+    const waited = attempt.phase() === 'acquiring';
+    const unfollow = waited ? this.#follow(kind, attempt) : () => undefined;
     const outcome = await Effect.runPromise(Effect.result(attempt.result));
-    this.acquiring = null;
+    unfollow();
+    this.pending = null;
     this.#settle(outcome);
     return waited;
+  }
+
+  #follow(kind: Kind, attempt: DropAttempt) {
+    const show = () => {
+      this.pending = { kind, attempt, phase: attempt.phase() };
+    };
+    show();
+    return attempt.subscribe(show);
   }
 
   async retry(retry: Retry) {
