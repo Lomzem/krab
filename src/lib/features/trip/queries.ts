@@ -1,7 +1,9 @@
 import { compassPoint, distanceText, durationText } from './format';
-import { bearingDeg, distanceFt, type LatLon } from './geo';
+import { bearingDeg, distanceFt, metresToFeet, type LatLon } from './geo';
 import { gearName } from './rules';
-import type { Drop, Gear, Trip } from './types';
+import type { Drop, Gear, Position, Trip } from './types';
+
+const ROUGH_ACCURACY_M = 50;
 
 export type Direction = {
   feet: number;
@@ -12,13 +14,21 @@ export type Direction = {
   pointShort: string;
 };
 
+export type SpokenText = { short: string; spoken: string };
+
 export type GearRow = {
   drop: Drop;
   gear: Gear;
   name: string;
   direction: Direction | null;
-  timeInWater: { short: string; spoken: string };
+  rough: SpokenText | null;
+  timeInWater: SpokenText;
 };
+
+export const roughness = (position: Position | null): SpokenText | null =>
+  position && position.accuracyM > ROUGH_ACCURACY_M
+    ? distanceText(metresToFeet(position.accuracyM))
+    : null;
 
 const directionTo = (from: LatLon | null, drop: Drop): Direction | null => {
   if (!from || !drop.position) return null;
@@ -54,6 +64,7 @@ const rowFor = (
       gear,
       name: gearName(gear),
       direction: directionTo(from, drop),
+      rough: roughness(drop.position),
       timeInWater: durationText(at - drop.placedAt)
     }
   ];
