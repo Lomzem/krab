@@ -184,22 +184,31 @@ it('waits for a late fix and stores it with the tap time', async () => {
   expect(placed.drop.noPosition).toBeNull();
 });
 
-it('saves without a position 20 s after the tap when no fix arrives', async () => {
+const drain = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 10);
+  });
+
+it('saves nothing until 20 s after the tap, then saves without a position', async () => {
   const { state, open, advance } = harness();
   state.fix = null;
   const book = await open();
 
   const attempt = await run(book.placeDrop('net'));
   advance(19_999);
-  const phaseJustBefore = attempt.phase();
-  advance(1);
-  const placed = await run(attempt.result);
+  await drain();
+  expect(await run(book.activeTrip())).toBeNull();
 
-  expect(phaseJustBefore).toBe('acquiring');
+  advance(1);
+  await drain();
+  const saved = await run(book.activeTrip());
+  expect(saved?.gear).toMatchObject([{ kind: 'net', number: 1 }]);
+  expect(saved?.drops).toMatchObject([
+    { placedAt: T0, position: null, noPosition: 'no-fix' }
+  ]);
+
+  const placed = await run(attempt.result);
   expect(placed.name).toBe('Net 1');
-  expect(placed.drop.placedAt).toBe(T0);
-  expect(placed.drop.position).toBeNull();
-  expect(placed.drop.noPosition).toBe('no-fix');
 });
 
 it('stores nothing when the wait is cancelled, even if a fix arrives later', async () => {
