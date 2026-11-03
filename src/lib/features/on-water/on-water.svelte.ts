@@ -53,7 +53,7 @@ export type PendingDrop = {
   phase: DropPhase;
 };
 
-export type SaveProblem = 'depth' | 'catch' | 'kind' | 'storage';
+export type SaveProblem = 'depth' | 'catch' | 'kind' | 'gone' | 'storage';
 
 type SaveFailure =
   | DropNotFound
@@ -68,7 +68,7 @@ const PROBLEMS: Record<SaveFailure['_tag'], SaveProblem> = {
   InvalidCatch: 'catch',
   NotCollected: 'catch',
   KindLocked: 'kind',
-  DropNotFound: 'storage',
+  DropNotFound: 'gone',
   StorageFailed: 'storage'
 };
 
@@ -252,13 +252,9 @@ export class OnWater {
   ): Promise<SaveProblem | null> {
     const book = await this.#book;
     if (!book) return 'storage';
-    const updated = await resultOf(book.updateDrop(dropId, edit));
-    if (Result.isFailure(updated)) return PROBLEMS[updated.failure._tag];
-    this.#show(updated.success);
-    if (!kind) return null;
-    const changed = await resultOf(book.changeKind(dropId, kind));
-    if (Result.isFailure(changed)) return PROBLEMS[changed.failure._tag];
-    this.#show(changed.success.trip);
+    const saved = await resultOf(book.saveDrop(dropId, edit, kind));
+    if (Result.isFailure(saved)) return PROBLEMS[saved.failure._tag];
+    this.#show(saved.success.trip);
     return null;
   }
 

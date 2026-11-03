@@ -20,7 +20,8 @@
   const PROBLEMS: Record<Exclude<SaveProblem, 'depth'>, string> = {
     catch:
       "Couldn't save the catch. It needs collected gear and whole numbers from 0.",
-    kind: 'This gear has been dropped again, so it keeps its kind. The details were saved.',
+    kind: 'This gear has been dropped again, so it keeps its kind. Nothing was saved.',
+    gone: "Couldn't save. That drop is gone.",
     storage: "Couldn't save. Try again."
   };
 

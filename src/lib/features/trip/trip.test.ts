@@ -645,24 +645,32 @@ it('saves trimmed details and rejects a negative or non-numeric depth', async ()
   const placed = await place(book, 'pot');
 
   await run(
-    book.updateDrop(placed.drop.id, {
-      details: {
-        label: '  red float ',
-        bait: 'chicken',
-        depthFt: 12.5,
-        notes: ' by the buoy\n'
+    book.saveDrop(
+      placed.drop.id,
+      {
+        details: {
+          label: '  red float ',
+          bait: 'chicken',
+          depthFt: 12.5,
+          notes: ' by the buoy\n'
+        },
+        catch: null
       },
-      catch: null
-    })
+      null
+    )
   );
   const rejected = await Promise.all(
     [-1, Number.NaN, Number.POSITIVE_INFINITY].map((depthFt) =>
       Effect.runPromise(
         Effect.flip(
-          book.updateDrop(placed.drop.id, {
-            details: { label: 'x', bait: 'x', depthFt, notes: 'x' },
-            catch: null
-          })
+          book.saveDrop(
+            placed.drop.id,
+            {
+              details: { label: 'x', bait: 'x', depthFt, notes: 'x' },
+              catch: null
+            },
+            null
+          )
         )
       )
     )
@@ -682,6 +690,11 @@ it('saves trimmed details and rejects a negative or non-numeric depth', async ()
   });
 });
 
+const NO_DETAILS: DropEdit = {
+  details: { label: '', bait: '', depthFt: null, notes: '' },
+  catch: null
+};
+
 it('changes kind to the next number of the new kind and never reuses the old one', async () => {
   const { open } = withoutLocation();
   const book = await open();
@@ -690,10 +703,10 @@ it('changes kind to the next number of the new kind and never reuses the old one
   await place(book, 'net');
 
   const names = [];
-  names.push((await run(book.changeKind(pot2.drop.id, 'net'))).name);
+  names.push((await run(book.saveDrop(pot2.drop.id, NO_DETAILS, 'net'))).name);
   names.push((await place(book, 'pot')).name);
   names.push((await place(book, 'net')).name);
-  names.push((await run(book.changeKind(pot2.drop.id, 'pot'))).name);
+  names.push((await run(book.saveDrop(pot2.drop.id, NO_DETAILS, 'pot'))).name);
 
   expect(names).toEqual(['Net 2', 'Pot 3', 'Net 3', 'Pot 4']);
 });
@@ -734,16 +747,21 @@ const storeTrip = (idb: IDBFactory, trip: Trip) =>
 const dropAgain = async (book: TripBook, dropId: string) =>
   run((await run(book.placeDrop({ again: dropId }))).result);
 
-it('blocks changing kind once the gear has been dropped again', async () => {
+it('a Save whose kind is locked because the gear was dropped again stores none of its details', async () => {
   const { open } = withoutLocation();
   const book = await open();
   const first = await place(book, 'pot');
   await run(book.collect(first.drop.id));
   const second = await dropAgain(book, first.drop.id);
+  const details = { label: 'red float', bait: 'squid', depthFt: 18, notes: '' };
+  const edits: [string, DropEdit][] = [
+    [first.drop.id, { details, catch: { kept: 2, released: 0 } }],
+    [second.drop.id, { details, catch: null }]
+  ];
 
   const refusals = await Promise.all(
-    [first.drop.id, second.drop.id].map((dropId) =>
-      Effect.runPromise(Effect.flip(book.changeKind(dropId, 'net')))
+    edits.map(([dropId, edit]) =>
+      Effect.runPromise(Effect.flip(book.saveDrop(dropId, edit, 'net')))
     )
   );
 
@@ -761,8 +779,8 @@ it('restores a deleted drop exactly once, in its original list position', async 
   const middle = await place(book, 'net');
   await place(book, 'pot');
   const details = { label: 'blue', bait: 'squid', depthFt: 30, notes: '' };
-  const before = await run(
-    book.updateDrop(middle.drop.id, { details, catch: null })
+  const { trip: before } = await run(
+    book.saveDrop(middle.drop.id, { details, catch: null }, null)
   );
 
   const deleted = await run(book.deleteDrop(middle.drop.id));
@@ -849,10 +867,14 @@ it('collects at the tap time once, and undo collect puts it back with no catch',
   advance(5000);
   const again = await run(book.collect(pot.drop.id));
   await run(
-    book.updateDrop(pot.drop.id, {
-      details: { label: '', bait: '', depthFt: null, notes: '' },
-      catch: { kept: 3, released: 1 }
-    })
+    book.saveDrop(
+      pot.drop.id,
+      {
+        details: { label: '', bait: '', depthFt: null, notes: '' },
+        catch: { kept: 3, released: 1 }
+      },
+      null
+    )
   );
   const undone = await run(book.undoCollect(pot.drop.id));
   const undoneAgain = await run(book.undoCollect(pot.drop.id));
@@ -886,20 +908,28 @@ it('records nothing caught as 0 and 0, apart from not recorded, and only whole c
   const edit = (kept: number, released: number) =>
     Effect.runPromise(
       Effect.flip(
-        book.updateDrop(recorded.drop.id, {
-          details,
-          catch: { kept, released }
-        })
+        book.saveDrop(
+          recorded.drop.id,
+          {
+            details,
+            catch: { kept, released }
+          },
+          null
+        )
       )
     );
 
   await run(
-    book.updateDrop(recorded.drop.id, {
-      details,
-      catch: { kept: 0, released: 0 }
-    })
+    book.saveDrop(
+      recorded.drop.id,
+      {
+        details,
+        catch: { kept: 0, released: 0 }
+      },
+      null
+    )
   );
-  await run(book.updateDrop(skipped.drop.id, { details, catch: null }));
+  await run(book.saveDrop(skipped.drop.id, { details, catch: null }, null));
   const refusals = await Promise.all([
     edit(-1, 0),
     edit(0, 1.5),
@@ -908,10 +938,14 @@ it('records nothing caught as 0 and 0, apart from not recorded, and only whole c
   ]);
   const inWaterRefusal = await Effect.runPromise(
     Effect.flip(
-      book.updateDrop(inWater.drop.id, {
-        details,
-        catch: { kept: 1, released: 0 }
-      })
+      book.saveDrop(
+        inWater.drop.id,
+        {
+          details,
+          catch: { kept: 1, released: 0 }
+        },
+        null
+      )
     )
   );
   const drops = (await run(book.activeTrip()))?.drops;
@@ -937,15 +971,19 @@ it('drops the same gear again from its latest collected drop with its number, la
   const net = await place(book, 'net');
   await run(book.collect(pot.drop.id));
   await run(
-    book.updateDrop(pot.drop.id, {
-      details: {
-        label: 'red float',
-        bait: 'squid',
-        depthFt: 18,
-        notes: 'ledge'
+    book.saveDrop(
+      pot.drop.id,
+      {
+        details: {
+          label: 'red float',
+          bait: 'squid',
+          depthFt: 18,
+          notes: 'ledge'
+        },
+        catch: { kept: 2, released: 0 }
       },
-      catch: { kept: 2, released: 0 }
-    })
+      null
+    )
   );
   const collected = await run(book.activeTrip());
   const offeredWhenCollected = collected?.drops.map((drop) =>
@@ -1058,18 +1096,26 @@ it('counts gear in the water and collected drops from the records, newest collec
   advance(60_000);
   await run(book.collect(pot2.drop.id));
   await run(
-    book.updateDrop(pot2.drop.id, {
-      details: nothing,
-      catch: { kept: 0, released: 0 }
-    })
+    book.saveDrop(
+      pot2.drop.id,
+      {
+        details: nothing,
+        catch: { kept: 0, released: 0 }
+      },
+      null
+    )
   );
   advance(60_000);
   await run(book.collect(net1.drop.id));
   await run(
-    book.updateDrop(net1.drop.id, {
-      details: nothing,
-      catch: { kept: 4, released: 1 }
-    })
+    book.saveDrop(
+      net1.drop.id,
+      {
+        details: nothing,
+        catch: { kept: 4, released: 1 }
+      },
+      null
+    )
   );
   await dropAgain(book, net1.drop.id);
   advance(60_000);
