@@ -5,7 +5,12 @@ import base from '../playwright.config';
 export default defineConfig({
   ...base,
   testDir: './verify-krab',
-  testMatch: ['placing-drop.ts', 'finding-gear.ts', 'collecting.ts'],
+  testMatch: [
+    'placing-drop.ts',
+    'finding-gear.ts',
+    'collecting.ts',
+    'drop-details.ts'
+  ],
   outputDir: '../test-results/verify-krab-lock/artifacts',
   workers: 1,
   retries: 0,
