@@ -3,8 +3,14 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { strict as assert } from 'node:assert';
+import { missingPlaywrightImage, playwrightImage } from '../playwright-image';
 
-const image = 'mcr.microsoft.com/playwright:v1.64.1-noble';
+const pinned = playwrightImage();
+if (pinned === null) {
+  console.error(missingPlaywrightImage);
+  process.exit(1);
+}
+const image = pinned;
 const scratch = resolve('test-results/verify-krab-lock');
 const runId =
   new Date().toISOString().replaceAll(':', '-') + `-${String(process.pid)}`;

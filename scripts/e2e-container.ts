@@ -1,25 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
 import { userInfo } from 'node:os';
-import { join } from 'node:path';
-
-const manifest = join(
-  process.cwd(),
-  'node_modules',
-  '@playwright',
-  'test',
-  'package.json'
-);
-
-const installedVersion = (): string | null => {
-  if (!existsSync(manifest)) return null;
-  const parsed: unknown = JSON.parse(readFileSync(manifest, 'utf8'));
-  if (typeof parsed !== 'object' || parsed === null) return null;
-  const { version } = parsed as { version?: unknown };
-  return typeof version === 'string' && /^\d+\.\d+\.\d+$/.test(version)
-    ? version
-    : null;
-};
+import { missingPlaywrightImage, playwrightImage } from './playwright-image';
 
 const run = (command: string, args: string[]) =>
   spawnSync(command, args, { stdio: 'inherit' }).status ?? 1;
@@ -50,12 +31,10 @@ const test = (image: string) => {
   ]);
 };
 
-const version = installedVersion();
-if (version === null) {
-  console.error(
-    `Can't resolve the installed @playwright/test version from ${manifest}. Run bun install --frozen-lockfile, then retry.`
-  );
+const image = playwrightImage();
+if (image === null) {
+  console.error(missingPlaywrightImage);
   process.exitCode = 1;
 } else {
-  process.exitCode = test(`mcr.microsoft.com/playwright:v${version}-noble`);
+  process.exitCode = test(image);
 }
