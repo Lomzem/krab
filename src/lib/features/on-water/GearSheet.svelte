@@ -50,8 +50,8 @@
         {subject.name}
       </h2>
       {#if subject.day}
-        <p class="mt-0.5 flex items-center gap-2 text-[17px] font-semibold">
-          <DayMarker day={subject.day.number} />{subject.day.text}
+        <p class="mt-0.5 text-[17px] font-semibold">
+          <DayMarker day={subject.day} />
         </p>
       {/if}
     {/if}

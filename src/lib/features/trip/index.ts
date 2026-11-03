@@ -82,6 +82,7 @@ export { availability, type Availability } from './availability';
 export {
   catchText,
   collectedGear,
+  dayGroups,
   dayOf,
   dropsInDays,
   gearCounts,

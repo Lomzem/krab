@@ -5,6 +5,7 @@ import {
   canDropAgain,
   canUndoCollect,
   collectedGear,
+  dayGroups,
   dayOf,
   dropsInDays,
   gearCounts,
@@ -1282,6 +1283,35 @@ it('gear rows and collected rows carry the day of their drop on a multi-day trip
   ]);
   expect(collectedGear(trip).map((row) => [row.name, row.day?.text])).toEqual([
     ['Pot 1', 'Day 1']
+  ]);
+});
+
+it('groups rows by day, oldest day first, keeping the order they came in within a day', async () => {
+  const { state, open } = withoutLocation();
+  const book = await open();
+
+  const pot1 = await placeAt(book, state, '2026-08-20T18:00:00-04:00');
+  const pot2 = await placeAt(book, state, '2026-08-20T19:00:00-04:00');
+  const pot3 = await placeAt(book, state, '2026-08-21T08:00:00-04:00');
+  const collectAt = async (id: string, localTime: string) => {
+    state.now = Date.parse(localTime);
+    return run(book.collect(id));
+  };
+  await collectAt(pot1.drop.id, '2026-08-21T09:00:00-04:00');
+  await collectAt(pot2.drop.id, '2026-08-21T09:10:00-04:00');
+  const { trip } = await collectAt(pot3.drop.id, '2026-08-21T09:20:00-04:00');
+
+  const names = (rows: readonly { name: string }[]) =>
+    rows.map(({ name }) => name);
+
+  expect(
+    dayGroups(collectedGear(trip)).map(({ day, rows }) => [
+      day.text,
+      names(rows)
+    ])
+  ).toEqual([
+    ['Day 1', ['Pot 2', 'Pot 1']],
+    ['Day 2', ['Pot 3']]
   ]);
 });
 

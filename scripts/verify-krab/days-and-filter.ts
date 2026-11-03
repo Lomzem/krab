@@ -117,7 +117,7 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
 
   await tab('Gear').click();
   await page
-    .getByRole('region', { name: 'Collected' })
+    .getByRole('region', { name: 'Collected', exact: true })
     .getByRole('button', { name: /Pot 1/ })
     .click();
   await sheet.getByRole('button', { name: 'Show on map' }).click();

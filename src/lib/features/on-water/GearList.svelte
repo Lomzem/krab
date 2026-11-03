@@ -7,7 +7,9 @@
   import {
     collectedGear,
     gearCounts,
+    dayGroups,
     gearInWater,
+    type CollectedRow,
     type GearRow,
     type LatLon,
     type Trip
@@ -32,19 +34,8 @@
   const rows = $derived(trip ? gearInWater(trip, from, now) : []);
   const collected = $derived(trip ? collectedGear(trip) : []);
   const counts = $derived(trip ? gearCounts(trip) : null);
-  const dayGroups = $derived(
-    rows
-      .flatMap(({ day }) => (day ? [day] : []))
-      .filter(
-        (day, index, days) =>
-          days.findIndex((seen) => seen.number === day.number) === index
-      )
-      .sort((a, b) => a.number - b.number)
-      .map((day) => ({
-        day,
-        rows: rows.filter((row) => row.day?.number === day.number)
-      }))
-  );
+  const inWaterByDay = $derived(dayGroups(rows));
+  const collectedByDay = $derived(dayGroups(collected));
 
   const rowClass =
     'flex min-h-16 w-full items-center gap-3 px-4 py-2 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted';
@@ -116,15 +107,37 @@
     </button>
   </li>{/snippet}
 
+{#snippet collectedRows(shown: CollectedRow[])}
+  <ul class="border-t border-border bg-card">
+    {#each shown as item (item.drop.id)}
+      <li class="border-b border-border">
+        <button
+          type="button"
+          class={rowClass}
+          onclick={(event) => {
+            onopen(item.drop.id, event.currentTarget);
+          }}
+        >
+          <GearIcon kind={item.gear.kind} size={28} />
+          <div class="min-w-0 flex-1">
+            <p class="text-[19px] leading-snug font-semibold">{item.name}</p>
+            <p class="text-[15px] text-muted-foreground">{item.catchText}</p>
+          </div>
+        </button>
+      </li>
+    {/each}
+  </ul>
+{/snippet}
+
 {#if trip}
-  {#if dayGroups.length > 0}
-    {#each dayGroups as group (group.day.number)}
+  {#if inWaterByDay.length > 0}
+    {#each inWaterByDay as group (group.day.number)}
       <section aria-labelledby="day-{group.day.number}-title">
         <h2
           id="day-{group.day.number}-title"
-          class="flex items-center gap-2 px-4 pt-4 pb-2 text-[22px] font-bold"
+          class="px-4 pt-4 pb-2 text-[22px] font-bold"
         >
-          <DayMarker day={group.day.number} size={24} />{group.day.text}
+          <DayMarker day={group.day} size={24} />
         </h2>
         {@render gearRows(group.rows)}
       </section>
@@ -137,36 +150,24 @@
       <h2 id="collected-title" class="px-4 pt-6 pb-2 text-[22px] font-bold">
         Collected
       </h2>
-      <ul class="border-t border-border bg-card">
-        {#each collected as item (item.drop.id)}
-          <li class="border-b border-border">
-            <button
-              type="button"
-              class={rowClass}
-              onclick={(event) => {
-                onopen(item.drop.id, event.currentTarget);
-              }}
+      {#if collectedByDay.length > 0}
+        {#each collectedByDay as group (group.day.number)}
+          <section
+            aria-labelledby="collected-title collected-day-{group.day
+              .number}-title"
+          >
+            <h3
+              id="collected-day-{group.day.number}-title"
+              class="px-4 pt-3 pb-2 text-[19px] font-bold"
             >
-              <GearIcon kind={item.gear.kind} size={28} />
-              <div class="min-w-0 flex-1">
-                <p class="text-[19px] leading-snug font-semibold">
-                  {item.name}
-                </p>
-                <p class="text-[15px] text-muted-foreground">
-                  {item.catchText}
-                </p>
-                {#if item.day}
-                  <p
-                    class="mt-0.5 flex items-center gap-1.5 text-[15px] font-semibold"
-                  >
-                    <DayMarker day={item.day.number} size={18} />{item.day.text}
-                  </p>
-                {/if}
-              </div>
-            </button>
-          </li>
+              <DayMarker day={group.day} size={20} />
+            </h3>
+            {@render collectedRows(group.rows)}
+          </section>
         {/each}
-      </ul>
+      {:else}
+        {@render collectedRows(collected)}
+      {/if}
     </section>
   {/if}
 {:else}

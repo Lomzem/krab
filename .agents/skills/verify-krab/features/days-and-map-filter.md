@@ -7,9 +7,9 @@ An overnight trip stays one trip. Each drop belongs to the phone's local calenda
 - Day is derived from `placedAt` and never stored. Day N counts calendar dates from the local date of `trip.startedAt`, so a quiet day leaves a gap (Day 1, Day 3).
 - On multi-day trips:
   - the Gear list groups gear in the water under "Day 1", "Day 2" headings (regions with those names), keeping distance order within a day;
-  - collected rows and the gear sheet heading show "Day N" next to a day marker shape;
-  - pins carry the day marker shape with its number, and each pin's name includes the day, for example "Pot 1, Day 1, …" or "Pot 1, Day 1, collected, …".
-- Day marker shapes cycle circle, square, diamond, hexagon, always with the day number inside. Colour never carries the day.
+  - the Collected section groups collected rows under "Day 1", "Day 2" headings (regions "Collected Day 1", "Collected Day 2"), keeping collection order within a day;
+  - one day indicator, a day marker shape followed by visible "Day N" text, labels the day headings, the gear sheet heading and every pin; each pin's name includes the day, for example "Pot 1, Day 1, …" or "Pot 1, Day 1, collected, …".
+- Day marker shapes cycle circle, square, diamond, hexagon as outlines; the text carries the number. Colour never carries the day.
 - One-day trips look as before: no day text, no grouping, no Days section.
 - The Filter button sits at the top left of the map (only while a trip runs) and opens the "Map filter" sheet. Its name reads "Filter, showing …" with the current choices.
   - "Gear in the water always shows."
@@ -42,6 +42,7 @@ Drop gear late in the evening, then drop again after midnight. The Gear tab show
 ## Gotchas
 
 - With `page.clock` installed, WebKit's emulated geolocation still stamps fixes with real time, so a fix looks stale after a clock jump and a drop waits for a position. Deliver fixes with `deliverFix` from `e2e/held-geolocation.ts`: without a time it stamps the page's `Date.now()`, and an explicit `Date` stamps exactly that. It is a plain module, separate from the e2e `providers` fixture, so live verify still reaches the real map providers.
+- On a multi-day trip, match the Collected region with `exact: true`; a plain name match also finds its "Collected Day N" regions.
 - Day boundaries follow the browser's time zone. Always set `timezoneId`; the container's default is UTC.
 - Pins near each other overlap their time labels. Keep made-up drops about 0.001° apart: closer and labels overlap, farther and a pin can end up hidden under the map controls when Show on map centres the other one. The controls always stay above every pin and keep their taps (collected pins under own position under gear in the water); `e2e/chart-map.test.ts` proves a pin under Filter never takes its tap.
 - The day numbering, gap days and DST cases are proven by `src/lib/features/trip/trip.test.ts` (Vitest pinned to America/New_York). The recipe only shows the screens.

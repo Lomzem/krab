@@ -224,11 +224,7 @@
               >
                 <GearIcon kind={row.gear.kind} size={17} />{row.gear.number}
                 {#if row.day}
-                  <DayMarker
-                    day={row.day.number}
-                    size={18}
-                    class="ml-0.5 fill-white text-[#0f2a44]"
-                  />
+                  <DayMarker day={row.day} size={15} class="ml-1 gap-0.5" />
                 {/if}
               </span>
             </button>
@@ -252,11 +248,7 @@
               >
                 <GearIcon kind={done.gear.kind} size={15} />{done.gear.number}
                 {#if done.day}
-                  <DayMarker
-                    day={done.day.number}
-                    size={16}
-                    class="ml-0.5 fill-white text-[#4b5b6c]"
-                  />
+                  <DayMarker day={done.day} size={14} class="ml-1 gap-0.5" />
                 {/if}
               </span>
             </button>

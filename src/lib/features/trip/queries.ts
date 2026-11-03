@@ -48,6 +48,19 @@ const dayNamer = (trip: Trip) => {
 
 export const dayOf = (trip: Trip, drop: Drop) => dayNamer(trip)(drop);
 
+export const dayGroups = <Row extends { day: Day | null }>(
+  rows: readonly Row[]
+) => {
+  const groups = new Map<number, { day: Day; rows: Row[] }>();
+  for (const row of rows) {
+    if (!row.day) continue;
+    const group = groups.get(row.day.number);
+    if (group) group.rows.push(row);
+    else groups.set(row.day.number, { day: row.day, rows: [row] });
+  }
+  return [...groups.values()].sort((a, b) => a.day.number - b.day.number);
+};
+
 export const dropsInDays = (
   trip: Trip,
   selection: DaySelection,

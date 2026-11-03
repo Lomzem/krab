@@ -68,6 +68,12 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
   await tab('Map').click();
   await expect(pin(/^Pot 1, Day 1,/)).toBeVisible();
   await expect(pin(/^Pot 2, Day 2,/)).toBeVisible();
+  for (const [name, day] of [
+    [/^Pot 1,/, 'Day 1'],
+    [/^Pot 2,/, 'Day 2']
+  ] as const) {
+    await expect(pin(name)).toContainText(day, { useInnerText: true });
+  }
   await openFilter();
   await expectAccessibleInBothThemes(page);
   for (const toggle of [
@@ -98,7 +104,7 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
 
   await tab('Gear').click();
   await page
-    .getByRole('region', { name: 'Collected' })
+    .getByRole('region', { name: 'Collected', exact: true })
     .getByRole('button', { name: /Pot 1/ })
     .click();
   await sheet.getByRole('button', { name: 'Show on map' }).click();
@@ -112,4 +118,28 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
     filter.getByRole('checkbox', { name: 'Collected gear' })
   ).toBeChecked();
   await expect(days.getByRole('radio', { name: 'All' })).toBeChecked();
+  await closeFilter();
+
+  await tab('Gear').click();
+  await day2.getByRole('button', { name: /Pot 2/ }).click();
+  await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 collected');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  const collectedList = page.getByRole('region', {
+    name: 'Collected',
+    exact: true
+  });
+  await expect(collectedList.getByRole('heading', { level: 3 })).toHaveText([
+    'Day 1',
+    'Day 2'
+  ]);
+  for (const [day, name] of [
+    ['Collected Day 1', /Pot 1/],
+    ['Collected Day 2', /Pot 2/]
+  ] as const) {
+    await expect(
+      collectedList.getByRole('region', { name: day }).getByRole('button')
+    ).toHaveText([name]);
+  }
 });
