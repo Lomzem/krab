@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { keepScreenAwakeWhile } from '#lib/features/app-shell/index.js';
   import { PositionWatch } from '#lib/features/location/index.js';
   import DropControl from './DropControl.svelte';
   import GearList from './GearList.svelte';
@@ -18,6 +19,7 @@
 
   const watch = new PositionWatch();
   const water = new OnWater(watch);
+  keepScreenAwakeWhile(() => water.trip !== null);
 
   let tab = $state<Tab>('map');
   let kind = $state(savedKind());
