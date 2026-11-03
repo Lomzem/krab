@@ -57,6 +57,7 @@ export {
 };
 export type { DropAttempt, PlacedDrop };
 export { canChangeKind, gearName, KIND_NAMES, KINDS } from './rules';
+export { compassPoint } from './format';
 export {
   gearInWater,
   nearestGear,

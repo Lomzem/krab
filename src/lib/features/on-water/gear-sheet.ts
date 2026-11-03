@@ -12,6 +12,12 @@ export type SheetSubject = {
   name: string;
 };
 
+export type SheetOrigin = {
+  dropId: string;
+  from: 'list' | 'map';
+  opener: HTMLElement;
+};
+
 export const sheetSubject = (
   trip: Trip | null,
   dropId: string | null

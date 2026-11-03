@@ -3,9 +3,19 @@ import type { Fix, PositionSource } from '#lib/features/trip/index.js';
 export type LocationPermission = 'prompt' | 'granted' | 'denied';
 
 const PERMISSION_DENIED = 1;
+const MOVING_MPS = 0.5;
+
+const courseOf = ({ heading, speed }: GeolocationCoordinates) =>
+  heading !== null &&
+  Number.isFinite(heading) &&
+  speed !== null &&
+  speed >= MOVING_MPS
+    ? heading
+    : null;
 
 export class PositionWatch implements PositionSource {
   fix = $state<Fix | null>(null);
+  courseDeg = $state<number | null>(null);
   permission = $state<LocationPermission>('prompt');
   #watchId: number | null = null;
   #wanted = false;
@@ -58,6 +68,7 @@ export class PositionWatch implements PositionSource {
       accuracyM: position.coords.accuracy,
       at: position.timestamp
     };
+    this.courseDeg = courseOf(position.coords);
     this.#tell();
   };
 
