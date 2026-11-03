@@ -1,7 +1,6 @@
 import { Effect, Exit, Result } from 'effect';
 import {
   openTripBook,
-  StorageFailed,
   type CannotDropAgain,
   type Clock,
   type Deletion,
@@ -20,6 +19,7 @@ import {
   type NotCollected,
   type PlacedDrop,
   type PositionSource,
+  type StorageFailed,
   type Trip,
   type TripBook
 } from '#lib/features/trip/index.js';
@@ -100,10 +100,7 @@ const undoCollectFailure = (
 
 const resultOf = <A, E>(
   effect: Effect.Effect<A, E>
-): Promise<Result.Result<A, E | StorageFailed>> =>
-  Effect.runPromise(Effect.result(effect)).catch((cause: unknown) =>
-    Result.fail(new StorageFailed({ cause }))
-  );
+): Promise<Result.Result<A, E>> => Effect.runPromise(Effect.result(effect));
 
 const openBook = (positions: PositionSource) =>
   Effect.runPromiseExit(
