@@ -2,30 +2,13 @@ import type { Locator, Page } from '@playwright/test';
 import { expect, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
+import { deliverFix, holdFixes } from './held-geolocation';
 
 const MIN_TARGET_PX = 44;
 const LATE_EVENING = new Date('2031-06-10T23:40:00-04:00');
 
-type HeldFix = { deliverFix?: PositionCallback };
-
-const holdFixes = () => {
-  const held = window as HeldFix;
-  navigator.geolocation.watchPosition = (success) => {
-    held.deliverFix = success;
-    return 1;
-  };
-  navigator.geolocation.clearWatch = () => undefined;
-};
-
-const fixNow = (coords: { latitude: number; longitude: number }) => {
-  (window as HeldFix).deliverFix?.({
-    coords: { ...coords, accuracy: 5 },
-    timestamp: Date.now()
-  } as GeolocationPosition);
-};
-
 const dropPotAt = async (page: Page, north: number, name: string) => {
-  await page.evaluate(fixNow, {
+  await deliverFix(page, {
     latitude: MADE_UP_SEA.latitude + north,
     longitude: MADE_UP_SEA.longitude
   });
@@ -62,7 +45,7 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
     await expect(sheet).toBeHidden();
   };
 
-  await page.addInitScript(holdFixes);
+  await holdFixes(page);
   await page.clock.install({ time: LATE_EVENING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();

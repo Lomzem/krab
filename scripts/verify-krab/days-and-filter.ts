@@ -4,29 +4,12 @@ import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
+import { deliverFix, holdFixes } from '../../e2e/held-geolocation';
 
 const LATE_EVENING = new Date('2031-06-10T23:40:00-04:00');
 
-type HeldFix = { deliverFix?: PositionCallback };
-
-const holdFixes = () => {
-  const held = window as HeldFix;
-  navigator.geolocation.watchPosition = (success) => {
-    held.deliverFix = success;
-    return 1;
-  };
-  navigator.geolocation.clearWatch = () => undefined;
-};
-
-const fixNow = (coords: { latitude: number; longitude: number }) => {
-  (window as HeldFix).deliverFix?.({
-    coords: { ...coords, accuracy: 5 },
-    timestamp: Date.now()
-  } as GeolocationPosition);
-};
-
 const dropPotAt = async (page: Page, north: number, name: string) => {
-  await page.evaluate(fixNow, {
+  await deliverFix(page, {
     latitude: MADE_UP_SEA.latitude + north,
     longitude: MADE_UP_SEA.longitude
   });
@@ -69,7 +52,7 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
   keep('doctor.json', doctor());
   log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
-  await page.addInitScript(holdFixes);
+  await holdFixes(page);
   await page.clock.install({ time: LATE_EVENING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();

@@ -27,7 +27,7 @@ Drop gear late in the evening, then drop again after midnight. The Gear tab show
 
 `scripts/verify-krab/days-and-filter.ts` runs through `bun scripts/verify-krab/run.ts` with `timezoneId: 'America/New_York'` and `page.clock` installed at 2031-06-10 23:40 local.
 
-1. An init script holds `watchPosition` so the recipe can deliver made-up fixes stamped with the faked clock. Drop Pot 1 at `MADE_UP_SEA`.
+1. `holdFixes(page)` from `e2e/held-geolocation.ts` holds `watchPosition`, and `deliverFix(page, fix)` delivers made-up fixes stamped with the faked clock. Drop Pot 1 at `MADE_UP_SEA`.
 2. Open Filter: group "Also show" shows and group "Days on this trip" does not. Capture `01-filter-one-day`. Done.
 3. `page.clock.fastForward('30:00')` to 00:10, deliver a fix 0.001° north, drop Pot 2.
 4. Gear tab: region "Day 1" holds only Pot 1 and region "Day 2" only Pot 2. Capture `02-gear-by-day`.
@@ -41,7 +41,7 @@ Drop gear late in the evening, then drop again after midnight. The Gear tab show
 
 ## Gotchas
 
-- With `page.clock` installed, WebKit's emulated geolocation still stamps fixes with real time, so a fix looks stale after a clock jump and a drop waits for a position. Deliver fixes through the held `watchPosition` callback with `Date.now()` from the page.
+- With `page.clock` installed, WebKit's emulated geolocation still stamps fixes with real time, so a fix looks stale after a clock jump and a drop waits for a position. Deliver fixes with `deliverFix` from `e2e/held-geolocation.ts`: without a time it stamps the page's `Date.now()`, and an explicit `Date` stamps exactly that. It is a plain module, separate from the e2e `providers` fixture, so live verify still reaches the real map providers.
 - Day boundaries follow the browser's time zone. Always set `timezoneId`; the container's default is UTC.
 - Pins near each other overlap their time labels. Keep made-up drops about 0.001° apart: closer and labels overlap, farther and a pin can sit under the map controls when Show on map centres the other one.
 - The day numbering, gap days and DST cases are proven by `src/lib/features/trip/trip.test.ts` (Vitest pinned to America/New_York). The recipe only shows the screens.
