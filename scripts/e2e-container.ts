@@ -6,7 +6,8 @@ const IMAGE = 'mcr.microsoft.com/playwright:v1.64.1-noble';
 const run = (command: string, args: string[]) =>
   spawnSync(command, args, { stdio: 'inherit' }).status ?? 1;
 
-const build = run('bun', ['run', 'build']);
+const firstBuild = run('bun', ['run', 'build']);
+const build = firstBuild === 0 ? run('bun', ['run', 'build:next']) : firstBuild;
 const { uid, gid } = userInfo();
 process.exitCode =
   build === 0

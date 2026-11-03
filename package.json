@@ -11,9 +11,10 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "build:next": "bun run scripts/build-next.ts",
     "preview": "vite preview",
     "prepare": "svelte-kit sync && lefthook install",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && tsc -p src/service-worker",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "bun run scripts/check-comments.ts && eslint . --max-warnings 0",

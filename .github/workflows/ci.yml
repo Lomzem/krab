@@ -53,5 +53,7 @@ jobs:
         run: bun run check:assets
       - name: Install WebKit for end-to-end tests
         run: bunx --no-install playwright install --with-deps webkit
+      - name: Build a newer version for the update test
+        run: bun run build:next
       - name: Run end-to-end tests
         run: bun run test:e2e
