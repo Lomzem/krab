@@ -250,7 +250,7 @@
   {#if ready}
     {#each places as place (place.id)}
       <div class="contents">
-        <div data-place={place.id} use:marker={place.at}>
+        <div data-place={place.id} style:z-index="2" use:marker={place.at}>
           {@render pin(place.id)}
         </div>
       </div>
@@ -260,6 +260,7 @@
       <div class="contents">
         <div
           class="pointer-events-none size-11"
+          style:z-index="1"
           role="img"
           aria-label={me.label}
           use:marker={me.at}
@@ -288,7 +289,7 @@
     {/if}
 
     <div
-      class="absolute inset-x-3 top-3 grid justify-items-end gap-2"
+      class="absolute inset-x-3 top-3 grid gap-2"
       style:pointer-events="none"
     >
       {#if signal === false}
@@ -300,76 +301,78 @@
           No signal, so the map can't load. Your gear and position still show.
         </p>
       {/if}
-    </div>
-
-    <div class="absolute right-3 bottom-10 grid gap-2">
-      <button
-        type="button"
-        class="flex min-h-12 items-center justify-center rounded-control border border-border bg-card px-3 text-[16px] font-semibold text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-        aria-pressed={base === 'street'}
-        onclick={() => {
-          base = base === 'chart' ? 'street' : 'chart';
-        }}>Street map</button
-      >
-      <button
-        type="button"
-        class="flex size-12 items-center justify-center justify-self-end rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        aria-label="Zoom in"
-        aria-disabled={zoom >= MAX_ZOOM}
-        onclick={() => {
-          if (zoom < MAX_ZOOM) map?.zoomIn();
-        }}
-      >
-        <svg
-          class="size-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
-        >
-      </button>
-      <button
-        type="button"
-        class="flex size-12 items-center justify-center justify-self-end rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        aria-label="Zoom out"
-        aria-disabled={zoom <= MIN_ZOOM}
-        onclick={() => {
-          if (zoom > MIN_ZOOM) map?.zoomOut();
-        }}
-      >
-        <svg
-          class="size-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          aria-hidden="true"><path d="M5 12h14" /></svg
-        >
-      </button>
-      {#if me || places.length > 0}
+      <div class="flex items-start justify-between gap-2">
         <button
           type="button"
-          class="flex size-12 items-center justify-center justify-self-end rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          aria-label={me ? 'Centre on my position' : 'Show all gear'}
-          onclick={recentre}
+          class="flex min-h-12 items-center justify-center rounded-control border border-border bg-card px-3 text-[16px] font-semibold text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+          style:pointer-events="auto"
+          aria-pressed={base === 'street'}
+          onclick={() => {
+            base = base === 'chart' ? 'street' : 'chart';
+          }}>Street map</button
         >
-          <svg
-            class="size-6"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.25"
-            stroke-linecap="round"
-            aria-hidden="true"
-            ><circle cx="12" cy="12" r="4" /><path
-              d="M12 2v4M12 18v4M2 12h4M18 12h4"
-            /></svg
+        <div class="grid gap-2" style:pointer-events="auto">
+          <button
+            type="button"
+            class="flex size-12 items-center justify-center rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            aria-label="Zoom in"
+            aria-disabled={zoom >= MAX_ZOOM}
+            onclick={() => {
+              if (zoom < MAX_ZOOM) map?.zoomIn();
+            }}
           >
-        </button>
-      {/if}
+            <svg
+              class="size-6"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
+            >
+          </button>
+          <button
+            type="button"
+            class="flex size-12 items-center justify-center rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            aria-label="Zoom out"
+            aria-disabled={zoom <= MIN_ZOOM}
+            onclick={() => {
+              if (zoom > MIN_ZOOM) map?.zoomOut();
+            }}
+          >
+            <svg
+              class="size-6"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              aria-hidden="true"><path d="M5 12h14" /></svg
+            >
+          </button>
+          {#if me || places.length > 0}
+            <button
+              type="button"
+              class="flex size-12 items-center justify-center rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              aria-label={me ? 'Centre on my position' : 'Show all gear'}
+              onclick={recentre}
+            >
+              <svg
+                class="size-6"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.25"
+                stroke-linecap="round"
+                aria-hidden="true"
+                ><circle cx="12" cy="12" r="4" /><path
+                  d="M12 2v4M12 18v4M2 12h4M18 12h4"
+                /></svg
+              >
+            </button>
+          {/if}
+        </div>
+      </div>
     </div>
   {/if}
 </div>

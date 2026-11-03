@@ -20,7 +20,7 @@ Each file has a user-facing introduction and exactly four H2s: Sub-features, How
 
 - [Placing a drop](placing-drop.md): fully driven from both Map and Gear, including restoration, plus a drop with location denied.
 - [Drop details](drop-details.md): journey mapped for ticket 04; not yet driven by the bounded recipe.
-- [Finding gear](finding-gear.md): Gear list reachable; tickets 06/08 own map and finding gear.
+- [Finding gear](finding-gear.md): Map tab, gear sheets from the map, Show on map, street toggle and NOAA chart alignment driven by `finding-gear.ts`; ticket 08 owns the dedicated finding workflow.
 - [Collecting](collecting.md): placeholder owned by ticket 05.
 - [Ending a trip](ending-trip.md): placeholder owned by ticket 09.
 - [Past trips](past-trips.md): empty tab reachable; ticket 09 owns the workflow.
