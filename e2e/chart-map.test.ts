@@ -1,7 +1,10 @@
 import type { Page } from '@playwright/test';
 import { expect, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
-import { expectAccessibleInBothThemes } from './accessibility';
+import {
+  expectAccessibleInBothThemes,
+  expectFocusTrapped
+} from './accessibility';
 
 const CHART_TILE =
   /\/MarineChart_Services_NOAACharts\/default\/default028mm\/(\d+)\/\d+\/\d+\.png$/;
@@ -167,6 +170,7 @@ test('gear on the map opens its sheet without Show on map, and Show on map from 
   await potOnMap(page).click();
   await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
   await expect(showOnMap).toHaveCount(0);
+  await expectFocusTrapped(page, sheet);
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await expect(potOnMap(page)).toBeFocused();

@@ -1,6 +1,9 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, holdStorage, releaseStorage, test, toastOf } from './fixtures';
-import { expectAccessibleInBothThemes } from './accessibility';
+import {
+  expectAccessibleInBothThemes,
+  expectFocusTrapped
+} from './accessibility';
 
 const gearRow = (page: Page, name: string) =>
   page.getByRole('main').getByRole('button').filter({ hasText: name });
@@ -35,10 +38,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(depth).toHaveAttribute('inputmode', 'decimal');
   await expectAccessibleInBothThemes(page);
 
-  await page.keyboard.press('Shift+Tab');
-  expect(await focusIsInside(sheet)).toBe(true);
-  await page.keyboard.press('Tab');
-  expect(await focusIsInside(sheet)).toBe(true);
+  await expectFocusTrapped(page, sheet);
 
   await label.fill('red float');
   await page.keyboard.press('Escape');
