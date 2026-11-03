@@ -5,10 +5,16 @@ import {
   canDropAgain,
   canUndoCollect,
   collectedGear,
+  dayOf,
+  dropsInDays,
   gearCounts,
+  gearName,
   gearInWater,
+  isMultiDay,
   nearestGear,
   openTripBook,
+  tripDays,
+  type DaySelection,
   type Drop,
   type DropEdit,
   type Fix,
@@ -1173,4 +1179,152 @@ it('counts gear in the water and collected drops from the records, newest collec
     ['Net 1', '4 kept, 1 released'],
     ['Pot 2', 'Nothing caught']
   ]);
+});
+
+const nameOf = (trip: Trip, drop: Drop) => {
+  const gear = trip.gear.find((item) => item.id === drop.gearId);
+  return gear ? gearName(gear) : null;
+};
+
+const placeAt = async (
+  book: TripBook,
+  state: Harness['state'],
+  localTime: string
+) => {
+  state.now = Date.parse(localTime);
+  return place(book, 'pot');
+};
+
+it('gives a drop the local calendar date it was placed, so a drop just after local midnight starts Day 2', async () => {
+  const { state, open } = withoutLocation();
+  const book = await open();
+
+  await placeAt(book, state, '2026-06-01T20:00:00-04:00');
+  const lateEvening = await placeAt(book, state, '2026-06-01T23:50:00-04:00');
+  const oneDay = lateEvening.trip;
+  const afterMidnight = await placeAt(book, state, '2026-06-02T00:30:00-04:00');
+  const { trip } = afterMidnight;
+
+  expect(isMultiDay(oneDay)).toBe(false);
+  expect(dayOf(oneDay, lateEvening.drop)).toBeNull();
+  expect(tripDays(trip)).toEqual([1, 2]);
+  expect(isMultiDay(trip)).toBe(true);
+  expect(dayOf(trip, lateEvening.drop)).toEqual({ number: 1, text: 'Day 1' });
+  expect(dayOf(trip, afterMidnight.drop)).toEqual({
+    number: 2,
+    text: 'Day 2'
+  });
+});
+
+it.each([
+  {
+    change: 'clocks go forward',
+    startedAt: '2026-03-07T09:00:00-05:00',
+    placedAt: '2026-03-09T00:30:00-04:00',
+    day: 3
+  },
+  {
+    change: 'clocks go back',
+    startedAt: '2026-10-31T00:30:00-04:00',
+    placedAt: '2026-11-01T23:30:00-05:00',
+    day: 2
+  }
+])(
+  'counts calendar dates, not 24-hour spans, across the night the $change',
+  async ({ startedAt, placedAt, day }) => {
+    const { state, open } = withoutLocation();
+    const book = await open();
+
+    await placeAt(book, state, startedAt);
+    const later = await placeAt(book, state, placedAt);
+
+    expect(dayOf(later.trip, later.drop)?.number).toBe(day);
+  }
+);
+
+it('numbers days from the date the trip started, keeping a gap day and a deleted first day, and a trip back to one date through Undo is one-day again', async () => {
+  const { state, open } = withoutLocation();
+  const book = await open();
+
+  const first = await placeAt(book, state, '2026-07-10T06:00:00-04:00');
+  const dayThree = await placeAt(book, state, '2026-07-12T07:00:00-04:00');
+  const gap = dayThree.trip;
+  const dayFour = await placeAt(book, state, '2026-07-13T05:00:00-04:00');
+  const deleted = await run(book.deleteDrop(first.drop.id));
+  const withoutFirst = deleted.trip;
+  const undoneTo = await run(book.undoDrop(dayFour.drop.id));
+
+  expect(tripDays(gap)).toEqual([1, 3]);
+  expect(dayOf(gap, dayThree.drop)?.text).toBe('Day 3');
+  assert(withoutFirst);
+  expect(tripDays(withoutFirst)).toEqual([3, 4]);
+  expect(dayOf(withoutFirst, dayFour.drop)?.text).toBe('Day 4');
+  assert(undoneTo);
+  expect(tripDays(undoneTo)).toEqual([3]);
+  expect(isMultiDay(undoneTo)).toBe(false);
+});
+
+it('gear rows and collected rows carry the day of their drop on a multi-day trip', async () => {
+  const { state, open } = withoutLocation();
+  const book = await open();
+
+  const pot1 = await placeAt(book, state, '2026-08-20T18:00:00-04:00');
+  await placeAt(book, state, '2026-08-21T08:00:00-04:00');
+  await placeAt(book, state, '2026-08-21T09:00:00-04:00');
+  const { trip } = await run(book.collect(pot1.drop.id));
+  const at = state.now;
+
+  expect(
+    gearInWater(trip, null, at).map((row) => [row.name, row.day?.text])
+  ).toEqual([
+    ['Pot 2', 'Day 2'],
+    ['Pot 3', 'Day 2']
+  ]);
+  expect(collectedGear(trip).map((row) => [row.name, row.day?.text])).toEqual([
+    ['Pot 1', 'Day 1']
+  ]);
+});
+
+it.each<{ selection: DaySelection; now: string; names: string[] }>([
+  { selection: 'today', now: '2026-09-05T15:00:00-04:00', names: ['Pot 3'] },
+  {
+    selection: 'earlier',
+    now: '2026-09-05T15:00:00-04:00',
+    names: ['Pot 1', 'Pot 2']
+  },
+  {
+    selection: 'all',
+    now: '2026-09-05T15:00:00-04:00',
+    names: ['Pot 1', 'Pot 2', 'Pot 3']
+  },
+  { selection: 'today', now: '2026-09-06T00:10:00-04:00', names: [] },
+  {
+    selection: 'earlier',
+    now: '2026-09-06T00:10:00-04:00',
+    names: ['Pot 1', 'Pot 2', 'Pot 3']
+  }
+])(
+  'selects the drops placed $selection as of $now on a multi-day trip',
+  async ({ selection, now, names }) => {
+    const { state, open } = withoutLocation();
+    const book = await open();
+    await placeAt(book, state, '2026-09-04T10:00:00-04:00');
+    await placeAt(book, state, '2026-09-04T23:59:00-04:00');
+    const { trip } = await placeAt(book, state, '2026-09-05T00:00:00-04:00');
+
+    const selected = dropsInDays(trip, selection, Date.parse(now));
+
+    expect(selected.map((drop) => nameOf(trip, drop))).toEqual(names);
+  }
+);
+
+it('selects every drop of a one-day trip whatever day is chosen, even when that day was yesterday', async () => {
+  const { state, open } = withoutLocation();
+  const book = await open();
+  await placeAt(book, state, '2026-09-04T10:00:00-04:00');
+  const { trip } = await placeAt(book, state, '2026-09-04T11:00:00-04:00');
+  const nextMorning = Date.parse('2026-09-05T07:00:00-04:00');
+
+  expect(dropsInDays(trip, 'today', nextMorning)).toHaveLength(2);
+  expect(dropsInDays(trip, 'earlier', nextMorning)).toHaveLength(2);
 });

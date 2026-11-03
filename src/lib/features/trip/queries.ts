@@ -16,6 +16,52 @@ export type Direction = {
 
 export type SpokenText = { short: string; spoken: string };
 
+export type Day = { number: number; text: string };
+
+export type DaySelection = 'today' | 'earlier' | 'all';
+
+const CALENDAR_DAY_MS = 86_400_000;
+
+const localDate = (at: number) => {
+  const local = new Date(at);
+  return Date.UTC(local.getFullYear(), local.getMonth(), local.getDate());
+};
+
+const dayNumber = (trip: Trip, at: number) =>
+  (localDate(at) - localDate(trip.startedAt)) / CALENDAR_DAY_MS + 1;
+
+export const tripDays = (trip: Trip) =>
+  [...new Set(trip.drops.map((drop) => dayNumber(trip, drop.placedAt)))].sort(
+    (a, b) => a - b
+  );
+
+export const isMultiDay = (trip: Trip) => tripDays(trip).length > 1;
+
+const dayNamer = (trip: Trip) => {
+  const multiDay = isMultiDay(trip);
+  return (drop: Drop): Day | null => {
+    if (!multiDay) return null;
+    const number = dayNumber(trip, drop.placedAt);
+    return { number, text: `Day ${String(number)}` };
+  };
+};
+
+export const dayOf = (trip: Trip, drop: Drop) => dayNamer(trip)(drop);
+
+export const dropsInDays = (
+  trip: Trip,
+  selection: DaySelection,
+  now: number
+) => {
+  if (selection === 'all' || !isMultiDay(trip)) return trip.drops;
+  const today = localDate(now);
+  return trip.drops.filter((drop) =>
+    selection === 'today'
+      ? localDate(drop.placedAt) === today
+      : localDate(drop.placedAt) < today
+  );
+};
+
 export type GearRow = {
   drop: Drop;
   gear: Gear;
@@ -23,6 +69,7 @@ export type GearRow = {
   direction: Direction | null;
   rough: SpokenText | null;
   timeInWater: SpokenText;
+  day: Day | null;
 };
 
 export const roughness = (position: Position | null): SpokenText | null =>
@@ -53,33 +100,29 @@ const byDistance = (a: GearRow, b: GearRow) =>
   (a.direction?.feet ?? Number.POSITIVE_INFINITY) -
   (b.direction?.feet ?? Number.POSITIVE_INFINITY);
 
-const rowFor = (
-  trip: Trip,
-  drop: Drop,
-  from: LatLon | null,
-  at: number
-): GearRow[] => {
-  const gear = trip.gear.find((candidate) => candidate.id === drop.gearId);
-  if (!gear) return [];
-  return [
-    {
-      drop,
-      gear,
-      name: gearName(gear),
-      direction: directionTo(from, drop),
-      rough: roughness(drop.position),
-      timeInWater: timeInWater(drop, at)
-    }
-  ];
-};
-
 const isInWater = (drop: Drop) => drop.collectedAt === null;
 
-export const gearInWater = (trip: Trip, from: LatLon | null, at: number) =>
-  trip.drops
+export const gearInWater = (trip: Trip, from: LatLon | null, at: number) => {
+  const dayFor = dayNamer(trip);
+  return trip.drops
     .filter(isInWater)
-    .flatMap((drop) => rowFor(trip, drop, from, at))
+    .flatMap((drop): GearRow[] => {
+      const gear = trip.gear.find((candidate) => candidate.id === drop.gearId);
+      if (!gear) return [];
+      return [
+        {
+          drop,
+          gear,
+          name: gearName(gear),
+          direction: directionTo(from, drop),
+          rough: roughness(drop.position),
+          timeInWater: timeInWater(drop, at),
+          day: dayFor(drop)
+        }
+      ];
+    })
     .sort(byDistance);
+};
 
 export const gearCounts = (trip: Trip) => {
   const inWater = trip.drops.filter(isInWater).length;
@@ -107,26 +150,28 @@ export type CollectedRow = {
   name: string;
   collectedAt: number;
   catchText: string;
+  day: Day | null;
 };
 
-const collectedRow = (trip: Trip, drop: Drop): CollectedRow[] => {
-  const gear = trip.gear.find((item) => item.id === drop.gearId);
-  if (drop.collectedAt === null || !gear) return [];
-  return [
-    {
-      drop,
-      gear,
-      name: gearName(gear),
-      collectedAt: drop.collectedAt,
-      catchText: catchText(drop.catch)
-    }
-  ];
-};
-
-export const collectedGear = (trip: Trip) =>
-  trip.drops
-    .flatMap((drop) => collectedRow(trip, drop))
+export const collectedGear = (trip: Trip) => {
+  const dayFor = dayNamer(trip);
+  return trip.drops
+    .flatMap((drop): CollectedRow[] => {
+      const gear = trip.gear.find((item) => item.id === drop.gearId);
+      if (drop.collectedAt === null || !gear) return [];
+      return [
+        {
+          drop,
+          gear,
+          name: gearName(gear),
+          collectedAt: drop.collectedAt,
+          catchText: catchText(drop.catch),
+          day: dayFor(drop)
+        }
+      ];
+    })
     .sort((a, b) => b.collectedAt - a.collectedAt);
+};
 
 export const nearestGear = (rows: readonly GearRow[]): GearRow | null =>
   rows.find((row) => row.direction !== null) ?? null;
