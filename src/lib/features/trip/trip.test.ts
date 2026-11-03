@@ -229,21 +229,31 @@ it('records the skipped reason when saved without a position during the wait', a
   expect(active?.drops).toEqual([placed.drop]);
 });
 
-it('records the denied reason without waiting, or as soon as location is denied', async () => {
+it('records the denied reason as soon as location is denied during the wait', async () => {
   const { state, open, advance, deny } = harness();
   state.fix = null;
   const book = await open();
 
-  const waiting = await run(book.placeDrop('pot'));
+  const attempt = await run(book.placeDrop('pot'));
   advance(2000);
   deny();
-  const deniedDuringWait = await run(waiting.result);
-  const deniedAtTap = await run(book.placeDrop('net'));
-  const waitedAtTap = deniedAtTap.gettingPosition();
-  const placed = await run(deniedAtTap.result);
+  const placed = await run(attempt.result);
 
-  expect(deniedDuringWait.drop.placedAt).toBe(T0);
-  expect(deniedDuringWait.drop.noPosition).toBe('denied');
+  expect(placed.drop.placedAt).toBe(T0);
+  expect(placed.drop.position).toBeNull();
+  expect(placed.drop.noPosition).toBe('denied');
+});
+
+it('records the denied reason without waiting when location is denied, even over a fresh fix', async () => {
+  const { state, open, report, deny } = harness();
+  const book = await open();
+  report({ ...SEA, accuracyM: 5, at: state.now });
+  deny();
+
+  const attempt = await run(book.placeDrop('net'));
+  const waitedAtTap = attempt.gettingPosition();
+  const placed = await run(attempt.result);
+
   expect(waitedAtTap).toBe(false);
   expect(placed.drop.position).toBeNull();
   expect(placed.drop.noPosition).toBe('denied');

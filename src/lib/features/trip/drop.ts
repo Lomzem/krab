@@ -1,4 +1,5 @@
 import { Data, Deferred, Effect, Fiber } from 'effect';
+import { availability } from './availability';
 import { dropCommand, gearName, placeDrop, type DropCommand } from './rules';
 import { roughness, type SpokenText } from './queries';
 import type { StorageFailed, TripStorage } from './storage';
@@ -12,7 +13,6 @@ import type {
   TripDeps
 } from './types';
 
-export const FRESH_FIX_MS = 5000;
 export const FIX_WAIT_MS = 20_000;
 
 export type PlacedDrop = {
@@ -46,9 +46,13 @@ const NO_FIX: Located = { position: null, noPosition: 'no-fix' };
 const DENIED: Located = { position: null, noPosition: 'denied' };
 
 const settledAt = (positions: PositionSource, tapAt: number) => {
-  const fix = positions.latest();
-  if (fix && fix.at >= tapAt - FRESH_FIX_MS) return located(fix);
-  return positions.denied() ? DENIED : null;
+  const status = availability(
+    { denied: positions.denied(), fix: positions.latest() },
+    tapAt
+  );
+  if (status.kind === 'denied') return DENIED;
+  if (status.kind === 'ready') return located(status.fix);
+  return null;
 };
 
 const store = (

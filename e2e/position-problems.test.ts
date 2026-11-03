@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectAccessibleInBothThemes } from './accessibility';
 
 const MIN_TARGET_PX = 44;
@@ -61,4 +61,78 @@ test('while getting a position, Cancel and Save without position are reachable 4
     'dropped without a position'
   );
   await expect(page.getByRole('button', { name: /^Drop / })).toBeFocused();
+});
+
+const START = new Date('2031-03-04T05:00:00Z');
+const PAUSED = new Date('2031-03-04T06:00:00Z');
+const MADE_UP_SEA = { latitude: -47.1, longitude: -128.6, accuracy: 5 };
+
+type HeldFix = { deliverFix?: PositionCallback };
+
+const holdFixes = () => {
+  const held = window as HeldFix;
+  navigator.geolocation.watchPosition = (success) => {
+    held.deliverFix = success;
+    return 1;
+  };
+  navigator.geolocation.clearWatch = () => undefined;
+};
+
+const deliverFix = ({
+  coords,
+  timestamp
+}: {
+  coords: typeof MADE_UP_SEA;
+  timestamp: number;
+}) => {
+  (window as HeldFix).deliverFix?.({
+    coords,
+    timestamp
+  } as GeolocationPosition);
+};
+
+const resume = () => {
+  document.dispatchEvent(new Event('visibilitychange'));
+};
+
+const gettingPositionShown = async (page: Page) => {
+  await page.clock.runFor(0);
+  return page.getByRole('heading', { name: 'Getting position' }).count();
+};
+
+test('Position ready lasts 5 seconds from each fix, is rechecked on resume, then falls back to Finding your position and a drop waits', async ({
+  page
+}) => {
+  await page.addInitScript(holdFixes);
+  await page.clock.install({ time: START });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding your position')).toBeVisible();
+  await page.clock.pauseAt(PAUSED);
+
+  await page.evaluate(deliverFix, {
+    coords: MADE_UP_SEA,
+    timestamp: PAUSED.getTime()
+  });
+  await expect(page.getByText('Position ready')).toBeVisible();
+
+  await page.clock.runFor(5000);
+  await page.evaluate(resume);
+  await expect(page.getByText('Position ready')).toBeVisible();
+
+  await page.clock.runFor(1);
+  await expect(page.getByText('Finding your position')).toBeVisible();
+
+  await page.evaluate(deliverFix, {
+    coords: MADE_UP_SEA,
+    timestamp: Date.parse('2031-03-04T06:00:05.001Z')
+  });
+  await expect(page.getByText('Position ready')).toBeVisible();
+
+  await page.clock.setSystemTime(new Date('2031-03-04T06:01:00Z'));
+  await page.evaluate(resume);
+  await expect(page.getByText('Finding your position')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect.poll(() => gettingPositionShown(page)).toBe(1);
 });

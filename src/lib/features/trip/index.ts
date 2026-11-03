@@ -25,6 +25,7 @@ export type {
 export { DropCancelled, DropNotSaved, StorageFailed };
 export type { DropAttempt, PlacedDrop };
 export { KIND_NAMES, KINDS } from './rules';
+export { availability, type Availability } from './availability';
 export {
   gearInWater,
   roughness,
