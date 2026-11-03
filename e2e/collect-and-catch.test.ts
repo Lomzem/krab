@@ -21,7 +21,7 @@ const collectedRow = (page: Page, name: string) =>
 const countOf = (page: Page, name: 'Kept' | 'Released') =>
   page.getByRole('dialog').getByRole('group', { name }).getByRole('status');
 
-test('collecting keeps the sheet open for the catch, which stays a draft until Save and survives reload', async ({
+test('collecting keeps the sheet open for the catch, which stays a draft until Save and survives reload; Clear catch empties only the draft, and One fewer does nothing at not recorded or 0', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -74,7 +74,42 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
   await expect(inWaterRow(page, 'Pot 1')).toHaveCount(0);
 
   await collectedRow(page, 'Pot 1').click();
+  await step('Clear catch').click();
+  await expect(countOf(page, 'Kept')).toContainText('Kept: not recorded');
+  await expect(countOf(page, 'Released')).toContainText(
+    'Released: not recorded'
+  );
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await collectedRow(page, 'Pot 1').click();
+  await expect(countOf(page, 'Kept')).toContainText('Kept: 2');
+  await expect(countOf(page, 'Released')).toContainText('Released: 1');
+
+  await step('Clear catch').click();
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  await page.reload();
+  await gearTab(page).click();
+  await expect(collectedRow(page, 'Pot 1')).toContainText('Catch not recorded');
+
+  await collectedRow(page, 'Pot 1').click();
+  const fewerKept = step('One fewer kept');
+  await fewerKept.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
+  await expect(fewerKept).toBeFocused();
+  await expect(countOf(page, 'Kept')).toContainText('Kept: not recorded');
+  await expect(countOf(page, 'Released')).toContainText(
+    'Released: not recorded'
+  );
+
   await sheet.getByRole('button', { name: 'Nothing caught' }).click();
+  await fewerKept.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
+  await expect(fewerKept).toBeFocused();
+  await expect(countOf(page, 'Kept')).toContainText('Kept: 0');
+  await expect(countOf(page, 'Released')).toContainText('Released: 0');
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(collectedRow(page, 'Pot 1')).toContainText('Nothing caught');
 });
