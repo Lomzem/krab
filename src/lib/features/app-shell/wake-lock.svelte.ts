@@ -1,9 +1,10 @@
+import { watchVisibility } from '#lib/page-visibility.js';
+
 const holdScreenAwake = () => {
   let wanted = true;
+  let visible = false;
   let pending = false;
   let lock: WakeLockSentinel | null = null;
-
-  const visible = () => document.visibilityState === 'visible';
 
   const release = () => {
     const current = lock;
@@ -12,13 +13,13 @@ const holdScreenAwake = () => {
   };
 
   const request = () => {
-    if (!wanted || pending || !visible() || (lock && !lock.released)) return;
+    if (!wanted || pending || !visible || (lock && !lock.released)) return;
     pending = true;
     navigator.wakeLock.request('screen').then(
       (sentinel) => {
         pending = false;
         lock = sentinel;
-        if (!wanted || !visible()) release();
+        if (!wanted || !visible) release();
       },
       () => {
         pending = false;
@@ -26,17 +27,15 @@ const holdScreenAwake = () => {
     );
   };
 
-  const onVisibilityChange = () => {
-    if (visible()) request();
+  const unwatch = watchVisibility((now) => {
+    visible = now;
+    if (visible) request();
     else release();
-  };
-
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  request();
+  });
 
   return () => {
     wanted = false;
-    document.removeEventListener('visibilitychange', onVisibilityChange);
+    unwatch();
     release();
   };
 };

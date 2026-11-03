@@ -1,3 +1,4 @@
+import { watchVisibility } from '#lib/page-visibility.js';
 import type { Access, HeadingSensor, Reading, SensorListener } from './types';
 
 type CompassEvent = DeviceOrientationEvent & {
@@ -49,15 +50,12 @@ const watch = (listener: SensorListener) => {
     if (on) window.addEventListener('deviceorientation', onOrientation);
     else window.removeEventListener('deviceorientation', onOrientation);
   };
-  const onVisibility = () => {
-    const visible = document.visibilityState === 'visible';
+  const unwatch = watchVisibility((visible) => {
     listen(visible);
     if (!visible) listener.paused();
-  };
-  document.addEventListener('visibilitychange', onVisibility);
-  listen(document.visibilityState === 'visible');
+  });
   return () => {
-    document.removeEventListener('visibilitychange', onVisibility);
+    unwatch();
     listen(false);
   };
 };
