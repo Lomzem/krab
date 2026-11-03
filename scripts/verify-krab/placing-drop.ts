@@ -1,66 +1,15 @@
 #!/usr/bin/env bun
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
-import { writeFileSync, appendFileSync } from 'node:fs';
+import { expect, test } from '@playwright/test';
 import { doctor } from './doctor';
+import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
-import type { Trip } from '../../src/lib/features/trip/types';
-
-const readTrips = (page: Page) =>
-  page.evaluate(
-    () =>
-      new Promise<Trip[]>((resolve, reject) => {
-        const request = indexedDB.open('krab');
-        request.onerror = () => {
-          reject(new Error('Cannot read Krab IndexedDB'));
-        };
-        request.onsuccess = () => {
-          const db = request.result;
-          const read = db
-            .transaction('trips', 'readonly')
-            .objectStore('trips')
-            .getAll();
-          read.onsuccess = () => {
-            resolve(read.result as Trip[]);
-            db.close();
-          };
-          read.onerror = () => {
-            reject(new Error('Cannot read trips'));
-            db.close();
-          };
-        };
-      })
-  );
-
-const recorder = (page: Page, info: TestInfo, entry: string) => ({
-  log: (action: string) => {
-    appendFileSync(
-      info.outputPath('actions.jsonl'),
-      JSON.stringify({
-        at: new Date().toISOString(),
-        feature: 'placing-drop',
-        entry,
-        action
-      }) + '\n'
-    );
-  },
-  capture: async (name: string) => {
-    await page.screenshot({ path: info.outputPath(`${name}.png`) });
-    writeFileSync(
-      info.outputPath(`${name}.aria.txt`),
-      await page.locator('body').ariaSnapshot()
-    );
-  },
-  keep: (name: string, value: unknown) => {
-    writeFileSync(info.outputPath(name), JSON.stringify(value, null, 2));
-  }
-});
 
 for (const entry of ['Map', 'Gear']) {
   test(`placing a drop from ${entry} survives reload`, async ({
     page,
     context
   }, info) => {
-    const { log, capture, keep } = recorder(page, info, entry);
+    const { log, capture, keep } = recorder(page, info, 'placing-drop', entry);
     keep('doctor.json', doctor());
     log('doctor passed: our preview process owns 4173');
     await page.goto('/');
@@ -81,7 +30,9 @@ for (const entry of ['Map', 'Gear']) {
       await page.getByRole('button', { name: 'Gear', exact: true }).click();
     await capture('02-before-drop');
     await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Pot 1 dropped');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'dropped' })
+    ).toContainText('Pot 1 dropped');
     log('tap Drop pot; saved toast visible');
     await capture('03-dropped');
     await page.getByRole('button', { name: 'Gear', exact: true }).click();
@@ -115,7 +66,7 @@ test('placing a drop with location denied saves it without a position', async ({
   page,
   context
 }, info) => {
-  const { log, capture, keep } = recorder(page, info, 'Denied');
+  const { log, capture, keep } = recorder(page, info, 'placing-drop', 'Denied');
   keep('doctor.json', doctor());
   log('doctor passed: our preview process owns 4173');
   await context.clearPermissions();
@@ -129,9 +80,9 @@ test('placing a drop with location denied saves it without a position', async ({
   await capture('01-location-off');
   keep('indexeddb-before.json', await readTrips(page));
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText(
-    'Pot 1 dropped without a position'
-  );
+  await expect(
+    page.getByRole('status').filter({ hasText: 'dropped' })
+  ).toContainText('Pot 1 dropped without a position');
   log('tap Drop pot; toast says saved without a position');
   await capture('02-dropped');
   await page.getByRole('button', { name: 'Gear', exact: true }).click();

@@ -3,6 +3,7 @@ import { IDBDatabase, IDBFactory, IDBTransaction } from 'fake-indexeddb';
 import { afterEach, assert, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   gearInWater,
+  nearestGear,
   openTripBook,
   type Drop,
   type Fix,
@@ -561,6 +562,29 @@ it('sorts by great-circle distance with bearing, compass point and distance text
   expect(bearings[3]).toBeCloseTo(45, 3);
   expect(bearings[4]).toBeCloseTo(180, 3);
   expect(rows[2]?.direction?.feet).toBeCloseTo(392.9, 1);
+});
+
+it('finds the nearest gear with a position, or none without my position', async () => {
+  const { state, open } = harness();
+  const book = await open();
+  await dropAt(book, state, 'pot', { north: 0.0005, east: 0 });
+  await dropAt(book, state, 'net', null);
+  const last = await dropAt(book, state, 'net', { north: 0, east: 0.0003 });
+
+  const nearest = nearestGear(last.trip, SEA, state.now);
+
+  expect(nearest?.name).toBe('Net 2');
+  expect(nearest?.direction?.feet).toBeCloseTo(109.44, 1);
+  expect(nearest?.direction?.bearingDeg).toBeCloseTo(90, 3);
+  expect(nearestGear(last.trip, null, state.now)).toBeNull();
+});
+
+it('has no nearest gear when no gear in the water has a position', async () => {
+  const { state, open } = harness();
+  const book = await open();
+  const last = await dropAt(book, state, 'pot', null);
+
+  expect(nearestGear(last.trip, SEA, state.now)).toBeNull();
 });
 
 it('formats time in the water as minutes, hours and days', async () => {

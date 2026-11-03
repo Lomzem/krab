@@ -2,15 +2,17 @@
   import { tick } from 'svelte';
   import { keepScreenAwakeWhile } from '#lib/features/app-shell/index.js';
   import { PositionWatch } from '#lib/features/location/index.js';
+  import type { Base, Camera } from '#lib/features/map/index.js';
   import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
   import DropControl from './DropControl.svelte';
   import GearList from './GearList.svelte';
-  import { sheetSubject } from './gear-sheet';
+  import { sheetSubject, type SheetOrigin } from './gear-sheet';
   import GearSheet from './GearSheet.svelte';
   import GettingPosition from './GettingPosition.svelte';
   import SavingDrop from './SavingDrop.svelte';
   import LocationIntro from './LocationIntro.svelte';
   import LocationStatus from './LocationStatus.svelte';
+  import MapTab from './MapTab.svelte';
   import { OnWater, type Retry, type Undo } from './on-water.svelte';
   import {
     locationExplained,
@@ -33,10 +35,13 @@
   let explained = $state(locationExplained());
   let now = $state(Date.now());
   let dropButton = $state<HTMLButtonElement>();
-  let sheetDropId = $state<string | null>(null);
-  let sheetOpener: HTMLElement | null = null;
+  let sheet = $state.raw<SheetOrigin | null>(null);
+  let base = $state<Base>('chart');
+  let camera = $state.raw<Camera | null>(null);
+  let showOnMap = $state<string | null>(null);
+  let mapTabButton = $state<HTMLButtonElement>();
 
-  const subject = $derived(sheetSubject(water.trip, sheetDropId));
+  const subject = $derived(sheetSubject(water.trip, sheet?.dropId ?? null));
 
   $effect(() => {
     const timer = setInterval(() => {
@@ -85,17 +90,28 @@
     });
   };
 
-  const openSheet = (dropId: string, opener: HTMLElement) => {
-    sheetOpener = opener;
-    sheetDropId = dropId;
-  };
+  const opensFrom =
+    (from: SheetOrigin['from']) => (dropId: string, opener: HTMLElement) => {
+      sheet = { dropId, from, opener };
+    };
+
+  let returnTo: HTMLElement | null = null;
 
   const closeSheet = () => {
-    sheetDropId = null;
+    returnTo = sheet?.opener ?? null;
+    sheet = null;
   };
 
-  const sheetReturnFocus = () =>
-    sheetOpener?.isConnected ? sheetOpener : dropButton;
+  const sheetReturnFocus = () => {
+    if (showOnMap !== null) return mapTabButton;
+    return returnTo?.isConnected ? returnTo : dropButton;
+  };
+
+  const show = (dropId: string) => {
+    showOnMap = dropId;
+    tab = 'map';
+    closeSheet();
+  };
 
   const deleteDrop = (dropId: string) => {
     void water.remove(dropId).then((deleted) => {
@@ -107,15 +123,29 @@
 <div class="flex h-dvh flex-col bg-background font-sans text-foreground">
   <main class="min-h-0 flex-1 overflow-y-auto">
     {#if tab === 'map'}
-      <section class="px-4 pt-5" aria-labelledby="map-title">
-        <h1 id="map-title" class="sr-only">Map</h1>
-        <p class="text-[17px] text-muted-foreground">
-          The map isn't here yet. Your gear is listed under Gear.
-        </p>
-      </section>
+      {#if water.ready}
+        <MapTab
+          trip={water.trip}
+          fix={watch.fix}
+          courseDeg={watch.courseDeg}
+          {now}
+          bind:base
+          bind:camera
+          show={showOnMap}
+          onshown={() => {
+            showOnMap = null;
+          }}
+          onopen={opensFrom('map')}
+        />
+      {/if}
     {:else if tab === 'gear'}
       {#if water.ready}
-        <GearList trip={water.trip} from={watch.fix} {now} onopen={openSheet} />
+        <GearList
+          trip={water.trip}
+          from={watch.fix}
+          {now}
+          onopen={opensFrom('list')}
+        />
       {/if}
     {:else}
       <section class="px-4 pt-5">
@@ -132,6 +162,17 @@
       water.save(dropId, edit, nextKind)}
     returnFocus={sheetReturnFocus}
   >
+    {#snippet actions(target: Drop)}
+      {#if sheet?.from === 'list' && target.position}
+        <button
+          type="button"
+          class="min-h-13 w-full rounded-control border-2 border-primary px-4 text-[18px] font-bold text-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          onclick={() => {
+            show(target.id);
+          }}>Show on map</button
+        >
+      {/if}
+    {/snippet}
     {#snippet endAction(target: Drop)}
       <button
         type="button"
@@ -179,6 +220,9 @@
         <li>
           <button
             type="button"
+            {@attach (node: HTMLButtonElement) => {
+              if (item.tab === 'map') mapTabButton = node;
+            }}
             class="relative flex min-h-15 w-full flex-col items-center justify-center gap-0.5 text-[14px] font-medium opacity-85 before:absolute before:inset-x-4 before:top-0 before:h-1 before:rounded-b-sm before:bg-tab-mark before:opacity-0 focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-tab-mark aria-[current=page]:font-bold aria-[current=page]:opacity-100 aria-[current=page]:before:opacity-100"
             aria-current={tab === item.tab ? 'page' : undefined}
             onclick={() => {

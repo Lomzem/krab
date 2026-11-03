@@ -75,3 +75,10 @@ export const gearInWater = (trip: Trip, from: LatLon | null, at: number) =>
     .filter((drop) => drop.collectedAt === null)
     .flatMap((drop) => rowFor(trip, drop, from, at))
     .sort(byDistance);
+
+export const nearestGear = (
+  trip: Trip,
+  from: LatLon | null,
+  at: number
+): GearRow | null =>
+  gearInWater(trip, from, at).find((row) => row.direction !== null) ?? null;
