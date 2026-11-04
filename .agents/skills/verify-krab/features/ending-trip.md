@@ -7,7 +7,7 @@ Finish the running trip from the Map when the day's fishing is done. Krab asks f
 - `end-trip`: with a trip running and no drop being placed, the Map shows a bar `Trip running. N in the water.` with an `End trip` button. It opens `End this trip?`.
 - `confirm`: the sheet names the outcome: `Everything has been collected. The trip moves to past trips.`, `1 drop is still in the water. It'll be saved as uncollected.` or `N drops are still in the water. They'll be saved as uncollected.` `Keep fishing` (or Escape) closes it, stores nothing and refocuses `End trip`.
 - `ended`: confirming stores a numeric `endedAt` and leaves uncollected drops with `collectedAt: null`. The toast reads `Trip ended. It is under Past trips.`, the bar goes, the Map says `No trip running`, and focus moves to the Drop button. The screen wake lock is released.
-- `past-layer`: when past trips exist, the Map `Filter` is available with no trip running and offers a `Past trips` checkbox. It shows each past drop as a dotted icon pin named `{name}, past trip, {dates}, {status}`, below collected and in-water pins.
+- `past-layer`: when past trips exist, the Map `Filter` is available with no trip running and offers a `Past trips` checkbox, unchecked by default. Checked, it shows each past drop as a dotted icon pin named `{name}, past trip, {dates}, {status}`, below collected and in-water pins. Unchecked, those pins are gone.
 
 ## How to get to it (user POV)
 
@@ -21,7 +21,7 @@ Preconditions: launch and doctor from the parent skill; fresh context; made-up f
 - **Running:** choose Map. Require the `Map` region to contain `Trip running. 1 in the water.` and the button `End trip`. Keep `indexeddb-before.json`.
 - **Keep fishing:** click `End trip`. Require the dialog heading `End this trip?` and the text `1 drop is still in the water. It'll be saved as uncollected.` Click `Keep fishing`; require the dialog hidden, `End trip` focused and stored `endedAt: null`.
 - **End:** click `End trip`, then the dialog's `End trip`. Require the dialog hidden, `toastOf(page)` containing `Trip ended. It is under Past trips.`, `Drop net` focused, no `End trip` in the Map region and the text `No trip running`. Require one stored trip with a numeric `endedAt`, Pot 1 collected and Net 1 `collectedAt: null`. Keep `indexeddb-ended.json`.
-- **Past layer:** click the Map region's button named `/^Filter/`, check `Past trips` in the dialog's `Also show` group and click `Done`. Require the Map buttons `Pot 1, past trip, Tuesday, June 10, 2031, 2 kept, 0 released` and `Net 1, past trip, Tuesday, June 10, 2031, Uncollected`. Keep `indexeddb-after.json`.
+- **Past layer:** wait for the Map region's image matching `/^Your position/`, so the map has drawn, then require the Map buttons `Pot 1, past trip, Tuesday, June 10, 2031, 2 kept, 0 released` and `Net 1, past trip, Tuesday, June 10, 2031, Uncollected` absent. Click the Map region's button named `/^Filter/` and require `Past trips` in the dialog's `Also show` group unchecked. Then, each time through `/^Filter/` and `Done`: check it and require both pins present, uncheck it and require both absent, check it again and require both present. Keep `indexeddb-after.json`.
 
 ## Gotchas
 

@@ -75,23 +75,38 @@ test('collect Pot 1 with its catch, end the trip with Net 1 still in, and find b
   await expect(endButton).toHaveCount(0);
   await expect(mapArea).toContainText('No trip running');
 
-  await mapArea.getByRole('button', { name: /^Filter/ }).click();
   const pastLayer = sheet
     .getByRole('group', { name: 'Also show' })
     .getByRole('checkbox', { name: 'Past trips' });
-  await expect(pastLayer).not.toBeChecked();
-  await pastLayer.check();
-  await sheet.getByRole('button', { name: 'Done' }).click();
-  await expect(sheet).toBeHidden();
   const pastPin = mapArea.getByRole('button', {
     name: `Pot 1, past trip, ${TRIP_DATE}, 2 kept, 0 released`
   });
-  await expect(pastPin).toBeVisible();
-  await expect(
+  const pastPins = [
+    pastPin,
     mapArea.getByRole('button', {
       name: `Net 1, past trip, ${TRIP_DATE}, Uncollected`
     })
+  ];
+  const showPastLayer = async (on: boolean) => {
+    await mapArea.getByRole('button', { name: /^Filter/ }).click();
+    await pastLayer.setChecked(on);
+    await sheet.getByRole('button', { name: 'Done' }).click();
+    await expect(sheet).toBeHidden();
+    for (const pin of pastPins) {
+      await expect(pin).toHaveCount(on ? 1 : 0);
+    }
+  };
+  await expect(
+    mapArea.getByRole('img', { name: /^Your position/ })
   ).toBeVisible();
+  for (const pin of pastPins) await expect(pin).toHaveCount(0);
+  await mapArea.getByRole('button', { name: /^Filter/ }).click();
+  await expect(pastLayer).not.toBeChecked();
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await showPastLayer(true);
+  await showPastLayer(false);
+  await showPastLayer(true);
+  for (const pin of pastPins) await expect(pin).toBeVisible();
   await expect(pastPin.locator('span').first()).toHaveCSS(
     'border-top-style',
     'dotted'
