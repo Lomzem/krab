@@ -76,15 +76,15 @@ const sampleTile = (page: Page, url: string, px: number, py: number) =>
       return {
         status: response.status,
         mode: response.type,
-        rgb: data ? [0, 1, 2].map((offset) => channel(data, offset)) : null
+        rgba: data ? [0, 1, 2, 3].map((offset) => channel(data, offset)) : null
       };
     },
     { url, px, py }
   );
 
-const surfaceOf = (rgb: number[] | null) => {
-  if (!rgb) return 'unreadable';
-  const [red = 0, , blue = 0] = rgb;
+const surfaceOf = (rgba: number[] | null) => {
+  const [red = 0, , blue = 0, alpha = 0] = rgba ?? [];
+  if (alpha !== 255) return 'unreadable';
   return red - blue > 25 ? 'land' : 'water';
 };
 
@@ -177,16 +177,29 @@ test('NOAA chart tiles line up with a public coastline at two zooms', async ({
       );
       samples.push({ zoom, ...place, url, px, py, ...sample });
       log(
-        `z${String(zoom)} ${place.name}: rgb ${String(sample.rgb)} reads as ${surfaceOf(sample.rgb)}`
+        `z${String(zoom)} ${place.name}: rgba ${String(sample.rgba)} reads as ${surfaceOf(sample.rgba)}`
       );
     }
   }
   keep('alignment.json', samples);
+  const blank = await page.evaluate((size) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    return canvas.toDataURL('image/png');
+  }, TILE_PX);
+  const control = await sampleTile(page, blank, TILE_PX / 2, TILE_PX / 2);
+  log(
+    `transparent tile control: rgba ${String(control.rgba)} reads as ${surfaceOf(control.rgba)}`
+  );
+  expect(surfaceOf(control.rgba), 'a transparent tile is not water').toBe(
+    'unreadable'
+  );
   for (const sample of samples) {
     expect(sample.status).toBe(200);
     expect(sample.mode).toBe('cors');
     expect(
-      surfaceOf(sample.rgb),
+      surfaceOf(sample.rgba),
       `${sample.name} at z${String(sample.zoom)}`
     ).toBe(sample.surface);
   }
