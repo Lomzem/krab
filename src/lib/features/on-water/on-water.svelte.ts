@@ -136,6 +136,7 @@ export class OnWater {
   pending = $state.raw<PendingDrop | null>(null);
   readonly #book: TripBook;
   #loads = 0;
+  #reloading = false;
   #persistAsked = false;
   #noticeKey = 0;
 
@@ -333,10 +334,12 @@ export class OnWater {
   async reload() {
     this.#loads += 1;
     const loading = this.#loads;
+    this.#reloading = true;
     const loaded = await resultOf(
       Effect.all([this.#book.activeTrip(), this.#book.pastTrips()])
     );
     if (loading !== this.#loads) return;
+    this.#reloading = false;
     if (Result.isFailure(loaded)) {
       this.load = 'failed';
       return;
@@ -346,7 +349,7 @@ export class OnWater {
   }
 
   #reconcile() {
-    if (this.load !== 'ready') void this.reload();
+    if (this.load !== 'ready' || this.#reloading) void this.reload();
   }
 
   #publish(tripId: string, trip: Trip | null) {

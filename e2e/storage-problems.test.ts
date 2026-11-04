@@ -6,8 +6,10 @@ import { deliverFix, holdFixes } from './held-geolocation';
 import {
   failStorage,
   holdFirstOpen,
+  holdNextRead,
   injectStorageFaults,
-  releaseFirstOpen
+  releaseFirstOpen,
+  releaseHeldRead
 } from './storage-faults';
 
 const MORNING = new Date('2031-06-10T07:30:00-04:00');
@@ -171,4 +173,45 @@ test('a drop tapped while storage is still opening keeps the tap time and the fi
   await tab(page, 'Gear').click();
   await expect(pot).toContainText('10m');
   await expect(pot).toContainText('0.7 mi');
+});
+
+test('a drop saved while an older reload is still reading stays on the Gear list after that reload finishes', async ({
+  page,
+  context
+}) => {
+  const sheet = page.getByRole('dialog');
+  const inWater = page
+    .getByRole('main')
+    .getByRole('button')
+    .filter({ hasText: 'in the water' });
+
+  await startWithLocation(page);
+  await dropPot(page, 'Pot 1');
+  await dropPot(page, 'Pot 2');
+  await tab(page, 'Gear').click();
+  await expect(inWater).toHaveCount(2);
+
+  const other = await context.newPage();
+  await other.goto('/');
+  await tab(other, 'Gear').click();
+  await inWaterRow(other, 'Pot 1').click();
+  await other
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Delete drop' })
+    .dblclick();
+  await expect(toastOf(other)).toContainText('Pot 1 deleted');
+  await other.close();
+
+  await inWaterRow(page, 'Pot 1').click();
+  await holdNextRead(page);
+  await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
+  await expect(sheet).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 3 dropped');
+  await expect(inWaterRow(page, 'Pot 3')).toHaveCount(1);
+
+  await releaseHeldRead(page);
+  await expect(inWaterRow(page, 'Pot 3')).toHaveCount(1);
+  await expect(inWaterRow(page, 'Pot 2')).toHaveCount(1);
+  await expect(inWater).toHaveCount(2);
 });
