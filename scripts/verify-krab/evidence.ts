@@ -8,11 +8,19 @@ export const readTrips = (page: Page) =>
     () =>
       new Promise<Trip[]>((resolve, reject) => {
         const request = indexedDB.open('krab');
+        request.onupgradeneeded = () => {
+          request.transaction?.abort();
+        };
         request.onerror = () => {
           reject(new Error('Cannot read Krab IndexedDB'));
         };
         request.onsuccess = () => {
           const db = request.result;
+          if (!db.objectStoreNames.contains('trips')) {
+            db.close();
+            reject(new Error('Krab IndexedDB has no trips store'));
+            return;
+          }
           const read = db
             .transaction('trips', 'readonly')
             .objectStore('trips')
