@@ -124,6 +124,43 @@ test('a touch held on the Undo toast holds it past 8 seconds and keeps the remai
   await expectExpiresAfter(page, 6000);
 });
 
+test('a touch held on the Undo toast also holds the notice that replaces it, and a notice after Undo from the keyboard starts unheld', async ({
+  page
+}) => {
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.clock.runFor(2000);
+
+  const touch = await touchesAt(toastOf(page));
+  await toastOf(page).dispatchEvent('touchstart', touch);
+  await dropPot(page, 'Pot 2');
+  await page.clock.runFor(20_000);
+  await expect(
+    undoOf(page),
+    'The replacing notice expired while the touch was still held; carry held reasons over to its countdown.'
+  ).toBeEnabled();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+
+  await toastOf(page).dispatchEvent('touchend', {
+    touches: [],
+    targetTouches: [],
+    changedTouches: touch.changedTouches
+  });
+  await expectExpiresAfter(page, 8000);
+
+  await dropPot(page, 'Pot 3');
+  await undoOf(page).focus();
+  await page.keyboard.press('Enter');
+  await expect(toastOf(page)).toContainText('Pot 3 removed');
+  await page.clock.runFor(3999);
+  await expect(toastOf(page)).toContainText('Pot 3 removed');
+  await page.clock.runFor(1);
+  await expect(
+    toastOf(page),
+    'A hold from the removed Undo button outlived it.'
+  ).toBeHidden();
+});
+
 test('a Collect toast lasts 8 seconds and Undo within it puts only that gear back in the water', async ({
   page
 }) => {

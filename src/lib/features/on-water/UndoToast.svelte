@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { Countdown } from './countdown';
   import type { Notice, Offer, Retry, Undo } from './on-water.svelte';
 
@@ -25,14 +27,25 @@
   } = $props();
 
   let countdown: Countdown | null = null;
+  let region: HTMLDivElement | undefined;
+  const held = new SvelteSet<string>();
 
   $effect(() => {
-    if (!notice) return;
+    if (!notice) {
+      untrack(() => {
+        held.clear();
+      });
+      return;
+    }
     const shownMs = SHOWN_MS[notice.offer.action];
     if (shownMs === null) return;
     const { key } = notice;
     const current = new Countdown(shownMs, () => {
       ondismiss(key);
+    });
+    untrack(() => {
+      if (!region?.contains(document.activeElement)) held.delete('focus');
+      for (const reason of held) current.hold(reason);
     });
     countdown = current;
     return () => {
@@ -41,9 +54,11 @@
   });
 
   const hold = (reason: string) => () => {
+    held.add(reason);
     countdown?.hold(reason);
   };
   const release = (reason: string) => () => {
+    held.delete(reason);
     countdown?.release(reason);
   };
 </script>
@@ -55,6 +70,7 @@
     class="absolute inset-x-3 bottom-0 flex justify-center"
     class:pb-3={notice}
     bind:clientHeight={covers}
+    bind:this={region}
   >
     {#if notice}
       <div
