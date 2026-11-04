@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test, toastOf } from './fixtures';
+import { expect, holdStorage, releaseStorage, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
 import { deliverFix, holdFixes } from './held-geolocation';
@@ -191,7 +191,7 @@ test('collect Pot 1 with its catch, end the trip with Net 1 still in, find both 
   await expect(pastTrip).toBeFocused();
 });
 
-test('a past trip over two days opens on All, and Last day and Earlier days narrow its rows and pins together; deleting its only remaining drop removes the trip until Undo brings it back, and Delete trip asks first and then removes it for good', async ({
+test('a past trip over two days opens on All, and Last day and Earlier days narrow its rows and pins together; deleting its only remaining drop removes the trip until Undo brings it back, and Delete trip asks first, stays open while removing, and then removes it for good', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -274,7 +274,20 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   await expect(deleteTrip).toBeFocused();
 
   await deleteTrip.click();
+  await holdStorage(page);
   await sheet.getByRole('button', { name: 'Delete trip' }).click();
+  for (const leave of [
+    () => sheet.getByRole('button', { name: 'Keep it' }).click({ force: true }),
+    () => page.keyboard.press('Escape')
+  ]) {
+    await leave();
+    await expect(
+      sheet.getByRole('heading', { name: 'Delete this trip?' })
+    ).toBeVisible();
+  }
+  await expect(toastOf(page)).not.toContainText('Trip deleted');
+
+  await releaseStorage(page);
   await expect(sheet).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip deleted');
   await expect(main).toContainText('No past trips yet.');

@@ -99,6 +99,10 @@
     (row ?? titleHeading)?.focus();
   };
 
+  const keepTrip = () => {
+    if (!deleting) deleteOpen = false;
+  };
+
   const confirmDelete = async () => {
     if (deleting || !trip) return;
     deleting = true;
@@ -318,9 +322,7 @@
 <Sheet
   open={deleteOpen && trip !== null}
   titleId={DELETE_TITLE_ID}
-  onclose={() => {
-    deleteOpen = false;
-  }}
+  onclose={keepTrip}
   returnFocus={() => (deleteButton?.isConnected ? deleteButton : titleHeading)}
 >
   {#snippet heading()}
@@ -342,10 +344,9 @@
     >
     <button
       type="button"
-      class="min-h-13 flex-1 rounded-control border-2 border-primary px-4 text-[18px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      onclick={() => {
-        deleteOpen = false;
-      }}>Keep it</button
+      class="min-h-13 flex-1 rounded-control border-2 border-primary px-4 text-[18px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+      aria-disabled={deleting}
+      onclick={keepTrip}>Keep it</button
     >
   {/snippet}
 </Sheet>

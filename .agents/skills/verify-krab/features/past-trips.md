@@ -8,7 +8,7 @@ Look back at trips that have ended: when they were, what was dropped, what each 
 - `detail`: tapping a row opens the trip with its dates as a focused heading and the counts, a map of its drops (dotted pins named `{name}, {day}, {status}`, no own position), and a `Gear` list whose rows read `{name} {status}`. Status is the catch (`2 kept, 0 released`, `Nothing caught`, `Catch not recorded`) or `Uncollected`. A trip over several days groups the list by day and adds a `Days on this trip` choice of Last day, Earlier days or All. `All past trips` goes back and refocuses the trip's row.
 - `past-sheet`: tapping a row or pin opens the gear sheet. Uncollected gear says `Uncollected. The trip ended with this gear in the water.` with no Collect and no Catch. Collected gear shows its catch for editing but no `Drop … again here`; a saved edit shows in the trip's list as soon as the sheet closes. `Show on map` focuses the pin on the trip map.
 - `delete-drop`: deleting a past trip's only drop removes the trip from the list until Undo restores it.
-- `delete-trip`: `Delete trip` asks `Delete this trip?`. `Keep it` refocuses the button. Confirming removes the trip and its catches for good, toasts `Trip deleted` and returns to the list with its heading focused.
+- `delete-trip`: `Delete trip` asks `Delete this trip?`. `Keep it` refocuses the button. While the removal is saving, the dialog stays open: `Keep it` reads as disabled, and it, Escape and the backdrop do nothing. Confirming removes the trip and its catches for good, toasts `Trip deleted` and returns to the list with its heading focused.
 
 ## How to get to it (user POV)
 
