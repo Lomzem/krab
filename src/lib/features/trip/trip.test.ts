@@ -19,6 +19,7 @@ import {
   tripBook,
   tripDays,
   type DaySelection,
+  type Deletion,
   type PastDaySelection,
   type Drop,
   type DropEdit,
@@ -839,10 +840,12 @@ it('a Save whose kind is locked because the gear was dropped again stores none o
 });
 
 it('restores a deleted drop exactly once, in its original list position', async () => {
-  const { open } = withoutLocation();
+  const { open, advance } = withoutLocation();
   const book = await open();
   const first = await place(book, 'pot');
+  advance(60_000);
   const middle = await place(book, 'net');
+  advance(60_000);
   await place(book, 'pot');
   const details = { label: 'blue', bait: 'squid', depthFt: 30, notes: '' };
   const { trip: before } = await run(
@@ -897,6 +900,158 @@ it('refuses to restore an emptied active trip after another trip has started', a
 
   expect(refusal._tag).toBe('AnotherTripActive');
   expect(await run(book.activeTrip())).toEqual(started.trip);
+});
+
+it('restores a drop among its gear by drop time after the drop before it was deleted too, so Drop again stays on the latest', async () => {
+  const { open, advance } = withoutLocation();
+  const book = await open();
+  const a = await place(book, 'pot');
+  await run(book.collect(a.drop.id));
+  advance(60_000);
+  const b = await dropAgain(book, a.drop.id);
+  await run(book.collect(b.drop.id));
+  advance(60_000);
+  const c = await dropAgain(book, b.drop.id);
+  await run(book.collect(c.drop.id));
+
+  const deletedB = await run(book.deleteDrop(b.drop.id));
+  await run(book.deleteDrop(a.drop.id));
+  const { trip } = await run(book.restoreDrop(deletedB.deletion));
+  const fromB = await run(
+    Effect.flip(book.placeDrop({ again: b.drop.id }).result)
+  );
+
+  expect(trip.drops.map((drop) => drop.id)).toEqual([b.drop.id, c.drop.id]);
+  expect(trip.drops.map((drop) => canDropAgain(trip, drop))).toEqual([
+    false,
+    true
+  ]);
+  expect(fromB._tag).toBe('CannotDropAgain');
+  expect((await dropAgain(book, c.drop.id)).name).toBe('Pot 1');
+});
+
+it('restores deleted gear among the other gear by the time it was first dropped', async () => {
+  const { open, advance } = withoutLocation();
+  const book = await open();
+  const pot = await place(book, 'pot');
+  advance(60_000);
+  const net = await place(book, 'net');
+  advance(60_000);
+  await place(book, 'pot');
+
+  const deletedNet = await run(book.deleteDrop(net.drop.id));
+  await run(book.deleteDrop(pot.drop.id));
+  const { trip } = await run(book.restoreDrop(deletedNet.deletion));
+
+  expect(trip.gear.map(gearName)).toEqual(['Net 1', 'Pot 2']);
+});
+
+type Restoring = { book: TripBook; advance: (ms: number) => void };
+
+it.each<[string, (setup: Restoring) => Promise<Deletion>]>([
+  [
+    'its gear has been dropped again since',
+    async ({ book, advance }) => {
+      const first = await place(book, 'pot');
+      await run(book.collect(first.drop.id));
+      advance(60_000);
+      const deleted = await dropAgain(book, first.drop.id);
+      const { deletion } = await run(book.deleteDrop(deleted.drop.id));
+      advance(60_000);
+      await dropAgain(book, first.drop.id);
+      return deletion;
+    }
+  ],
+  [
+    'a later drop of its gear has been collected',
+    async ({ book, advance }) => {
+      const first = await place(book, 'pot');
+      await run(book.collect(first.drop.id));
+      advance(60_000);
+      const deleted = await dropAgain(book, first.drop.id);
+      const { deletion } = await run(book.deleteDrop(deleted.drop.id));
+      advance(60_000);
+      const later = await dropAgain(book, first.drop.id);
+      await run(book.collect(later.drop.id));
+      return deletion;
+    }
+  ],
+  [
+    'an earlier drop of its gear is back in the water',
+    async ({ book, advance }) => {
+      const first = await place(book, 'pot');
+      await run(book.collect(first.drop.id));
+      advance(60_000);
+      const deleted = await dropAgain(book, first.drop.id);
+      await run(book.collect(deleted.drop.id));
+      const { deletion } = await run(book.deleteDrop(deleted.drop.id));
+      await run(book.undoCollect(first.drop.id));
+      return deletion;
+    }
+  ]
+])(
+  'refuses to restore a drop when %s, so its gear is never in the water twice',
+  async (_, arrange) => {
+    const { open, advance } = withoutLocation();
+    const book = await open();
+    const deletion = await arrange({ book, advance });
+    const before = await run(book.activeTrip());
+
+    const refusal = await run(Effect.flip(book.restoreDrop(deletion)));
+
+    expect(refusal._tag).toBe('DroppedAgain');
+    expect(await run(book.activeTrip())).toEqual(before);
+  }
+);
+
+it('refuses Drop again and Undo collect on gear a stored trip already has in the water, and writes nothing', async () => {
+  const { idb, open } = withoutLocation();
+  const book = await open();
+  const stored = (
+    id: string,
+    placedAt: number,
+    collectedAt: number | null
+  ) => ({
+    id,
+    gearId: 'stored-gear',
+    placedAt,
+    position: null,
+    noPosition: 'skipped',
+    label: '',
+    bait: '',
+    depthFt: null,
+    notes: '',
+    collectedAt,
+    catch: null
+  });
+  await withStoredTrips(idb, 'readwrite', (trips) =>
+    trips.put({
+      id: 'stored-trip',
+      startedAt: T0,
+      endedAt: null,
+      gear: [{ id: 'stored-gear', kind: 'pot', number: 1 }],
+      drops: [
+        stored('still-in', T0, null),
+        stored('collected-later', T0 + 60_000, T0 + 120_000)
+      ],
+      next: { pot: 2, net: 1 }
+    })
+  );
+  const before = await run(book.activeTrip());
+  assert(before);
+  const later = before.drops[1];
+
+  const again = await run(
+    Effect.flip(book.placeDrop({ again: 'collected-later' }).result)
+  );
+  const undo = await run(Effect.flip(book.undoCollect('collected-later')));
+
+  expect([canDropAgain(before, later), canUndoCollect(before, later)]).toEqual([
+    false,
+    false
+  ]);
+  expect([again._tag, undo._tag]).toEqual(['CannotDropAgain', 'DroppedAgain']);
+  expect(await run(book.activeTrip())).toEqual(before);
 });
 
 it('collects at the tap time once, and undo collect puts it back with no catch', async () => {

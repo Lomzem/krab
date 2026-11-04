@@ -151,7 +151,10 @@ export type TripBook = {
   ) => Effect.Effect<DeletedDrop, DropNotFound | StorageFailed>;
   restoreDrop: (
     deletion: Deletion
-  ) => Effect.Effect<NamedTrip, AnotherTripActive | StorageFailed>;
+  ) => Effect.Effect<
+    NamedTrip,
+    AnotherTripActive | DroppedAgain | StorageFailed
+  >;
   endTrip: (
     tripId: string
   ) => Effect.Effect<Trip, TripNotFound | StorageFailed>;
@@ -254,11 +257,9 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
     ),
   deleteDrop: (dropId) =>
     storage.readModifyWrite<DeletedDrop, DropNotFound>((trips) => {
-      const found = locateDrop(trips, dropId);
-      const deletion = found && deletionOf(found.trip, found.index, found.drop);
-      if (!found || !deletion) {
-        return Result.fail(new DropNotFound({ dropId }));
-      }
+      const found = dropIn(trips, dropId);
+      if (!found) return Result.fail(new DropNotFound({ dropId }));
+      const deletion = deletionOf(found.trip, found.drop, found.gear);
       const trip = withoutDrop(found.trip, dropId);
       const result = { trip, name: gearName(deletion.gear), deletion };
       return Result.succeed(
@@ -268,12 +269,13 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
       );
     }),
   restoreDrop: (deletion) =>
-    storage.readModifyWrite<NamedTrip, AnotherTripActive>((trips) =>
-      Result.map(restoreDrop(trips, deletion), (trip) => ({
-        put: [trip],
-        remove: [],
-        result: { trip, name: gearName(deletion.gear) }
-      }))
+    storage.readModifyWrite<NamedTrip, AnotherTripActive | DroppedAgain>(
+      (trips) =>
+        Result.map(restoreDrop(trips, deletion), (trip) => ({
+          put: [trip],
+          remove: [],
+          result: { trip, name: gearName(deletion.gear) }
+        }))
     ),
   endTrip: (tripId) =>
     Effect.suspend(() => {

@@ -98,7 +98,5 @@ export type DropEdit = { details: DropDetails; catch: Catch | null };
 export type Deletion = {
   trip: Omit<Trip, 'gear' | 'drops'>;
   drop: Drop;
-  dropIndex: number;
   gear: Gear;
-  gearIndex: number;
 };

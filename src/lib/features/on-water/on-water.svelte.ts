@@ -2,6 +2,7 @@ import { Effect, Exit, Result } from 'effect';
 import {
   pastOf,
   tripBook,
+  type AnotherTripActive,
   type CannotDropAgain,
   type Clock,
   type Deletion,
@@ -91,14 +92,26 @@ const droppedText = (placed: PlacedDrop) => {
   return `${placed.name} dropped`;
 };
 
+const droppedAgainText = (name: string) =>
+  `Couldn't undo. ${name} has been dropped again since.`;
+
 const undoCollectFailure = (
   tag: (DropNotFound | DroppedAgain | StorageFailed)['_tag'],
   undo: UndoCollect
 ): [string, Offer?] => {
-  if (tag === 'DroppedAgain') {
-    return [`Couldn't undo. ${undo.name} has been dropped again since.`];
-  }
+  if (tag === 'DroppedAgain') return [droppedAgainText(undo.name)];
   if (tag === 'DropNotFound') return [`Couldn't undo. ${undo.name} is gone.`];
+  return ["Couldn't undo. Try again.", undo];
+};
+
+const restoreFailure = (
+  tag: (AnotherTripActive | DroppedAgain | StorageFailed)['_tag'],
+  undo: Extract<Offer, { action: 'restore' }>
+): [string, Offer?] => {
+  if (tag === 'DroppedAgain') return [droppedAgainText(undo.name)];
+  if (tag === 'AnotherTripActive') {
+    return [`Couldn't restore ${undo.name}. Another trip has started.`];
+  }
   return ["Couldn't undo. Try again.", undo];
 };
 
@@ -214,13 +227,7 @@ export class OnWater {
     }
     const restored = await resultOf(this.#book.restoreDrop(undo.deletion));
     if (Result.isFailure(restored)) {
-      const retry = restored.failure._tag === 'StorageFailed';
-      this.#say(
-        retry
-          ? "Couldn't undo. Try again."
-          : `Couldn't restore ${undo.name}. Another trip has started.`,
-        retry ? undo : undefined
-      );
+      this.#say(...restoreFailure(restored.failure._tag, undo));
       return;
     }
     this.#publish(restored.success.trip.id, restored.success.trip);
