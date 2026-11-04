@@ -831,7 +831,7 @@ it('changes kind to the next number of the new kind and never reuses the old one
   expect(names).toEqual(['Net 2', 'Pot 3', 'Net 3', 'Pot 4']);
 });
 
-it('a Save whose kind is locked because the gear was dropped again stores none of its details', async () => {
+it('a Save whose kind is locked because the gear was dropped again stores none of its details, while one keeping the same kind stores them', async () => {
   const { open } = withoutLocation();
   const book = await open();
   const first = await place(book, 'pot');
@@ -848,12 +848,22 @@ it('a Save whose kind is locked because the gear was dropped again stores none o
       Effect.runPromise(Effect.flip(book.saveDrop(dropId, edit, 'net')))
     )
   );
+  const refused = await run(book.activeTrip());
+  for (const [dropId, edit] of edits) {
+    await run(book.saveDrop(dropId, edit, 'pot'));
+  }
+  const saved = await run(book.activeTrip());
 
   expect(refusals.map((failure) => failure._tag)).toEqual([
     'KindLocked',
     'KindLocked'
   ]);
-  expect(await run(book.activeTrip())).toEqual(second.trip);
+  expect(refused).toEqual(second.trip);
+  expect(saved?.gear).toEqual(second.trip.gear);
+  expect(saved?.drops).toMatchObject([
+    { id: first.drop.id, ...details, catch: { kept: 2, released: 0 } },
+    { id: second.drop.id, ...details, catch: null }
+  ]);
 });
 
 it('restores a deleted drop exactly once, in its original list position', async () => {
