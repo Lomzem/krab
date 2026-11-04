@@ -3,6 +3,7 @@ import { expect, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
 import { deliverFix, holdFixes } from './held-geolocation';
+import { failStorage, injectStorageFaults } from './storage-faults';
 
 const MORNING = new Date('2031-06-10T07:30:00-04:00');
 const LATE_EVENING = new Date('2031-06-10T23:40:00-04:00');
@@ -49,7 +50,7 @@ const endTheTrip = async (page: Page, outcome: string) => {
   );
 };
 
-test('collect Pot 1 with its catch, end the trip with Net 1 still in, and find both on the past trip, its map and the main map', async ({
+test('collect Pot 1 with its catch, end the trip with Net 1 still in, find both on the past trip, its map and the main map, and see a catch saved there in its list', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -169,10 +170,21 @@ test('collect Pot 1 with its catch, end the trip with Net 1 still in, and find b
   await expect(sheet.getByRole('button', { name: /again here/ })).toHaveCount(
     0
   );
+  await sheet.getByRole('button', { name: 'One more kept' }).click();
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  const savedPot1 = detail.getByRole('button', {
+    name: 'Pot 1 3 kept, 0 released',
+    exact: true
+  });
+  await expect(savedPot1).toBeVisible();
+  await expect(pot1).toHaveCount(0);
+
+  await savedPot1.click();
   await sheet.getByRole('button', { name: 'Show on map' }).click();
   await expect(sheet).toBeHidden();
   await expect(
-    detail.getByRole('button', { name: 'Pot 1, 2 kept, 0 released' })
+    detail.getByRole('button', { name: 'Pot 1, 3 kept, 0 released' })
   ).toBeFocused();
 
   await detail.getByRole('button', { name: 'All past trips' }).click();
@@ -273,36 +285,6 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   await expect(main).toContainText('No past trips yet.');
 });
 
-const FAIL_READS = 'krab-e2e-fail-trip-reads';
-
-type Begin = (this: IDBDatabase, ...args: unknown[]) => IDBTransaction;
-
-const injectReadFaults = (page: Page) =>
-  page.addInitScript((flag) => {
-    const database = IDBDatabase.prototype;
-    const begin = Reflect.get(database, 'transaction') as Begin;
-    const abort = (tx: IDBTransaction) => () => {
-      tx.abort();
-    };
-    const faulty: Begin = function (...args) {
-      const tx = Reflect.apply(begin, this, args);
-      if (tx.mode === 'readonly' && sessionStorage.getItem(flag) === 'on') {
-        queueMicrotask(abort(tx));
-      }
-      return tx;
-    };
-    Reflect.set(database, 'transaction', faulty);
-  }, FAIL_READS);
-
-const failReads = (page: Page, on: boolean) =>
-  page.evaluate(
-    ([flag, state]) => {
-      if (state) sessionStorage.setItem(flag, 'on');
-      else sessionStorage.removeItem(flag);
-    },
-    [FAIL_READS, on] as const
-  );
-
 test('past trips show what was just written even while storage reads fail, and history that fails to load offers Retry instead of reading as empty', async ({
   page
 }) => {
@@ -313,14 +295,14 @@ test('past trips show what was just written even while storage reads fail, and h
     exact: true
   });
 
-  await injectReadFaults(page);
+  await injectStorageFaults(page);
   await page.clock.install({ time: MORNING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Position ready')).toBeVisible();
   await dropOf(page, 'Pot', 'Pot 1');
 
-  await failReads(page, true);
+  await failStorage(page, 'reads');
   await endTheTrip(
     page,
     "1 drop is still in the water. It'll be saved as uncollected."
@@ -344,7 +326,7 @@ test('past trips show what was just written even while storage reads fail, and h
   await expect(main).not.toContainText('No past trips yet.');
   await expect(pastTrip).toHaveCount(0);
 
-  await failReads(page, false);
+  await failStorage(page, null);
   await main.getByRole('button', { name: 'Retry' }).click();
   await expect(pastTrip).toBeVisible();
   await expect(main).not.toContainText("Couldn't load past trips.");

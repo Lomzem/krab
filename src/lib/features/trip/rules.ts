@@ -67,19 +67,47 @@ export const dropCommand = (
 
 export type Placed = { trip: Trip; drop: Drop; gear: Gear; isNew: boolean };
 
+export type FoundDrop = { trip: Trip; drop: Drop; gear: Gear };
+
+export const findDrop = (
+  trips: readonly Trip[],
+  dropId: string
+): FoundDrop | null => {
+  for (const trip of trips) {
+    const drop = trip.drops.find((item) => item.id === dropId);
+    const gear = drop && trip.gear.find((item) => item.id === drop.gearId);
+    if (drop) return gear ? { trip, drop, gear } : null;
+  }
+  return null;
+};
+
 const recorded = (trips: readonly Trip[], dropId: string): Placed | null => {
-  const found = locateDrop(trips, dropId);
-  const gear = found?.trip.gear.find((item) => item.id === found.drop.gearId);
-  return found && gear
-    ? { trip: found.trip, drop: found.drop, gear, isNew: false }
-    : null;
+  const found = findDrop(trips, dropId);
+  return found && { ...found, isNew: false };
 };
 
 const isLatest = (trip: Trip, drop: Drop) =>
   trip.drops.findLast((item) => item.gearId === drop.gearId)?.id === drop.id;
 
+const inWater = (drop: Drop) => drop.collectedAt === null;
+
+const dropsOf = (trip: Trip, gearId: string) =>
+  trip.drops.filter((drop) => drop.gearId === gearId);
+
+const hasInWater = (trip: Trip, gearId: string) =>
+  dropsOf(trip, gearId).some(inWater);
+
+const inWaterOnlyLast = (trip: Trip, gearId: string) => {
+  const drops = dropsOf(trip, gearId);
+  const wet = drops.filter(inWater);
+  return wet.length === 0 || (wet.length === 1 && drops.at(-1) === wet[0]);
+};
+
 const isLatestCollected = (trip: Trip, drop: Drop) =>
-  trip.endedAt === null && drop.collectedAt !== null && isLatest(trip, drop);
+  trip.endedAt === null &&
+  !inWater(drop) &&
+  isLatest(trip, drop) &&
+  !hasInWater(trip, drop.gearId);
 
 export const canDropAgain = isLatestCollected;
 
@@ -129,11 +157,11 @@ const placeAgain = (
   where: Located
 ): Result.Result<Placed, CannotDropAgain> => {
   const active = activeOf(trips);
-  const source = active && locateDrop([active], sourceId);
-  const gear = source?.trip.gear.find((item) => item.id === source.drop.gearId);
-  if (!source || !gear || !canDropAgain(source.trip, source.drop)) {
+  const source = active && findDrop([active], sourceId);
+  if (!source || !canDropAgain(source.trip, source.drop)) {
     return Result.fail(new CannotDropAgain({ dropId: sourceId }));
   }
+  const { gear } = source;
   const { label, bait, depthFt } = source.drop;
   const drop = newDrop(command, gear, where, { label, bait, depthFt });
   const trip = { ...source.trip, drops: [...source.trip.drops, drop] };
@@ -159,14 +187,6 @@ export const withoutDrop = (trip: Trip, dropId: string): Trip | null => {
     drops.some((drop) => drop.gearId === item.id)
   );
   return drops.length === 0 ? null : { ...trip, gear, drops };
-};
-
-export const locateDrop = (trips: readonly Trip[], dropId: string) => {
-  for (const trip of trips) {
-    const index = trip.drops.findIndex((drop) => drop.id === dropId);
-    if (index >= 0) return { trip, drop: trip.drops[index], index };
-  }
-  return null;
 };
 
 const badDepth = (depthFt: number | null): depthFt is number =>
@@ -217,7 +237,7 @@ export const uncollectDrop = (
   drop: Drop
 ): Result.Result<Trip | null, DroppedAgain> => {
   if (drop.collectedAt === null) return Result.succeed(null);
-  if (!isLatest(trip, drop)) {
+  if (!isLatest(trip, drop) || hasInWater(trip, drop.gearId)) {
     return Result.fail(new DroppedAgain({ dropId: drop.id }));
   }
   return Result.succeed(
@@ -249,48 +269,59 @@ export const switchKind = (
   });
 };
 
-export const deletionOf = (
-  trip: Trip,
-  dropIndex: number,
-  drop: Drop
-): Deletion | null => {
-  const gearIndex = trip.gear.findIndex((item) => item.id === drop.gearId);
-  if (gearIndex < 0) return null;
-  const gear = trip.gear[gearIndex];
+export const deletionOf = (trip: Trip, drop: Drop, gear: Gear): Deletion => {
   const { id, startedAt, endedAt, next } = trip;
-  return {
-    trip: { id, startedAt, endedAt, next },
-    drop,
-    dropIndex,
-    gear,
-    gearIndex
-  };
+  return { trip: { id, startedAt, endedAt, next }, drop, gear };
 };
 
-const insertAt = <T>(items: readonly T[], index: number, item: T) => [
-  ...items.slice(0, index),
-  item,
-  ...items.slice(index)
-];
+const insertBefore = <T>(
+  items: readonly T[],
+  item: T,
+  isLater: (other: T) => boolean
+) => {
+  const index = items.findIndex(isLater);
+  return index < 0
+    ? [...items, item]
+    : [...items.slice(0, index), item, ...items.slice(index)];
+};
 
-const restoreIn = (trip: Trip, deletion: Deletion): Trip => {
-  if (trip.drops.some((drop) => drop.id === deletion.drop.id)) return trip;
-  const hasGear = trip.gear.some((gear) => gear.id === deletion.gear.id);
-  return {
+const firstDroppedAt = (trip: Trip, gearId: string) =>
+  Math.min(...dropsOf(trip, gearId).map((drop) => drop.placedAt));
+
+const restoreIn = (
+  trip: Trip,
+  { drop, gear }: Deletion
+): Result.Result<Trip, DroppedAgain> => {
+  if (trip.drops.some((item) => item.id === drop.id)) {
+    return Result.succeed(trip);
+  }
+  const hasGear = trip.gear.some((item) => item.id === gear.id);
+  const restored: Trip = {
     ...trip,
     gear: hasGear
       ? trip.gear
-      : insertAt(trip.gear, deletion.gearIndex, deletion.gear),
-    drops: insertAt(trip.drops, deletion.dropIndex, deletion.drop)
+      : insertBefore(
+          trip.gear,
+          gear,
+          (other) => firstDroppedAt(trip, other.id) > drop.placedAt
+        ),
+    drops: insertBefore(
+      trip.drops,
+      drop,
+      (other) => other.placedAt > drop.placedAt
+    )
   };
+  return inWaterOnlyLast(restored, gear.id)
+    ? Result.succeed(restored)
+    : Result.fail(new DroppedAgain({ dropId: drop.id }));
 };
 
 export const restoreDrop = (
   trips: readonly Trip[],
   deletion: Deletion
-): Result.Result<Trip, AnotherTripActive> => {
+): Result.Result<Trip, AnotherTripActive | DroppedAgain> => {
   const existing = trips.find((trip) => trip.id === deletion.trip.id);
-  if (existing) return Result.succeed(restoreIn(existing, deletion));
+  if (existing) return restoreIn(existing, deletion);
   const active = activeOf(trips);
   if (deletion.trip.endedAt === null && active) {
     return Result.fail(new AnotherTripActive({ tripId: active.id }));

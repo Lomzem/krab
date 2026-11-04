@@ -1,9 +1,9 @@
 export type LatLon = { lat: number; lon: number };
 
 const EARTH_RADIUS_M = 6_371_008.8;
-const FEET_PER_METRE = 1 / 0.3048;
+const METRES_PER_FOOT = 0.3048;
 
-export const metresToFeet = (metres: number) => metres * FEET_PER_METRE;
+export const metresToFeet = (metres: number) => metres / METRES_PER_FOOT;
 
 const radians = (deg: number) => (deg * Math.PI) / 180;
 const degrees = (rad: number) => (rad * 180) / Math.PI;
@@ -17,7 +17,7 @@ export const distanceFt = (from: LatLon, to: LatLon) => {
       Math.cos(radians(to.lat)) *
       Math.sin(dLon / 2) ** 2;
   const central = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return central * EARTH_RADIUS_M * FEET_PER_METRE;
+  return metresToFeet(central * EARTH_RADIUS_M);
 };
 
 export const bearingDeg = (from: LatLon, to: LatLon) => {

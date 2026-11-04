@@ -8,7 +8,7 @@ Take gear out of the water from its gear sheet, record what it caught, and put t
 - `catch`: the Kept and Released steppers, labelled `One more kept`/`One fewer kept` and the released equivalents, and the `Nothing caught` button edit a draft. Save stores `{ kept, released }`; Escape discards. Clear catch returns to not recorded (`catch: null`). A one-sided catch cannot be stored.
 - `collected-list`: Gear shows `N in the water` and `N collected` under the title and a `Collected` region whose rows read `2 kept, 1 released`, `Nothing caught` or `Catch not recorded`.
 - `drop-again`: the latest collected drop of a gear offers `Drop pot again here` (or net). It saves the sheet's draft, then stores a new drop of the same gear (same name and number; label, bait and depth copied) at the current fix.
-- `undo-collect`: Undo collect in the sheet footer clears `collectedAt` and the catch, and focus moves to Collect. Older drops of re-dropped gear show Delete drop instead.
+- `undo-collect`: Undo collect in the sheet footer clears `collectedAt` and the catch, and focus moves to Collect. Older drops of re-dropped gear show Delete drop instead. Drop again and Undo collect are offered and stored only while the gear has no drop in the water, so a gear is never in the water twice.
 
 ## How to get to it (user POV)
 

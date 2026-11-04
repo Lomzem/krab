@@ -59,6 +59,11 @@ const phone = ({
     position: () => world.position,
     now: () => world.now
   });
+  let delivered: CompassState = { kind: 'off' };
+  compass.subscribe((state) => {
+    delivered = state;
+  });
+  const shown = () => delivered;
   const read = (
     headingDeg: number | null,
     {
@@ -80,7 +85,7 @@ const phone = ({
         at: world.at
       });
     }
-    return compass.state;
+    return delivered;
   };
   const hide = () => {
     for (const listener of listeners) listener.paused();
@@ -93,6 +98,7 @@ const phone = ({
   const subject = {
     compass,
     world,
+    shown,
     read,
     hide,
     answer,
@@ -180,11 +186,17 @@ test('readings that cancel out give the latest reading, not a made-up direction'
   expectHeading(read(270), 270 + NOAA_ARCTIC_D_2025);
 });
 
-test('a long gap between readings starts smoothing afresh', async () => {
-  const { read } = await turnedOn();
-  read(0);
-  expectHeading(read(90, { afterMs: 5000 }), 90 + NOAA_ARCTIC_D_2025);
-});
+test.each([
+  { gapMs: 499, shows: 'halfway', expected: 45 + NOAA_ARCTIC_D_2025 },
+  { gapMs: 500, shows: 'the turn', expected: 90 + NOAA_ARCTIC_D_2025 }
+])(
+  'a turn from 0° to 90° read $gapMs ms later shows $shows, as smoothing keeps only the last 500 ms',
+  async ({ gapMs, expected }) => {
+    const { read } = await turnedOn();
+    read(0);
+    expectHeading(read(90, { afterMs: gapMs }), expected);
+  }
+);
 
 test.each([
   { screenAngleDeg: 0, heading: 45, expected: 46.28 },
@@ -236,14 +248,14 @@ test.each<CompassState>([
 });
 
 test('turning on asks once, remembers the choice and points by the compass', async () => {
-  const { compass, world, read } = phone();
+  const { compass, world, read, shown } = phone();
   compass.start();
-  expect(compass.state.kind).toBe('off');
+  expect(shown().kind).toBe('off');
   compass.toggle();
   await settle();
   expect(world.asked).toBe(1);
   expect(world.remembered).toBe(true);
-  expect(compass.state.kind).toBe('starting');
+  expect(shown().kind).toBe('starting');
   expectHeading(read(90), 90 + NOAA_ARCTIC_D_2025);
 });
 
@@ -261,28 +273,28 @@ test.each(
     subject.compass.toggle();
     await settle();
     const reason = access === 'unsupported' ? 'unsupported' : 'denied';
-    expect(subject.compass.state).toEqual({ kind: 'unavailable', reason });
+    expect(subject.shown()).toEqual({ kind: 'unavailable', reason });
     expect(subject.read(90)).toEqual({ kind: 'unavailable', reason });
     const reloaded = phone({ remembered: subject.world.remembered });
     reloaded.compass.start();
-    expect(reloaded.compass.state.kind).toBe('off');
+    expect(reloaded.shown().kind).toBe('off');
     expect(reloaded.world.asked).toBe(0);
   }
 );
 
 test('remembered on, the compass listens again without asking', () => {
-  const { compass, world, read } = phone({ remembered: true });
+  const { compass, world, read, shown } = phone({ remembered: true });
   compass.start();
-  expect(compass.state.kind).toBe('waiting');
+  expect(shown().kind).toBe('waiting');
   expect(world.asked).toBe(0);
   expectHeading(read(90), 90 + NOAA_ARCTIC_D_2025);
 });
 
 test('remembered on but needing access again, it waits north-up until a tap', async () => {
-  const { compass, world, read } = phone({ remembered: true });
+  const { compass, world, read, shown } = phone({ remembered: true });
   compass.start();
   await settle();
-  expect(compass.state.kind).toBe('waiting');
+  expect(shown().kind).toBe('waiting');
   expect(world.asked).toBe(0);
   compass.toggle();
   await settle();
@@ -291,10 +303,10 @@ test('remembered on but needing access again, it waits north-up until a tap', as
 });
 
 test('a sensor pause waits north-up, and the next readings point again', async () => {
-  const { read, hide, compass } = await turnedOn();
+  const { read, hide, shown } = await turnedOn();
   read(90);
   hide();
-  expect(compass.state.kind).toBe('waiting');
+  expect(shown().kind).toBe('waiting');
   expectHeading(read(180), 180 + NOAA_ARCTIC_D_2025);
 });
 
@@ -305,13 +317,13 @@ test.each([
   'a $access answer that arrives after the compass stopped changes nothing (remembered on: $remembered)',
   async ({ access, remembered, after }) => {
     const subject = phone({ remembered });
-    const { compass, world, read } = subject;
+    const { compass, world, read, shown } = subject;
     subject.holding = true;
     compass.toggle();
     compass.stop();
     compass.start();
     await subject.answer(access);
-    expect(compass.state.kind).toBe(after);
+    expect(shown().kind).toBe(after);
     expect(world.remembered).toBe(remembered);
     if (remembered) expectHeading(read(90), 90 + NOAA_ARCTIC_D_2025);
     else expect(read(90).kind).toBe('off');
@@ -320,7 +332,7 @@ test.each([
 
 test('tapping again while the phone is asking asks once, and its answer turns the compass on', async () => {
   const subject = phone();
-  const { compass, world, read } = subject;
+  const { compass, world, read, shown } = subject;
   subject.holding = true;
   compass.start();
   compass.toggle();
@@ -331,14 +343,14 @@ test('tapping again while the phone is asking asks once, and its answer turns th
   expect(world.remembered).toBe(true);
   expectHeading(read(90), 90 + NOAA_ARCTIC_D_2025);
   compass.toggle();
-  expect(compass.state.kind).toBe('off');
+  expect(shown().kind).toBe('off');
 });
 
 test('tapping a working compass turns it off and forgets it', async () => {
-  const { compass, world, read } = await turnedOn();
+  const { compass, world, read, shown } = await turnedOn();
   read(90);
   compass.toggle();
-  expect(compass.state.kind).toBe('off');
+  expect(shown().kind).toBe('off');
   expect(world.remembered).toBe(false);
   expect(read(180).kind).toBe('off');
 });

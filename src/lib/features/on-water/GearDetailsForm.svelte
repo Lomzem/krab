@@ -29,7 +29,6 @@
   let {
     subject,
     formId,
-    editKind,
     now,
     operation,
     onsave,
@@ -40,7 +39,6 @@
   }: {
     subject: SheetSubject;
     formId: string;
-    editKind: boolean;
     now: number;
     operation: SheetOperation | null;
     onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
@@ -146,15 +144,13 @@
     {/if}
   {/if}
   {@render children?.()}
-  {#if editKind}
-    <KindField
-      bind:kind
-      {stored}
-      name={subject.name}
-      locked={!canChangeKind(subject.trip, drop.gearId)}
-      {idPrefix}
-    />
-  {/if}
+  <KindField
+    bind:kind
+    {stored}
+    name={subject.name}
+    locked={!canChangeKind(subject.trip, drop.gearId)}
+    {idPrefix}
+  />
   <DetailsFields
     bind:draft
     {idPrefix}

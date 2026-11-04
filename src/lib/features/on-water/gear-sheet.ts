@@ -1,5 +1,6 @@
 import {
   dayOf,
+  findDrop,
   gearName,
   type Day,
   type Drop,
@@ -28,22 +29,16 @@ export type SheetOperation = {
   problem: SaveProblem | null;
 };
 
-const subjectIn = (trip: Trip, dropId: string): SheetSubject | null => {
-  const drop = trip.drops.find((item) => item.id === dropId);
-  const gear = drop && trip.gear.find((item) => item.id === drop.gearId);
-  return drop && gear
-    ? { trip, drop, gear, name: gearName(gear), day: dayOf(trip, drop) }
-    : null;
-};
-
 export const sheetSubject = (
   trips: readonly Trip[],
   dropId: string | null
 ): SheetSubject | null => {
-  if (dropId === null) return null;
-  for (const trip of trips) {
-    const subject = subjectIn(trip, dropId);
-    if (subject) return subject;
-  }
-  return null;
+  const found = dropId === null ? null : findDrop(trips, dropId);
+  return (
+    found && {
+      ...found,
+      name: gearName(found.gear),
+      day: dayOf(found.trip, found.drop)
+    }
+  );
 };
