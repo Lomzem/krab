@@ -16,7 +16,7 @@ const runId =
   new Date().toISOString().replaceAll(':', '-') + `-${String(process.pid)}`;
 const evidence = resolve(
   process.env.KRAB_VERIFY_EVIDENCE_ROOT ??
-    '/home/lomzem/proj/krab/.scratch/on-water-workflow/verify-evidence',
+    '.scratch/on-water-workflow/verify-evidence',
   runId
 );
 const docker = (args: string[]) =>

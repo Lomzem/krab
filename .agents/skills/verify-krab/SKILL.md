@@ -47,7 +47,7 @@ For future permission/offline journeys in this recipe, use fresh contexts: `awai
 
 Default persistent root:
 
-`/home/lomzem/proj/krab/.scratch/on-water-workflow/verify-evidence/<timestamp>-<pid>/`
+`.scratch/on-water-workflow/verify-evidence/<timestamp>-<pid>/`, resolved from the repository root where the command runs
 
 Configure the parent directory before launch:
 
