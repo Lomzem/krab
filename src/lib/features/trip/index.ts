@@ -74,6 +74,7 @@ export {
   TripNotFound
 };
 export type { DropAttempt, DropPhase, PlacedDrop };
+export { pastOf };
 export {
   canChangeKind,
   canDropAgain,

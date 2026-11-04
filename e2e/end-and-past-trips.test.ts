@@ -210,3 +210,80 @@ test('deleting the only drop of a past trip removes the trip until Undo brings i
   await tab(page, 'Past trips').click();
   await expect(main).toContainText('No past trips yet.');
 });
+
+const FAIL_READS = 'krab-e2e-fail-trip-reads';
+
+type Begin = (this: IDBDatabase, ...args: unknown[]) => IDBTransaction;
+
+const injectReadFaults = (page: Page) =>
+  page.addInitScript((flag) => {
+    const database = IDBDatabase.prototype;
+    const begin = Reflect.get(database, 'transaction') as Begin;
+    const abort = (tx: IDBTransaction) => () => {
+      tx.abort();
+    };
+    const faulty: Begin = function (...args) {
+      const tx = Reflect.apply(begin, this, args);
+      if (tx.mode === 'readonly' && sessionStorage.getItem(flag) === 'on') {
+        queueMicrotask(abort(tx));
+      }
+      return tx;
+    };
+    Reflect.set(database, 'transaction', faulty);
+  }, FAIL_READS);
+
+const failReads = (page: Page, on: boolean) =>
+  page.evaluate(
+    ([flag, state]) => {
+      if (state) sessionStorage.setItem(flag, 'on');
+      else sessionStorage.removeItem(flag);
+    },
+    [FAIL_READS, on] as const
+  );
+
+test('past trips show what was just written even while storage reads fail, and history that fails to load offers Retry instead of reading as empty', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const main = page.getByRole('main');
+  const pastTrip = main.getByRole('button', {
+    name: `${TRIP_DATE} 1 drop, 1 uncollected`,
+    exact: true
+  });
+
+  await injectReadFaults(page);
+  await page.clock.install({ time: MORNING });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Position ready')).toBeVisible();
+  await dropOf(page, 'Pot', 'Pot 1');
+
+  await failReads(page, true);
+  await endTheTrip(
+    page,
+    "1 drop is still in the water. It'll be saved as uncollected."
+  );
+  await tab(page, 'Past trips').click();
+  await expect(pastTrip).toBeVisible();
+  await pastTrip.click();
+  await main
+    .getByRole('button', { name: 'Pot 1 Uncollected', exact: true })
+    .click();
+  await sheet.getByRole('button', { name: 'Delete drop' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 deleted');
+  await expect(main).toContainText('No past trips yet.');
+  await toastOf(page).getByRole('button', { name: 'Undo' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 restored');
+  await expect(pastTrip).toBeVisible();
+
+  await page.reload();
+  await tab(page, 'Past trips').click();
+  await expect(main).toContainText("Couldn't load past trips.");
+  await expect(main).not.toContainText('No past trips yet.');
+  await expect(pastTrip).toHaveCount(0);
+
+  await failReads(page, false);
+  await main.getByRole('button', { name: 'Retry' }).click();
+  await expect(pastTrip).toBeVisible();
+  await expect(main).not.toContainText("Couldn't load past trips.");
+});
