@@ -19,6 +19,7 @@ const holdScreenAwake = () => {
       (sentinel) => {
         pending = false;
         lock = sentinel;
+        sentinel.addEventListener('release', request, { once: true });
         if (!wanted || !visible) release();
       },
       () => {

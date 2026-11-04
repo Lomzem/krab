@@ -35,7 +35,7 @@ for (const { phone, setup } of PHONES) {
 }
 
 type Locks = { hidden: boolean; held: number; most: number };
-type LocksWindow = { locks?: Locks };
+type LocksWindow = { locks?: Locks; phoneLetsGo?: () => void };
 
 const holdLocksLikeAPhone = () => {
   const locks: Locks = { hidden: false, held: 0, most: 0 };
@@ -82,10 +82,13 @@ const holdLocksLikeAPhone = () => {
       }
     }
   });
-  document.addEventListener('visibilitychange', () => {
-    if (!locks.hidden) return;
+  const letGo = () => {
     for (const lock of sentinels) void lock.release();
     sentinels = [];
+  };
+  (window as LocksWindow).phoneLetsGo = letGo;
+  document.addEventListener('visibilitychange', () => {
+    if (locks.hidden) letGo();
   });
 };
 
@@ -102,7 +105,7 @@ const locksHeld = (page: Page) =>
     return { held: locks?.held, most: locks?.most };
   });
 
-test('a phone that keeps the screen on holds one lock during a trip, takes it again on return and lets it go when the trip ends', async ({
+test('a phone that keeps the screen on holds one lock during a trip, takes it again when the phone lets it go while showing and on return, and lets it go when the trip ends', async ({
   page
 }) => {
   await page.addInitScript(holdLocksLikeAPhone);
@@ -112,6 +115,11 @@ test('a phone that keeps the screen on holds one lock during a trip, takes it ag
   expect(await locksHeld(page)).toEqual({ held: 0, most: 0 });
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await expect.poll(() => locksHeld(page)).toEqual({ held: 1, most: 1 });
+
+  await page.evaluate(() => {
+    (window as LocksWindow).phoneLetsGo?.();
+  });
   await expect.poll(() => locksHeld(page)).toEqual({ held: 1, most: 1 });
 
   await setHidden(page, true);
