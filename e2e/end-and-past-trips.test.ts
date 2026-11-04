@@ -50,7 +50,7 @@ const endTheTrip = async (page: Page, outcome: string) => {
   );
 };
 
-test('collect Pot 1 with its catch, end the trip with Net 1 still in, and find both on the past trip, its map and the main map', async ({
+test('collect Pot 1 with its catch, end the trip with Net 1 still in, find both on the past trip, its map and the main map, and see a catch saved there in its list', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -170,10 +170,21 @@ test('collect Pot 1 with its catch, end the trip with Net 1 still in, and find b
   await expect(sheet.getByRole('button', { name: /again here/ })).toHaveCount(
     0
   );
+  await sheet.getByRole('button', { name: 'One more kept' }).click();
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  const savedPot1 = detail.getByRole('button', {
+    name: 'Pot 1 3 kept, 0 released',
+    exact: true
+  });
+  await expect(savedPot1).toBeVisible();
+  await expect(pot1).toHaveCount(0);
+
+  await savedPot1.click();
   await sheet.getByRole('button', { name: 'Show on map' }).click();
   await expect(sheet).toBeHidden();
   await expect(
-    detail.getByRole('button', { name: 'Pot 1, 2 kept, 0 released' })
+    detail.getByRole('button', { name: 'Pot 1, 3 kept, 0 released' })
   ).toBeFocused();
 
   await detail.getByRole('button', { name: 'All past trips' }).click();
