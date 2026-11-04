@@ -536,3 +536,50 @@ test('a pin under the Filter control never takes its tap: Filter still opens the
     page.getByRole('dialog').getByRole('heading', { name: 'Map filter' })
   ).toBeVisible();
 });
+
+type Box = { x: number; y: number; width: number; height: number };
+
+const boxOf = async (target: Locator): Promise<Box> => {
+  const box = await target.boundingBox();
+  expect(box).not.toBeNull();
+  return box ?? { x: 0, y: 0, width: 0, height: 0 };
+};
+
+const within = (area: Box) => (box: Box) =>
+  box.x >= area.x &&
+  box.x + box.width <= area.x + area.width &&
+  box.y >= area.y &&
+  box.y + box.height <= area.y + area.height;
+
+test('gear either side of the 180th meridian fits the past trip map as one small area, not the whole world', async ({
+  context,
+  page
+}) => {
+  const main = page.getByRole('main');
+  const sheet = page.getByRole('dialog');
+  await context.setGeolocation({ latitude: 0, longitude: 179.995 });
+  await dropPotAndOpenMap(page);
+  await context.setGeolocation({ latitude: 0, longitude: -179.995 });
+  await expect(potOnMap(page)).toHaveAccessibleName(/miles/);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await page.getByRole('button', { name: 'End trip' }).click();
+  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await expect(sheet).toBeHidden();
+  await page.getByRole('button', { name: 'Past trips', exact: true }).click();
+  await main.getByRole('button', { name: /2 drops, 2 uncollected$/ }).click();
+
+  const view = main.getByRole('region', { name: 'Map view' });
+  const pins = [/^Pot 1,/, /^Pot 2,/].map((name) =>
+    main.getByRole('button', { name })
+  );
+  for (const pin of pins) await expect(pin).toBeVisible();
+  await expect
+    .poll(async () => {
+      const area = await boxOf(view);
+      const [first, second] = await Promise.all(pins.map(boxOf));
+      const inside = [first, second].every(within(area));
+      return inside ? Math.abs(first.x - second.x) / area.width : 0;
+    })
+    .toBeGreaterThan(0.5);
+});

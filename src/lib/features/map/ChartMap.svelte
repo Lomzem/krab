@@ -84,14 +84,29 @@
 
   const lngLat = (at: LatLon): LngLatLike => [at.lon, at.lat];
 
+  const lonSpan = (lons: number[]) => {
+    const sorted = [...lons].sort((a, b) => a - b);
+    const gapAfter = (index: number) =>
+      (sorted[(index + 1) % sorted.length] ?? 0) -
+      (sorted[index] ?? 0) +
+      360 * Number(index === sorted.length - 1);
+    const widest = sorted.reduce(
+      (best, _, index) => (gapAfter(index) > gapAfter(best) ? index : best),
+      sorted.length - 1
+    );
+    const west = sorted[(widest + 1) % sorted.length] ?? 0;
+    const east = sorted[widest] ?? 0;
+    return { west, east: east < west ? east + 360 : east };
+  };
+
   const fitPlaces = () => {
     if (!map || places.length === 0) return;
-    const lons = places.map((place) => place.at.lon);
+    const { west, east } = lonSpan(places.map((place) => place.at.lon));
     const lats = places.map((place) => place.at.lat);
     map.fitBounds(
       [
-        [Math.min(...lons), Math.min(...lats)],
-        [Math.max(...lons), Math.max(...lats)]
+        [west, Math.min(...lats)],
+        [east, Math.max(...lats)]
       ],
       { padding: FIT_PADDING, maxZoom: SHOW_ZOOM, duration: 0 }
     );
