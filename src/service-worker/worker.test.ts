@@ -4,7 +4,10 @@ const ORIGIN = 'https://krab.test';
 
 type Handler = (event: object) => void;
 
-const worker = async (entry: () => Promise<unknown>) => {
+const worker = async (
+  entry: () => Promise<unknown>,
+  unregister: () => Promise<boolean> = () => Promise.resolve(true)
+) => {
   const handlers = new Map<string, Handler>();
   const world = { unregistered: 0 };
   const self = {
@@ -16,7 +19,7 @@ const worker = async (entry: () => Promise<unknown>) => {
     registration: {
       unregister: () => {
         world.unregistered += 1;
-        return Promise.resolve(true);
+        return unregister();
       }
     },
     skipWaiting: () => Promise.resolve()
@@ -110,10 +113,16 @@ test.each([
     how: 'listing caches fails',
     keys: () => Promise.reject(unusable),
     failure: unusable
+  },
+  {
+    how: 'listing caches and unregistering both fail',
+    keys: () => Promise.reject(unusable),
+    failure: unusable,
+    unregister: () => Promise.reject(new Error('unregister refused'))
   }
 ])(
   'the recovery worker unregisters when $how, and a deletion failure stays visible',
-  async ({ keys, failure }) => {
+  async ({ keys, failure, unregister }) => {
     const deleted: string[] = [];
     vi.stubGlobal('caches', {
       keys,
@@ -122,7 +131,10 @@ test.each([
         return Promise.resolve(true);
       }
     });
-    const { world, dispatch } = await worker(() => import('./kill-switch'));
+    const { world, dispatch } = await worker(
+      () => import('./kill-switch'),
+      unregister
+    );
 
     const activated = dispatch('activate', {});
 
