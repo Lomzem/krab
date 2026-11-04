@@ -100,7 +100,8 @@ const harness = () => {
     await Effect.runPromise(book.activeTrip());
     return book;
   };
-  return { state, idb, open, advance, report, deny };
+  const listening = () => listeners.size;
+  return { state, idb, open, advance, report, deny, listening };
 };
 
 type Harness = ReturnType<typeof harness>;
@@ -208,6 +209,56 @@ it('waits for a late fix and stores it with the tap time', async () => {
   });
   expect(placed.drop.noPosition).toBeNull();
 });
+
+type Waiting = Harness & { attempt: ReturnType<TripBook['placeDrop']> };
+
+it.each<[string, (waiting: Waiting) => void]>([
+  [
+    'a late fix',
+    ({ state, report }) => {
+      report({ ...SEA, accuracyM: 5, at: state.now });
+    }
+  ],
+  [
+    'the 20 s wait running out',
+    ({ advance }) => {
+      advance(20_000);
+    }
+  ],
+  [
+    'Cancel',
+    ({ attempt }) => {
+      attempt.cancel();
+    }
+  ],
+  [
+    'Save without position',
+    ({ attempt }) => {
+      attempt.saveWithoutPosition();
+    }
+  ],
+  [
+    'location being denied',
+    ({ deny }) => {
+      deny();
+    }
+  ]
+])(
+  'leaves no position listener once a waiting drop settles by %s',
+  async (_, settle) => {
+    const setup = harness();
+    setup.state.fix = null;
+    const book = await setup.open();
+
+    const attempt = book.placeDrop({ kind: 'pot' });
+    const whileWaiting = setup.listening();
+    settle({ ...setup, attempt });
+    await run(Effect.result(attempt.result));
+
+    expect(whileWaiting).toBe(1);
+    expect(setup.listening()).toBe(0);
+  }
+);
 
 const drain = () =>
   new Promise<void>((resolve) => {
