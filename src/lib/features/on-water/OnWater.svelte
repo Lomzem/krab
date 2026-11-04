@@ -145,15 +145,15 @@
     explained = true;
   };
 
-  const focusDropAfterWait = async (waited: boolean) => {
-    if (!waited) return;
+  const focusDropAfterSave = async (saved: boolean) => {
+    if (!saved) return;
     await tick();
     dropButton?.focus();
   };
 
   const drop = () => {
     now = Date.now();
-    void water.drop(kind).then(focusDropAfterWait);
+    void water.drop(kind).then(focusDropAfterSave);
   };
 
   const restingFocus = () => (tab === 'trips' ? pastHeading : dropButton);
@@ -237,7 +237,7 @@
         if (problem !== null) return problem;
         closeSheet();
         now = Date.now();
-        void water.dropAgain(dropId).then(focusDropAfterWait);
+        void water.dropAgain(dropId).then(focusDropAfterSave);
         return null;
       }
     );
@@ -447,7 +447,7 @@
       oncancel={attempt.cancel}
       onskip={attempt.saveWithoutPosition}
     />
-  {:else if water.pending?.waited}
+  {:else if water.pending}
     <SavingDrop />
   {:else if tab !== 'trips'}
     {#if explained}

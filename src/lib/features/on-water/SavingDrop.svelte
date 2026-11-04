@@ -25,5 +25,5 @@
       Saving drop
     </h2>
   </div>
-  <p class="text-[17px]">Position found. Saving it now.</p>
+  <p class="text-[17px]">Saving it now.</p>
 </section>

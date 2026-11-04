@@ -107,7 +107,7 @@ test('Position ready lasts 5 seconds from each fix, is rechecked on resume, then
   await expect.poll(() => gettingPositionShown(page)).toBe(1);
 });
 
-test('once a fix arrives, Cancel and Save without position give way to saving feedback until the drop is saved', async ({
+test('once a fix arrives, Cancel and Save without position give way to saving feedback until the drop is saved, and a drop with a fresh fix gets the same feedback', async ({
   page
 }) => {
   await holdFixes(page);
@@ -134,6 +134,25 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
   await releaseStorage(page);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
+
+  await deliverFix(page, MADE_UP_SEA);
+  await expect(page.getByText('Position ready')).toBeVisible();
+  await holdStorage(page);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+
+  await expect(
+    page.getByRole('heading', { name: 'Saving drop' })
+  ).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Drop pot' })).toHaveCount(0);
+  await expect(toastOf(page)).not.toContainText('Pot 2');
+
+  await releaseStorage(page);
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await expect(
+    page.getByRole('main').getByRole('listitem').filter({ hasText: 'Pot' })
+  ).toHaveCount(2);
 });
 
 type Watching = { hidden: boolean; active: number[]; most: number };
