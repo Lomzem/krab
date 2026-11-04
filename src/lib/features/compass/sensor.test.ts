@@ -15,10 +15,12 @@ type Permission =
 
 const browser = ({
   visibility = 'visible',
-  permission = { kind: 'answers', answer: 'granted' }
+  permission = { kind: 'answers', answer: 'granted' },
+  screenAngleDeg = 0
 }: {
   visibility?: DocumentVisibilityState;
   permission?: Permission;
+  screenAngleDeg?: number;
 } = {}) => {
   const world = { asked: 0 };
   const page = Object.assign(new EventTarget(), {
@@ -27,7 +29,7 @@ const browser = ({
   const phone = new EventTarget();
   vi.stubGlobal('document', page);
   vi.stubGlobal('window', phone);
-  vi.stubGlobal('screen', { orientation: { angle: 0 } });
+  vi.stubGlobal('screen', { orientation: { angle: screenAngleDeg } });
   if (permission.kind === 'answers' || permission.kind === 'rejects') {
     vi.stubGlobal('DeviceOrientationEvent', {
       requestPermission: () => {
@@ -159,29 +161,35 @@ test.each<{ how: string; permission: Permission; state: CompassState }>([
   }
 );
 
-test('a tap asks the phone for permission during the tap, and granted points by the compass', async () => {
-  const { world, orient } = browser();
-  let remembered = false;
-  const compass = new Compass({
-    sensor: deviceCompass,
-    choice: {
-      remembered: () => remembered,
-      remember: (on) => {
-        remembered = on;
-      }
-    },
-    position: () => NOAA_ARCTIC,
-    now: () => JAN_2025
-  });
-  const shown = shownBy(compass);
-  compass.toggle();
-  expect(world.asked).toBe(1);
-  await settle();
-  expect(remembered).toBe(true);
-  orient(90);
-  const state = shown();
-  expect(state.kind).toBe('usable');
-  if (state.kind !== 'usable') return;
-  expect(state.trueHeadingDeg).toBeCloseTo(90 + NOAA_ARCTIC_D_2025, 2);
-  compass.stop();
-});
+test.each([
+  { screenAngleDeg: 0, headingDeg: 90, expected: 90 + NOAA_ARCTIC_D_2025 },
+  { screenAngleDeg: 90, headingDeg: 270, expected: NOAA_ARCTIC_D_2025 }
+])(
+  'a tap asks the phone for permission during the tap, and granted points by the compass turned $screenAngleDeg° from portrait',
+  async ({ screenAngleDeg, headingDeg, expected }) => {
+    const { world, orient } = browser({ screenAngleDeg });
+    let remembered = false;
+    const compass = new Compass({
+      sensor: deviceCompass,
+      choice: {
+        remembered: () => remembered,
+        remember: (on) => {
+          remembered = on;
+        }
+      },
+      position: () => NOAA_ARCTIC,
+      now: () => JAN_2025
+    });
+    const shown = shownBy(compass);
+    compass.toggle();
+    expect(world.asked).toBe(1);
+    await settle();
+    expect(remembered).toBe(true);
+    orient(headingDeg);
+    const state = shown();
+    expect(state.kind).toBe('usable');
+    if (state.kind !== 'usable') return;
+    expect(state.trueHeadingDeg).toBeCloseTo(expected, 2);
+    compass.stop();
+  }
+);
