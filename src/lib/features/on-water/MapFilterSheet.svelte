@@ -41,7 +41,9 @@
   {/snippet}
 
   <p class="text-[17px] text-muted-foreground">
-    Gear in the water always shows.
+    {multiDay
+      ? 'Gear in the water always shows for the days you pick.'
+      : 'Gear in the water always shows.'}
   </p>
 
   <fieldset class="mt-4">

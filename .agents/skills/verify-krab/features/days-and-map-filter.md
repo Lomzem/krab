@@ -12,7 +12,7 @@ An overnight trip stays one trip. Each drop belongs to the phone's local calenda
 - Day marker shapes cycle circle, square, diamond, hexagon as outlines; the text carries the number. Colour never carries the day.
 - One-day trips look as before: no day text, no grouping, no Days section.
 - The Filter button sits at the top left of the map during a trip, and also when past trips exist without a running trip, and opens the "Map filter" sheet. Its name reads "Filter, showing …" with the current choices.
-  - "Gear in the water always shows."
+  - "Gear in the water always shows." On a multi-day trip it reads "Gear in the water always shows for the days you pick."
   - "Also show": the checkboxes Collected gear and Time in the water, both on by default. Collected gear draws collected drops that have a position as dashed, muted pins under gear in the water. Time in the water hides only the labels under pins.
   - "Days on this trip" (multi-day trips only): the radios Today, Earlier days and All, default All. On a one-day trip the map always shows all days.
   - Done closes the sheet. Every choice is a 44 px target.
