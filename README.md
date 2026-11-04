@@ -4,7 +4,7 @@ A client-rendered SvelteKit app for keeping track of crab pots and nets on the w
 
 ## Setup
 
-Install [Bun](https://bun.sh/docs/installation) **1.4.4** and Node.js **26.13.0** (recorded in `.node-version`). Bun manages packages and developer commands; the tooling also invokes Node. SvelteKit requires Node >=22.17.0. No environment file, cloud account, API key, or service credentials are needed.
+Install [Bun](https://bun.sh/docs/installation) **1.4.4** and Node.js **26.13.0** (recorded in `.node-version`). Bun manages packages and developer commands; the tooling also invokes Node. The minimum is Node >=22.18.0: SvelteKit needs 22.17.0, and the verification helpers run TypeScript files directly with `node`, which Node 22 does by default from 22.18.0. No environment file, cloud account, API key, or service credentials are needed.
 
 From a fresh checkout:
 
