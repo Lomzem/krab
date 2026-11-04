@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 import { expect, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import {
@@ -147,15 +147,18 @@ test('on the Street map, panning, every map control, Show on map and reload send
   expectNoPositionIn(requested);
 });
 
+const CORS = { 'access-control-allow-origin': '*' };
+
+const reconnect = async (context: BrowserContext) => {
+  await context.setOffline(true);
+  await context.setOffline(false);
+};
+
 test('without signal the Map tab says so while the toast still expires, still shows gear and my position, keeps saying so through reconnects that load nothing, and clears once a map tile arrives', async ({
   context,
   page,
   providers
 }) => {
-  const reconnect = async () => {
-    await context.setOffline(true);
-    await context.setOffline(false);
-  };
   providers.cutOff();
   await dropPotAndOpenMap(page);
 
@@ -171,11 +174,11 @@ test('without signal the Map tab says so while the toast still expires, still sh
   await expectAccessibleInBothThemes(page);
 
   providers.hold();
-  await reconnect();
+  await reconnect(context);
   await expect.poll(() => providers.held()).toBeGreaterThan(0);
   await expect(notice).toBeVisible();
   const firstAttempt = providers.held();
-  await reconnect();
+  await reconnect(context);
   await expect.poll(() => providers.held()).toBeGreaterThan(firstAttempt);
   await expect(notice).toBeVisible();
 
@@ -188,18 +191,58 @@ const streetMapButton = (page: Page) =>
   mapArea(page).getByRole('button', { name: 'Street map' });
 const noSignal = (page: Page) =>
   mapArea(page).getByRole('status').filter({ hasText: 'No signal' });
+const notAnswering = (page: Page) =>
+  mapArea(page)
+    .getByRole('status')
+    .filter({ hasText: "The map service isn't answering" });
 
-test('a Street style the map cannot use falls back to the plain map with the warning, gear still shown and no page error', async ({
+test('when NOAA answers map tiles busy or failing, the Map tab says the map service is not answering rather than no signal, still shows gear and clears once a map tile arrives', async ({
+  context,
+  page
+}) => {
+  let failWith: number | null = null;
+  await context.route(CHART_TILE, async (route) => {
+    if (failWith === null) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ status: failWith, headers: CORS });
+  });
+  await dropPotAndOpenMap(page);
+
+  for (const status of [429, 503]) {
+    failWith = status;
+    await reconnect(context);
+    await expect(notAnswering(page)).toBeVisible();
+    await expect(noSignal(page)).toHaveCount(0);
+    await expect(potOnMap(page)).toBeVisible();
+    await expect(myPosition(page)).toBeVisible();
+    failWith = null;
+    await reconnect(context);
+    await expect(notAnswering(page)).toBeHidden();
+  }
+});
+
+test('a Street style the map service refuses or the map cannot use falls back to the plain map saying the service is not answering, gear still shown and no page error', async ({
+  context,
   page,
   providers
 }) => {
   const errors: Error[] = [];
   page.on('pageerror', (error) => errors.push(error));
+  let refuseStyle = false;
+  await context.route(`${OPEN_FREE_MAP}styles/**`, async (route) => {
+    if (!refuseStyle) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ status: 503, headers: CORS });
+  });
   const streetMap = streetMapButton(page);
   await dropPotAndOpenMap(page);
-  await expect(noSignal(page)).toBeHidden();
+  await expect(notAnswering(page)).toBeHidden();
 
-  for (const unusable of [
+  const unusable = [
     {
       version: 8,
       sources: null,
@@ -216,16 +259,27 @@ test('a Street style the map cannot use falls back to the plain map with the war
       },
       layers: [{ id: 'street', type: 'no-such-layer', source: 'street' }]
     }
-  ]) {
-    providers.serve(unusable);
+  ];
+  const failures = [
+    ...unusable.map((style) => () => {
+      providers.serve(style);
+    }),
+    () => {
+      refuseStyle = true;
+    }
+  ];
+  for (const fail of failures) {
+    fail();
     await streetMap.click();
     await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
-    await expect(noSignal(page)).toBeVisible();
+    await expect(notAnswering(page)).toBeVisible();
+    await expect(noSignal(page)).toHaveCount(0);
     await expect(potOnMap(page)).toBeVisible();
     await expect(myPosition(page)).toBeVisible();
+    refuseStyle = false;
     providers.serve();
     await streetMap.click();
-    await expect(noSignal(page)).toBeHidden();
+    await expect(notAnswering(page)).toBeHidden();
   }
   expect(errors).toEqual([]);
 });

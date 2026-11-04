@@ -17,10 +17,11 @@
     ACCURACY_SOURCE,
     baseStyle,
     isOverlay,
-    lostConnection,
     noBaseStyle,
+    tileOutage,
     type Accuracy,
-    type Base
+    type Base,
+    type Outage
   } from './base-style';
   import { chartTileUrl } from './chart-tiles';
   import type { Camera, MapPlace, MyPosition } from './types';
@@ -34,6 +35,12 @@
   const MAX_ZOOM = 19;
   const MIN_ZOOM = 0;
   const FIT_PADDING = 64;
+  const OUTAGE_NOTICE: Record<Outage, string> = {
+    'no-signal':
+      "No signal, so the map can't load. Your gear and position still show.",
+    'not-answering':
+      "The map service isn't answering, so the map can't load. Your gear and position still show."
+  };
 
   let {
     base = $bindable('chart'),
@@ -61,7 +68,7 @@
   let map: MapLibre | null = null;
   let ready = $state(false);
   let failed = $state(false);
-  let availability = $state<'loading' | 'available' | 'unavailable'>('loading');
+  let availability = $state<'available' | Outage>('available');
   let generation = 0;
   let request: AbortController | null = null;
   let awaitingStyle = false;
@@ -115,7 +122,6 @@
     const current = startGeneration();
     const loading = new AbortController();
     request = loading;
-    if (availability === 'available') availability = 'loading';
     const next = await baseStyle(wanted, latest, loading.signal);
     if (!map || current !== generation) return;
     request = null;
@@ -124,13 +130,13 @@
     baseSources = new Set(
       Object.keys(next.style.sources).filter((id) => !isOverlay(id))
     );
-    if (!next.reachable) availability = 'unavailable';
+    if (next.outage) availability = next.outage;
   };
 
   const fallBack = () => {
     startGeneration();
     map?.setStyle(noBaseStyle(latest), { diff: false });
-    availability = 'unavailable';
+    availability = 'not-answering';
   };
 
   const fromBase = (sourceId: unknown) =>
@@ -205,9 +211,8 @@
         fallBack();
         return;
       }
-      if (fromBase(sourceId) && lostConnection(event.error)) {
-        availability = 'unavailable';
-      }
+      const outage = fromBase(sourceId) ? tileOutage(event.error) : null;
+      if (outage) availability = outage;
     });
     created.on('data', (event) => {
       if (
@@ -357,13 +362,13 @@
       class="absolute inset-x-3 top-3 z-1 grid gap-2"
       style:pointer-events="none"
     >
-      {#if availability === 'unavailable'}
+      {#if availability !== 'available'}
         <p
           class="w-full rounded-control border border-border bg-card px-4 py-3 text-[17px] text-foreground shadow"
           role="status"
           style:pointer-events="auto"
         >
-          No signal, so the map can't load. Your gear and position still show.
+          {OUTAGE_NOTICE[availability]}
         </p>
       {/if}
       <div class="flex items-start justify-between gap-2">

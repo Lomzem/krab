@@ -10,7 +10,7 @@ Find gear still in the water on a north-up chart map or in the Gear list. The Ma
 - Nearest-gear card above the map: "Nearest gear: <name>" with distance and direction.
 - Buttons, so dragging is never needed: Street map (toggle), Zoom in, Zoom out (unavailable at the limits), and Centre on my position (Show all gear when there is no fix).
 - Tapping gear on the map opens its gear sheet without Show on map. Show on map appears in a sheet opened from the Gear list, switches to the Map tab and focuses that gear.
-- No signal: "No signal, so the map can't load. Your gear and position still show." Gear and position still render. The notice clears when the phone comes back online.
+- Map notices. When base tiles or the Street style fail with a connection error: "No signal, so the map can't load. Your gear and position still show." When the map service answers base tiles busy or failing (HTTP 429 or 5xx), or refuses or sends an unusable Street style: "The map service isn't answering, so the map can't load. Your gear and position still show." Missing tiles (404) show no notice. Gear and position still render either way, and the notice clears once a map tile arrives.
 - Chart zoom is capped at XYZ z16, which is NOAA service level 14. The map overscales beyond that, up to z19.
 
 ## How to get to it (user POV)
@@ -41,9 +41,9 @@ Open Krab. The Map tab is the first tab. Turn on location and drop a pot or net;
 ## Gotchas
 
 - MapLibre's unlayered `.maplibregl-map { position: relative }` beats Tailwind's layered utilities. Keep the map container `size-full` inside a separately positioned wrapper, or it collapses to 0 px, which hides the chart and makes gear untappable even though Playwright reports it visible.
-- The Map tab is the default, so the map is mounted before any fix exists. The No signal notice is a second status region beside the toast; check toasts with `toastOf(page)` from `e2e/fixtures.ts` (the group inside the status region named `Messages`) rather than any `role="status"`.
+- The Map tab is the default, so the map is mounted before any fix exists. The map notice (No signal or not answering) is a second status region beside the toast; check toasts with `toastOf(page)` from `e2e/fixtures.ts` (the group inside the status region named `Messages`) rather than any `role="status"`.
 - MapLibre's canvas is a region named "Map view"; the tab's region is "Map". Use `exact: true`.
 - Rapid Zoom in presses interrupt each other's animation and never reach the limit. Press once and wait for the button to become unavailable before pressing again.
 - Both journeys use the real network: NOAA and OpenFreeMap must be reachable from the container. Mid-ocean NOAA tiles are blank (no coverage), so the chart looks like plain sea at `MADE_UP_SEA`.
 - Page JavaScript cannot read `Access-Control-Allow-Origin`. A successful `getImageData` on a `mode: 'cors'` fetch is the WebGL-relevant CORS proof.
-- Course and rough labels, the zoom cap, privacy and no signal are owned by `e2e/chart-map.test.ts` with routed tiles. This recipe gathers evidence and does not replace that proof.
+- Course and rough labels, the zoom cap, privacy and both map notices are owned by `e2e/chart-map.test.ts` with routed tiles. This recipe gathers evidence and does not replace that proof.

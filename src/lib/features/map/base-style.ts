@@ -67,15 +67,12 @@ const withOverlays = (
   layers: [...layers, ...overlayLayers]
 });
 
-export type BaseStyle = { style: StyleSpecification; reachable: boolean };
+export type Outage = 'no-signal' | 'not-answering';
+
+export type BaseStyle = { style: StyleSpecification; outage: Outage | null };
 
 export const noBaseStyle = (accuracy: Accuracy) =>
   withOverlays({}, [background], accuracy);
-
-const offline = (accuracy: Accuracy): BaseStyle => ({
-  style: noBaseStyle(accuracy),
-  reachable: false
-});
 
 const isStyle = (value: unknown): value is StyleSpecification =>
   typeof value === 'object' &&
@@ -87,35 +84,48 @@ const isStyle = (value: unknown): value is StyleSpecification =>
   Array.isArray(value.layers);
 
 const fetchStreetStyle = (signal: AbortSignal) =>
-  Effect.tryPromise(async () => {
-    const response = await fetch(STREET_STYLE, { signal });
-    const remote: unknown = response.ok ? await response.json() : null;
-    return remote;
+  Effect.tryPromise({
+    try: async () => {
+      const response = await fetch(STREET_STYLE, { signal });
+      return response.ok ? await response.text() : null;
+    },
+    catch: (): Outage => 'no-signal'
   });
+
+const usableStyle = (body: string | null) =>
+  body === null
+    ? Effect.fail<Outage>('not-answering')
+    : Effect.filterOrFail(
+        Effect.try({
+          try: (): unknown => JSON.parse(body),
+          catch: (): Outage => 'not-answering'
+        }),
+        isStyle,
+        (): Outage => 'not-answering'
+      );
 
 const streetStyle = (
   accuracy: Accuracy,
   signal: AbortSignal
 ): Promise<BaseStyle> =>
   Effect.runPromise(
-    Effect.orElseSucceed(
-      Effect.map(fetchStreetStyle(signal), (remote): BaseStyle => {
-        if (!isStyle(remote)) return offline(accuracy);
-        const { sources, layers, ...rest } = remote;
-        return {
-          style: withOverlays(sources, [background, ...layers], accuracy, rest),
-          reachable: true
-        };
+    Effect.match(Effect.flatMap(fetchStreetStyle(signal), usableStyle), {
+      onFailure: (outage): BaseStyle => ({
+        style: noBaseStyle(accuracy),
+        outage
       }),
-      () => offline(accuracy)
-    )
+      onSuccess: ({ sources, layers, ...rest }): BaseStyle => ({
+        style: withOverlays(sources, [background, ...layers], accuracy, rest),
+        outage: null
+      })
+    })
   );
 
 export const baseStyle = (
   base: Base,
   accuracy: Accuracy,
   signal: AbortSignal
-) =>
+): Promise<BaseStyle> =>
   base === 'chart'
     ? Promise.resolve({
         style: withOverlays(
@@ -123,14 +133,21 @@ export const baseStyle = (
           [background, { id: 'chart', type: 'raster', source: 'chart' }],
           accuracy
         ),
-        reachable: true
+        outage: null
       })
     : streetStyle(accuracy, signal);
 
 export const isOverlay = (sourceId: string) => sourceId === ACCURACY_SOURCE;
 
-export const lostConnection = (error: unknown) => {
-  if (typeof error !== 'object' || error === null) return false;
-  if ('name' in error && error.name === 'AbortError') return false;
-  return !('status' in error) || error.status === 0;
+const BUSY = 429;
+
+export const tileOutage = (error: unknown): Outage | null => {
+  if (typeof error !== 'object' || error === null) return null;
+  if ('name' in error && error.name === 'AbortError') return null;
+  if (!('status' in error) || error.status === 0) return 'no-signal';
+  const { status } = error;
+  return typeof status === 'number' &&
+    (status === BUSY || (status >= 500 && status <= 599))
+    ? 'not-answering'
+    : null;
 };
