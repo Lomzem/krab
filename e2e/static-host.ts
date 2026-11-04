@@ -26,10 +26,20 @@ const read = (root: string, pathname: string) => {
   );
 };
 
-const listen = (root: string, port: number) =>
+const listen = (
+  root: string,
+  port: number,
+  redirects: Record<string, string>
+) =>
   new Promise<Server>((resolve) => {
     const server = createServer((request, response) => {
       const { pathname } = new URL(request.url ?? '/', 'http://site');
+      const location = redirects[pathname];
+      if (location) {
+        response.writeHead(302, { location, 'cache-control': 'no-cache' });
+        response.end();
+        return;
+      }
       void read(root, pathname).then(({ body, type }) => {
         response.writeHead(200, {
           'content-type': type,
@@ -57,7 +67,7 @@ const stop = (server: Server | null) =>
 
 export type Site = {
   origin: string;
-  deploy: (build: string) => Promise<void>;
+  deploy: (build: string, redirects?: Record<string, string>) => Promise<void>;
   takeDown: () => Promise<void>;
 };
 
@@ -70,9 +80,9 @@ export const siteAt = (port: number): Site => {
   return {
     origin: `http://127.0.0.1:${String(port)}/`,
     takeDown,
-    deploy: async (build) => {
+    deploy: async (build, redirects = {}) => {
       await takeDown();
-      server = await listen(build, port);
+      server = await listen(build, port, redirects);
     }
   };
 };
