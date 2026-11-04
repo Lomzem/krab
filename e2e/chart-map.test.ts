@@ -82,7 +82,7 @@ test('the Map tab shows gear and my position from the phone and asks NOAA only f
   expectNoPositionIn(requested);
 });
 
-test('on the Street map, panning, zooming, Show on map and reload send no position to OpenFreeMap', async ({
+test('on the Street map, panning, every map control, Show on map and reload send no position to OpenFreeMap', async ({
   context,
   page
 }) => {
@@ -112,6 +112,22 @@ test('on the Street map, panning, zooming, Show on map and reload send no positi
   }
   await mapArea(page).getByRole('button', { name: 'Zoom out' }).click();
   await mapArea(page).getByRole('button', { name: 'Zoom in' }).click();
+  await mapArea(page)
+    .getByRole('button', { name: 'Centre on my position' })
+    .click();
+  const sheet = page.getByRole('dialog');
+  await mapArea(page)
+    .getByRole('button', { name: /^Filter/ })
+    .click();
+  await expect(
+    sheet.getByRole('heading', { name: 'Map filter' })
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await potOnMap(page).click();
+  await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
 
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await page
@@ -119,10 +135,7 @@ test('on the Street map, panning, zooming, Show on map and reload send no positi
     .getByRole('button')
     .filter({ hasText: 'Pot 1' })
     .click();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Show on map' })
-    .click();
+  await sheet.getByRole('button', { name: 'Show on map' }).click();
   await expect(potOnMap(page)).toBeFocused();
   await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
 
