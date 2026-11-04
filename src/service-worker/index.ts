@@ -27,10 +27,11 @@ const fits = (path: string, response: Response) =>
   isHtml(response) === (path === SHELL);
 
 const store = (cache: Cache, path: string) =>
-  fetch(new Request(path, { cache: 'no-cache' })).then((response) =>
-    fits(path, response)
-      ? cache.put(path, response)
-      : Promise.reject(new Error(`Unexpected response for ${path}`))
+  fetch(new Request(path, { cache: 'no-cache', redirect: 'error' })).then(
+    (response) =>
+      fits(path, response)
+        ? cache.put(path, response)
+        : Promise.reject(new Error(`Unexpected response for ${path}`))
   );
 
 const precache = () =>
