@@ -438,12 +438,16 @@ test('a pin under the Filter control never takes its tap: Filter still opens the
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
 
   const pot2 = mapArea(page).getByRole('button', { name: /^Pot 2,/ });
-  const pin = await centreOf(pot2);
-  const tap = await centreOf(filterButton);
-  expect(
-    Math.max(Math.abs(pin.x - tap.x), Math.abs(pin.y - tap.y)),
-    'Pot 2 sits under the centre of Filter'
-  ).toBeLessThan(MIN_PIN_PX / 2);
+  await expect
+    .poll(
+      async () => {
+        const pin = await centreOf(pot2);
+        const tap = await centreOf(filterButton);
+        return Math.max(Math.abs(pin.x - tap.x), Math.abs(pin.y - tap.y));
+      },
+      { message: 'Pot 2 sits under the centre of Filter' }
+    )
+    .toBeLessThan(MIN_PIN_PX / 2);
 
   await filterButton.click({ timeout: 5000 });
   await expect(
