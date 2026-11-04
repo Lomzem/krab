@@ -107,20 +107,22 @@ test('Position ready lasts 5 seconds from each fix, is rechecked on resume, then
   await expect.poll(() => gettingPositionShown(page)).toBe(1);
 });
 
-test('once a fix arrives, Cancel and Save without position give way to saving feedback until the drop is saved, and a drop with a fresh fix gets the same feedback', async ({
+test('once a fix arrives, Cancel and Save without position give way to saving feedback at once, until the drop is saved', async ({
   page
 }) => {
   await holdFixes(page);
+  await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding your position')).toBeVisible();
+  await page.clock.pauseAt(PAUSED);
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(
     page.getByRole('heading', { name: 'Getting position' })
   ).toBeFocused();
 
   await holdStorage(page);
-  await deliverFix(page, MADE_UP_SEA);
+  await deliverFix(page, MADE_UP_SEA, PAUSED);
 
   await expect(
     page.getByRole('heading', { name: 'Saving drop' })
@@ -134,25 +136,60 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
   await releaseStorage(page);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
+});
 
-  await deliverFix(page, MADE_UP_SEA);
+test('a drop with a fresh fix shows saving feedback only once saving has taken half a second, and a quick save leaves focus where it is', async ({
+  page
+}) => {
+  await holdFixes(page);
+  await page.clock.install({ time: START });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding your position')).toBeVisible();
+  await page.clock.pauseAt(PAUSED);
+  await deliverFix(page, MADE_UP_SEA, PAUSED);
   await expect(page.getByText('Position ready')).toBeVisible();
+  const dropPot = page.getByRole('button', { name: 'Drop pot' });
+  const saving = page.getByRole('heading', { name: 'Saving drop' });
+
   await holdStorage(page);
-  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await dropPot.focus();
+  await page.keyboard.press('Enter');
+  await page.clock.runFor(499);
+  await expect(saving).toHaveCount(0);
+  await releaseStorage(page);
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.clock.runFor(1000);
+  await expect(saving).toHaveCount(0);
+  await expect(dropPot).toBeFocused();
 
-  await expect(
-    page.getByRole('heading', { name: 'Saving drop' })
-  ).toBeFocused();
-  await expect(page.getByRole('button', { name: 'Drop pot' })).toHaveCount(0);
-  await expect(toastOf(page)).not.toContainText('Pot 2');
-
+  const gearTab = page.getByRole('button', { name: 'Gear', exact: true });
+  await holdStorage(page);
+  await page.keyboard.press('Enter');
+  await gearTab.focus();
   await releaseStorage(page);
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
-  await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.clock.runFor(1000);
+  await expect(gearTab).toBeFocused();
+
+  await dropPot.focus();
+  await holdStorage(page);
+  await page.keyboard.press('Enter');
+  await page.clock.runFor(499);
+  await expect(saving).toHaveCount(0);
+  await expect(dropPot).toBeFocused();
+  await page.clock.runFor(1);
+  await expect(saving).toBeFocused();
+  await expect(dropPot).toHaveCount(0);
+  await expect(toastOf(page)).not.toContainText('Pot 3');
+
+  await releaseStorage(page);
+  await expect(toastOf(page)).toContainText('Pot 3 dropped');
+  await expect(dropPot).toBeFocused();
+  await gearTab.click();
   await expect(
     page.getByRole('main').getByRole('listitem').filter({ hasText: 'Pot' })
-  ).toHaveCount(2);
+  ).toHaveCount(3);
 });
 
 type Watching = { hidden: boolean; active: number[]; most: number };

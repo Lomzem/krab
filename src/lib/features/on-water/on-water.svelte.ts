@@ -54,6 +54,7 @@ export type PendingDrop = {
   kind: Kind;
   attempt: DropAttempt;
   phase: DropPhase;
+  waited: boolean;
 };
 
 export type Load = 'opening' | 'ready' | 'failed';
@@ -157,9 +158,10 @@ export class OnWater {
   async #place(target: DropTarget, kind: Kind) {
     if (this.pending) return false;
     const attempt = this.#book.placeDrop(target);
-    this.pending = { kind, attempt, phase: attempt.phase() };
+    const waited = attempt.phase() === 'acquiring';
+    this.pending = { kind, attempt, phase: attempt.phase(), waited };
     const unfollow = attempt.subscribe(() => {
-      this.pending = { kind, attempt, phase: attempt.phase() };
+      this.pending = { kind, attempt, phase: attempt.phase(), waited };
     });
     const outcome = await Effect.runPromise(Effect.result(attempt.result));
     unfollow();

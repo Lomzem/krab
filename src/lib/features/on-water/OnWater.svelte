@@ -13,6 +13,7 @@
     canUndoCollect,
     gearInWater,
     type Drop,
+    type DropAttempt,
     type DropEdit,
     type Kind
   } from '#lib/features/trip/index.js';
@@ -50,6 +51,7 @@
   import UndoToast from './UndoToast.svelte';
 
   const TICK_MS = 15_000;
+  const SAVING_SHOWN_AFTER_MS = 500;
   const TRIP_LOAD_FAILED = "Couldn't load your trip.";
 
   const watch = new PositionWatch();
@@ -81,6 +83,13 @@
   let pastShow = $state<string | null>(null);
   let pastShowNext: string | null = null;
   let toastCovers = $state(0);
+  let slowAttempt = $state.raw<DropAttempt | null>(null);
+  let dropReplaced = false;
+  const savingAttempt = $derived(water.pending?.attempt ?? null);
+  const savingShown = $derived(
+    water.pending !== null &&
+      (water.pending.waited || slowAttempt === water.pending.attempt)
+  );
   const listClearance = $derived(
     tab === 'map' ? undefined : `${String(toastCovers)}px`
   );
@@ -116,6 +125,22 @@
   });
 
   $effect(() => {
+    const attempt = savingAttempt;
+    if (!attempt) return;
+    const timer = setTimeout(() => {
+      slowAttempt = attempt;
+    }, SAVING_SHOWN_AFTER_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  });
+
+  $effect(() => {
+    if (water.pending?.phase === 'acquiring' || savingShown)
+      dropReplaced = true;
+  });
+
+  $effect(() => {
     if (!explained) return;
     watch.start();
     return () => {
@@ -146,7 +171,8 @@
   };
 
   const focusDropAfterSave = async (saved: boolean) => {
-    if (!saved) return;
+    if (!saved || !dropReplaced) return;
+    dropReplaced = false;
     await tick();
     dropButton?.focus();
   };
@@ -447,7 +473,7 @@
       oncancel={attempt.cancel}
       onskip={attempt.saveWithoutPosition}
     />
-  {:else if water.pending}
+  {:else if savingShown}
     <SavingDrop />
   {:else if tab !== 'trips'}
     {#if explained}
