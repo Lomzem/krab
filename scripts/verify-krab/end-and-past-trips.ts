@@ -108,26 +108,39 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   );
   await capture('03-ended');
 
-  await mapArea.getByRole('button', { name: /^Filter/ }).click();
-  await sheet
+  const pastLayer = sheet
     .getByRole('group', { name: 'Also show' })
-    .getByRole('checkbox', { name: 'Past trips' })
-    .check();
-  await sheet.getByRole('button', { name: 'Done' }).click();
-  await expect(sheet).toBeHidden();
-  await expect(
+    .getByRole('checkbox', { name: 'Past trips' });
+  const pastPins = [
     mapArea.getByRole('button', {
       name: `Pot 1, past trip, ${TRIP_DATE}, 2 kept, 0 released`
-    })
-  ).toBeVisible();
-  await expect(
+    }),
     mapArea.getByRole('button', {
       name: `Net 1, past trip, ${TRIP_DATE}, Uncollected`
     })
+  ];
+  const showPastLayer = async (on: boolean) => {
+    await mapArea.getByRole('button', { name: /^Filter/ }).click();
+    await pastLayer.setChecked(on);
+    await sheet.getByRole('button', { name: 'Done' }).click();
+    await expect(sheet).toBeHidden();
+    for (const pin of pastPins) await expect(pin).toHaveCount(on ? 1 : 0);
+  };
+  await expect(
+    mapArea.getByRole('img', { name: /^Your position/ })
   ).toBeVisible();
+  for (const pin of pastPins) await expect(pin).toHaveCount(0);
+  await mapArea.getByRole('button', { name: /^Filter/ }).click();
+  await expect(pastLayer).not.toBeChecked();
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(sheet).toBeHidden();
+  await showPastLayer(true);
+  await showPastLayer(false);
+  await showPastLayer(true);
+  for (const pin of pastPins) await expect(pin).toBeVisible();
   keep('indexeddb-after.json', await readTrips(page));
   log(
-    'with no trip running, Filter offers Past trips; ticking it shows dotted Pot 1 and Net 1 pins named for the past trip'
+    'with no trip running and own position drawn, the past pins are absent and Past trips is unticked; ticking it shows dotted Pot 1 and Net 1 pins named for the past trip, unticking hides them, ticking again shows them'
   );
   await capture('04-past-layer');
 });

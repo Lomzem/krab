@@ -320,6 +320,7 @@
     {:else if water.ready}
       <PastTrips
         past={water.past}
+        failed={water.pastFailed}
         bind:selected={pastTripId}
         bind:titleHeading={pastHeading}
         show={pastShow}
@@ -330,6 +331,7 @@
           sheet = { dropId, from, opener };
         }}
         ondelete={(tripId: string) => water.deleteTrip(tripId)}
+        onretry={() => water.retryPast()}
       />
     {/if}
   </main>

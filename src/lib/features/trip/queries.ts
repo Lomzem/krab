@@ -195,29 +195,29 @@ const latestDrop = (trip: Trip) =>
 const earliestDrop = (trip: Trip) =>
   Math.min(...trip.drops.map((drop) => drop.placedAt));
 
-const fullDate = new Intl.DateTimeFormat('en-US', {
+const FULL_DATE: Intl.DateTimeFormatOptions = {
   weekday: 'long',
   month: 'long',
   day: 'numeric',
   year: 'numeric'
-});
+};
 
-const dateInYear = new Intl.DateTimeFormat('en-US', {
+const DATE_IN_YEAR: Intl.DateTimeFormatOptions = {
   weekday: 'long',
   month: 'long',
   day: 'numeric'
-});
+};
 
 export const tripDates = (trip: Trip) => {
   const first = new Date(earliestDrop(trip));
   const last = new Date(latestDrop(trip));
   if (localDate(first.getTime()) === localDate(last.getTime())) {
-    return fullDate.format(first);
+    return first.toLocaleDateString('en-US', FULL_DATE);
   }
   if (first.getFullYear() === last.getFullYear()) {
-    return `${dateInYear.format(first)} to ${fullDate.format(last)}`;
+    return `${first.toLocaleDateString('en-US', DATE_IN_YEAR)} to ${last.toLocaleDateString('en-US', FULL_DATE)}`;
   }
-  return `${fullDate.format(first)} to ${fullDate.format(last)}`;
+  return `${first.toLocaleDateString('en-US', FULL_DATE)} to ${last.toLocaleDateString('en-US', FULL_DATE)}`;
 };
 
 export const pastTripCounts = (trip: Trip) => {

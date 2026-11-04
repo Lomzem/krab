@@ -24,25 +24,30 @@
 
   let {
     past,
+    failed,
     selected = $bindable(null),
     titleHeading = $bindable(),
     show,
     onshown,
     onopen,
-    ondelete
+    ondelete,
+    onretry
   }: {
     past: readonly Trip[];
+    failed: boolean;
     selected?: string | null;
     titleHeading?: HTMLHeadingElement;
     show: string | null;
     onshown: () => void;
     onopen: (dropId: string, opener: HTMLElement, from: 'list' | 'map') => void;
     ondelete: (tripId: string) => Promise<boolean>;
+    onretry: () => Promise<void>;
   } = $props();
 
   let selection = $state<PastDaySelection>('all');
   let deleteOpen = $state(false);
   let deleting = $state(false);
+  let retrying = $state(false);
   let deleteButton = $state<HTMLButtonElement>();
   let list = $state<HTMLUListElement>();
 
@@ -100,6 +105,13 @@
     const deleted = await ondelete(trip.id);
     deleting = false;
     if (deleted) deleteOpen = false;
+  };
+
+  const retry = async () => {
+    if (retrying) return;
+    retrying = true;
+    await onretry();
+    retrying = false;
   };
 
   const pinLabel = (row: PastDropRow) =>
@@ -265,8 +277,21 @@
     >
       Past trips
     </h1>
+    {#if failed}
+      <div class="flex flex-col items-start gap-3 px-4 pb-4">
+        <p class="text-[17px]">Couldn't load past trips.</p>
+        <button
+          type="button"
+          class="min-h-12 rounded-control border-2 border-primary px-5 text-[17px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+          aria-disabled={retrying}
+          onclick={() => void retry()}>Retry</button
+        >
+      </div>
+    {/if}
     {#if past.length === 0}
-      <p class="px-4 text-[17px]">No past trips yet.</p>
+      {#if !failed}
+        <p class="px-4 text-[17px]">No past trips yet.</p>
+      {/if}
     {:else}
       <ul bind:this={list} class="border-t border-border bg-card">
         {#each past as item (item.id)}
