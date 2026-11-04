@@ -69,6 +69,14 @@ const watched = () => {
   return { heard, stop };
 };
 
+const shownBy = (compass: Compass) => {
+  let delivered: CompassState = { kind: 'off' };
+  compass.subscribe((state) => {
+    delivered = state;
+  });
+  return () => delivered;
+};
+
 const settle = () =>
   new Promise((resolve) => {
     setTimeout(resolve, 0);
@@ -143,10 +151,11 @@ test.each<{ how: string; permission: Permission; state: CompassState }>([
       position: () => NOAA_ARCTIC,
       now: () => JAN_2025
     });
+    const shown = shownBy(compass);
     compass.toggle();
     await settle();
     orient(90);
-    expect(compass.state).toEqual(state);
+    expect(shown()).toEqual(state);
   }
 );
 
@@ -164,12 +173,13 @@ test('a tap asks the phone for permission during the tap, and granted points by 
     position: () => NOAA_ARCTIC,
     now: () => JAN_2025
   });
+  const shown = shownBy(compass);
   compass.toggle();
   expect(world.asked).toBe(1);
   await settle();
   expect(remembered).toBe(true);
   orient(90);
-  const { state } = compass;
+  const state = shown();
   expect(state.kind).toBe('usable');
   if (state.kind !== 'usable') return;
   expect(state.trueHeadingDeg).toBeCloseTo(90 + NOAA_ARCTIC_D_2025, 2);

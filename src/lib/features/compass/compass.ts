@@ -55,10 +55,6 @@ export class Compass {
     this.#needs = needs;
   }
 
-  get state() {
-    return this.#state;
-  }
-
   readonly subscribe = (run: (state: CompassState) => void) => {
     this.#runs = [...this.#runs, run];
     run(this.#state);
