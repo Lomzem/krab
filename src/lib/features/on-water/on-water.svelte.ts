@@ -1,5 +1,6 @@
 import { Effect, Exit, Result } from 'effect';
 import {
+  findDrop,
   pastOf,
   tripBook,
   type AnotherTripActive,
@@ -148,11 +149,9 @@ export class OnWater {
   }
 
   dropAgain(dropId: string) {
-    const drop = this.trip?.drops.find((item) => item.id === dropId);
-    const gear =
-      drop && this.trip?.gear.find((item) => item.id === drop.gearId);
-    if (!gear) return Promise.resolve(false);
-    return this.#place({ again: dropId }, gear.kind);
+    const found = this.trip && findDrop([this.trip], dropId);
+    if (!found) return Promise.resolve(false);
+    return this.#place({ again: dropId }, found.gear.kind);
   }
 
   async #place(target: DropTarget, kind: Kind) {

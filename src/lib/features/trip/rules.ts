@@ -67,12 +67,23 @@ export const dropCommand = (
 
 export type Placed = { trip: Trip; drop: Drop; gear: Gear; isNew: boolean };
 
+export type FoundDrop = { trip: Trip; drop: Drop; gear: Gear };
+
+export const findDrop = (
+  trips: readonly Trip[],
+  dropId: string
+): FoundDrop | null => {
+  for (const trip of trips) {
+    const drop = trip.drops.find((item) => item.id === dropId);
+    const gear = drop && trip.gear.find((item) => item.id === drop.gearId);
+    if (drop) return gear ? { trip, drop, gear } : null;
+  }
+  return null;
+};
+
 const recorded = (trips: readonly Trip[], dropId: string): Placed | null => {
-  const found = locateDrop(trips, dropId);
-  const gear = found?.trip.gear.find((item) => item.id === found.drop.gearId);
-  return found && gear
-    ? { trip: found.trip, drop: found.drop, gear, isNew: false }
-    : null;
+  const found = findDrop(trips, dropId);
+  return found && { ...found, isNew: false };
 };
 
 const isLatest = (trip: Trip, drop: Drop) =>
@@ -146,11 +157,11 @@ const placeAgain = (
   where: Located
 ): Result.Result<Placed, CannotDropAgain> => {
   const active = activeOf(trips);
-  const source = active && locateDrop([active], sourceId);
-  const gear = source?.trip.gear.find((item) => item.id === source.drop.gearId);
-  if (!source || !gear || !canDropAgain(source.trip, source.drop)) {
+  const source = active && findDrop([active], sourceId);
+  if (!source || !canDropAgain(source.trip, source.drop)) {
     return Result.fail(new CannotDropAgain({ dropId: sourceId }));
   }
+  const { gear } = source;
   const { label, bait, depthFt } = source.drop;
   const drop = newDrop(command, gear, where, { label, bait, depthFt });
   const trip = { ...source.trip, drops: [...source.trip.drops, drop] };
@@ -176,14 +187,6 @@ export const withoutDrop = (trip: Trip, dropId: string): Trip | null => {
     drops.some((drop) => drop.gearId === item.id)
   );
   return drops.length === 0 ? null : { ...trip, gear, drops };
-};
-
-export const locateDrop = (trips: readonly Trip[], dropId: string) => {
-  for (const trip of trips) {
-    const index = trip.drops.findIndex((drop) => drop.id === dropId);
-    if (index >= 0) return { trip, drop: trip.drops[index], index };
-  }
-  return null;
 };
 
 const badDepth = (depthFt: number | null): depthFt is number =>

@@ -26,7 +26,7 @@ import {
   editDrop,
   endTrip,
   gearName,
-  locateDrop,
+  findDrop,
   pastOf,
   restoreDrop,
   switchKind,
@@ -39,7 +39,7 @@ import {
   type Change,
   type TripStorage
 } from './storage';
-import type { DropTarget } from './rules';
+import type { DropTarget, FoundDrop } from './rules';
 import type { Deletion, DropEdit, Kind, Trip, TripDeps } from './types';
 
 export type {
@@ -79,10 +79,12 @@ export {
   canChangeKind,
   canDropAgain,
   canUndoCollect,
+  findDrop,
   gearName,
   KIND_NAMES,
   KINDS,
-  type DropTarget
+  type DropTarget,
+  type FoundDrop
 } from './rules';
 export { compassPoint } from './format';
 export { availability, type Availability } from './availability';
@@ -164,24 +166,16 @@ export type TripBook = {
   ) => Effect.Effect<void, TripNotEnded | StorageFailed>;
 };
 
-const dropIn = (trips: readonly Trip[], dropId: string) => {
-  const found = locateDrop(trips, dropId);
-  const gear = found?.trip.gear.find((item) => item.id === found.drop.gearId);
-  return found && gear ? { ...found, gear } : null;
-};
-
 const tripIn = (trips: readonly Trip[], tripId: string) =>
   trips.find((trip) => trip.id === tripId) ?? null;
 
 const activeDrop = (trips: readonly Trip[], dropId: string) => {
   const active = activeOf(trips);
-  return active ? dropIn([active], dropId) : null;
+  return active ? findDrop([active], dropId) : null;
 };
 
-type ActiveDrop = NonNullable<ReturnType<typeof activeDrop>>;
-
 const collection = (
-  found: ActiveDrop,
+  found: FoundDrop,
   changed: Trip | null
 ): Change<Collection> => {
   const name = gearName(found.gear);
@@ -219,7 +213,7 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
       NamedTrip,
       DropNotFound | InvalidDepth | InvalidCatch | NotCollected | KindLocked
     >((trips) => {
-      const found = dropIn(trips, dropId);
+      const found = findDrop(trips, dropId);
       if (!found) return Result.fail(new DropNotFound({ dropId }));
       const edited = Result.flatMap(
         editDrop(found.trip, found.drop, edit),
@@ -257,7 +251,7 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
     ),
   deleteDrop: (dropId) =>
     storage.readModifyWrite<DeletedDrop, DropNotFound>((trips) => {
-      const found = dropIn(trips, dropId);
+      const found = findDrop(trips, dropId);
       if (!found) return Result.fail(new DropNotFound({ dropId }));
       const deletion = deletionOf(found.trip, found.drop, found.gear);
       const trip = withoutDrop(found.trip, dropId);
