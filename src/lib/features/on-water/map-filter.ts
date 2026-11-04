@@ -7,12 +7,14 @@ import {
 
 export type MapFilter = {
   collected: boolean;
+  past: boolean;
   timeInWater: boolean;
   days: DaySelection;
 };
 
 export const DEFAULT_MAP_FILTER: MapFilter = {
   collected: true,
+  past: false,
   timeInWater: true,
   days: 'all'
 };

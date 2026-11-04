@@ -100,7 +100,11 @@
 </script>
 
 <form id={formId} class="grid gap-6" onsubmit={submit} novalidate>
-  {#if collectedAt === null}
+  {#if collectedAt === null && subject.trip.endedAt !== null}
+    <p class="text-[17px] font-semibold">
+      Uncollected. The trip ended with this gear in the water.
+    </p>
+  {:else if collectedAt === null}
     <div class="grid gap-3">
       <div class="flex min-h-11 items-center justify-between gap-3">
         <p class="text-[17px] text-muted-foreground">

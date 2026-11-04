@@ -102,7 +102,7 @@ const locksHeld = (page: Page) =>
     return { held: locks?.held, most: locks?.most };
   });
 
-test('a phone that keeps the screen on holds one lock during a trip and takes it again on return', async ({
+test('a phone that keeps the screen on holds one lock during a trip, takes it again on return and lets it go when the trip ends', async ({
   page
 }) => {
   await page.addInitScript(holdLocksLikeAPhone);
@@ -123,4 +123,12 @@ test('a phone that keeps the screen on holds one lock during a trip and takes it
   await expect.poll(() => locksHeld(page)).toEqual({ held: 1, most: 1 });
   await setHidden(page, false);
   await expect.poll(() => locksHeld(page)).toEqual({ held: 1, most: 1 });
+
+  await page.getByRole('button', { name: 'End trip' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'End trip' })
+    .click();
+  await expect(toastOf(page)).toContainText('Trip ended');
+  await expect.poll(() => locksHeld(page)).toEqual({ held: 0, most: 1 });
 });

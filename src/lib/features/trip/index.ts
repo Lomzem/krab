@@ -15,15 +15,19 @@ import {
   InvalidCatch,
   InvalidDepth,
   KindLocked,
-  NotCollected
+  NotCollected,
+  TripNotEnded,
+  TripNotFound
 } from './failures';
 import {
   activeOf,
   collectDrop,
   deletionOf,
   editDrop,
+  endTrip,
   gearName,
   locateDrop,
+  pastOf,
   restoreDrop,
   switchKind,
   uncollectDrop,
@@ -65,7 +69,9 @@ export {
   InvalidDepth,
   KindLocked,
   NotCollected,
-  StorageFailed
+  StorageFailed,
+  TripNotEnded,
+  TripNotFound
 };
 export type { DropAttempt, DropPhase, PlacedDrop };
 export {
@@ -89,14 +95,19 @@ export {
   gearInWater,
   isMultiDay,
   nearestGear,
+  pastDrops,
+  pastTripCounts,
   roughness,
   timeInWater,
+  tripDates,
   tripDays,
   type CollectedRow,
   type Day,
   type DaySelection,
   type Direction,
   type GearRow,
+  type PastDaySelection,
+  type PastDropRow,
   type SpokenText
 } from './queries';
 export type { LatLon } from './geo';
@@ -140,6 +151,13 @@ export type TripBook = {
   restoreDrop: (
     deletion: Deletion
   ) => Effect.Effect<NamedTrip, AnotherTripActive | StorageFailed>;
+  endTrip: (
+    tripId: string
+  ) => Effect.Effect<Trip, TripNotFound | StorageFailed>;
+  pastTrips: () => Effect.Effect<readonly Trip[], StorageFailed>;
+  deleteTrip: (
+    tripId: string
+  ) => Effect.Effect<void, TripNotEnded | StorageFailed>;
 };
 
 const dropIn = (trips: readonly Trip[], dropId: string) => {
@@ -147,6 +165,9 @@ const dropIn = (trips: readonly Trip[], dropId: string) => {
   const gear = found?.trip.gear.find((item) => item.id === found.drop.gearId);
   return found && gear ? { ...found, gear } : null;
 };
+
+const tripIn = (trips: readonly Trip[], tripId: string) =>
+  trips.find((trip) => trip.id === tripId) ?? null;
 
 const activeDrop = (trips: readonly Trip[], dropId: string) => {
   const active = activeOf(trips);
@@ -252,7 +273,34 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
         remove: [],
         result: { trip, name: gearName(deletion.gear) }
       }))
-    )
+    ),
+  endTrip: (tripId) =>
+    Effect.suspend(() => {
+      const at = deps.clock.now();
+      return storage.readModifyWrite<Trip, TripNotFound>((trips) => {
+        const trip = tripIn(trips, tripId);
+        if (!trip) return Result.fail(new TripNotFound({ tripId }));
+        const ended = endTrip(trip, at);
+        return Result.succeed(
+          ended
+            ? { put: [ended], remove: [], result: ended }
+            : { put: [], remove: [], result: trip }
+        );
+      });
+    }),
+  pastTrips: () => Effect.map(storage.readTrips(), pastOf),
+  deleteTrip: (tripId) =>
+    storage.readModifyWrite<undefined, TripNotEnded>((trips) => {
+      const trip = tripIn(trips, tripId);
+      if (trip?.endedAt === null) {
+        return Result.fail(new TripNotEnded({ tripId }));
+      }
+      return Result.succeed({
+        put: [],
+        remove: trip ? [trip.id] : [],
+        result: undefined
+      });
+    })
 });
 
 export const openTripBook = (deps: TripDeps) =>

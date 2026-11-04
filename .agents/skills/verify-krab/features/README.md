@@ -24,6 +24,6 @@ Each file has a user-facing introduction and exactly four H2s: Sub-features, How
 - [Days and the Map filter](days-and-map-filter.md): overnight grouping, day markers, the Map filter and Show on map restoring hidden gear, driven by `days-and-filter.ts`.
 - [Collecting](collecting.md): collect, catch, reload, drop again and undo collect fully driven by `collecting.ts`.
 - [Compass](compass.md): toggle, 44 px target, unavailable path and no re-ask driven by `compass.ts`; working-compass checks are manual on an iPhone.
-- [Ending a trip](ending-trip.md): placeholder owned by ticket 09.
-- [Past trips](past-trips.md): empty tab reachable; ticket 09 owns the workflow.
+- [Ending a trip](ending-trip.md): End trip with its confirmation, the stored end and the Past trips layer on the Map, driven by `end-and-past-trips.ts`.
+- [Past trips](past-trips.md): list, trip detail with its map and gear sheets, reload and Delete trip, driven by `end-and-past-trips.ts`.
 - [Offline and wake lock](offline-and-wake-lock.md): offline open, next-launch update and optional wake lock driven by the e2e recipes; device checks remain for ticket 11.

@@ -17,6 +17,7 @@
     type Kind
   } from '#lib/features/trip/index.js';
   import DropControl from './DropControl.svelte';
+  import EndTripSheet from './EndTripSheet.svelte';
   import GearList from './GearList.svelte';
   import {
     sheetSubject,
@@ -30,6 +31,7 @@
   import LocationStatus from './LocationStatus.svelte';
   import { DEFAULT_MAP_FILTER, filterToShow } from './map-filter';
   import MapTab from './MapTab.svelte';
+  import PastTrips from './PastTrips.svelte';
   import {
     OnWater,
     type Retry,
@@ -69,6 +71,13 @@
   let showOnMap = $state<string | null>(null);
   let mapFilter = $state({ ...DEFAULT_MAP_FILTER });
   let mapTabButton = $state<HTMLButtonElement>();
+  let endButton = $state<HTMLButtonElement>();
+  let endOpen = $state(false);
+  let ending = $state(false);
+  let pastTripId = $state<string | null>(null);
+  let pastHeading = $state<HTMLHeadingElement>();
+  let pastShow = $state<string | null>(null);
+  let pastShowNext: string | null = null;
   let toastCovers = $state(0);
   const listClearance = $derived(
     tab === 'map' ? undefined : `${String(toastCovers)}px`
@@ -76,7 +85,13 @@
 
   let operation = $state.raw<SheetOperation | null>(null);
 
-  const subject = $derived(sheetSubject(water.trip, sheet?.dropId ?? null));
+  const subject = $derived(
+    sheetSubject(
+      water.trip ? [water.trip, ...water.past] : water.past,
+      sheet?.dropId ?? null
+    )
+  );
+  const subjectActive = $derived(subject?.trip.endedAt === null);
   const sheetOperation = $derived(
     operation?.sheet === sheet ? operation : null
   );
@@ -137,6 +152,8 @@
     void water.drop(kind).then(focusDropAfterWait);
   };
 
+  const restingFocus = () => (tab === 'trips' ? pastHeading : dropButton);
+
   const retry = (target: Retry) => {
     void water.retry(target).then(() => {
       dropButton?.focus();
@@ -144,8 +161,9 @@
   };
 
   const undo = (target: Undo) => {
-    void water.undo(target).then(() => {
-      dropButton?.focus();
+    void water.undo(target).then(async () => {
+      await tick();
+      restingFocus()?.focus();
     });
   };
 
@@ -163,7 +181,12 @@
 
   const sheetReturnFocus = () => {
     if (showOnMap !== null) return mapTabButton;
-    return returnTo?.isConnected ? returnTo : dropButton;
+    if (pastShowNext !== null) {
+      pastShow = pastShowNext;
+      pastShowNext = null;
+      return null;
+    }
+    return returnTo?.isConnected ? returnTo : restingFocus();
   };
 
   const operate = async <A,>(
@@ -189,7 +212,13 @@
   };
 
   const show = (target: Drop) => {
-    if (busy || !water.trip) return;
+    if (busy) return;
+    if (subject && !subjectActive) {
+      pastShowNext = target.id;
+      closeSheet();
+      return;
+    }
+    if (!water.trip) return;
     now = Date.now();
     mapFilter = filterToShow(mapFilter, water.trip, target, now);
     showOnMap = target.id;
@@ -227,6 +256,18 @@
     );
   };
 
+  const endTrip = async () => {
+    const trip = water.trip;
+    if (!trip || ending) return;
+    ending = true;
+    const ended = await water.endTrip(trip.id);
+    ending = false;
+    if (ended) endOpen = false;
+  };
+
+  const endReturnFocus = () =>
+    endButton?.isConnected ? endButton : restingFocus();
+
   const undoCollect = (dropId: string, name: string) => {
     void operate(
       () => water.undoCollect(dropId, name),
@@ -245,6 +286,12 @@
       {#if water.ready}
         <MapTab
           trip={water.trip}
+          past={water.past}
+          canEnd={water.pending === null}
+          onend={() => {
+            endOpen = true;
+          }}
+          bind:endButton
           fix={watch.fix}
           courseDeg={watch.courseDeg}
           compass={$compass}
@@ -270,11 +317,20 @@
           onopen={opensFrom('list')}
         />
       {/if}
-    {:else}
-      <section class="px-4 pt-5">
-        <h1 class="text-[34px] leading-tight font-bold">Past trips</h1>
-        <p class="text-[17px]">No past trips yet.</p>
-      </section>
+    {:else if water.ready}
+      <PastTrips
+        past={water.past}
+        bind:selected={pastTripId}
+        bind:titleHeading={pastHeading}
+        show={pastShow}
+        onshown={() => {
+          pastShow = null;
+        }}
+        onopen={(dropId: string, opener: HTMLElement, from: 'list' | 'map') => {
+          sheet = { dropId, from, opener };
+        }}
+        ondelete={(tripId: string) => water.deleteTrip(tripId)}
+      />
     {/if}
   </main>
 
@@ -346,6 +402,17 @@
       {/if}
     {/snippet}
   </GearSheet>
+
+  <EndTripSheet
+    trip={water.trip}
+    open={endOpen && water.trip !== null}
+    busy={ending}
+    onend={() => void endTrip()}
+    onclose={() => {
+      endOpen = false;
+    }}
+    returnFocus={endReturnFocus}
+  />
 
   <UndoToast
     notice={water.notice}

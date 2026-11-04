@@ -5,7 +5,7 @@ export type Camera = { center: LatLon; zoom: number };
 export type MapPlace = {
   id: string;
   at: LatLon;
-  layer: 'in-water' | 'collected';
+  layer: 'in-water' | 'collected' | 'past';
 };
 
 export type MyPosition = {

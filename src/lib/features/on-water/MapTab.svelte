@@ -8,13 +8,17 @@
     collectedGear,
     compassPoint,
     dropsInDays,
+    gearCounts,
     gearInWater,
     isMultiDay,
     nearestGear,
+    pastDrops,
     roughness,
+    tripDates,
     type CollectedRow,
     type Fix,
     type GearRow,
+    type PastDropRow,
     type Trip
   } from '#lib/features/trip/index.js';
   import DayMarker from './DayMarker.svelte';
@@ -24,6 +28,10 @@
 
   let {
     trip,
+    past,
+    canEnd,
+    onend,
+    endButton = $bindable(),
     fix,
     courseDeg,
     compass,
@@ -37,6 +45,10 @@
     onopen
   }: {
     trip: Trip | null;
+    past: readonly Trip[];
+    canEnd: boolean;
+    onend: () => void;
+    endButton?: HTMLButtonElement;
     fix: Fix | null;
     courseDeg: number | null;
     compass: CompassState;
@@ -63,6 +75,19 @@
   const collectedById = $derived(
     new Map(collected.map((row) => [row.drop.id, row]))
   );
+  type PastPin = PastDropRow & { dates: string };
+  const pastPins = $derived(
+    filter.past
+      ? past.flatMap((ended) => {
+          const dates = tripDates(ended);
+          return pastDrops(ended, 'all').map((row): PastPin => ({
+            ...row,
+            dates
+          }));
+        })
+      : []
+  );
+  const pastById = $derived(new Map(pastPins.map((row) => [row.drop.id, row])));
   const placesOf = (
     shown: (GearRow | CollectedRow)[],
     layer: MapPlace['layer']
@@ -73,6 +98,9 @@
         : []
     );
   const places = $derived([
+    ...pastPins.flatMap(({ drop }): MapPlace[] =>
+      drop.position ? [{ id: drop.id, at: drop.position, layer: 'past' }] : []
+    ),
     ...placesOf(collected, 'collected'),
     ...placesOf(rows, 'in-water')
   ]);
@@ -85,6 +113,7 @@
     [
       'gear in the water',
       filter.collected && 'collected gear',
+      past.length > 0 && filter.past && 'past trips',
       filter.timeInWater && 'time in the water',
       multiDay && DAY_NAMES[filter.days]
     ]
@@ -126,6 +155,9 @@
       .filter(Boolean)
       .join(', ');
 
+  const pastLabel = (row: PastPin) =>
+    [row.name, 'past trip', row.dates, row.status].join(', ');
+
   const collectedLabel = (row: CollectedRow) =>
     [row.name, row.day?.text, 'collected', row.catchText]
       .filter(Boolean)
@@ -134,6 +166,22 @@
 
 <section class="flex h-full flex-col" aria-labelledby="map-title">
   <h1 id="map-title" class="sr-only">Map</h1>
+  {#if trip && canEnd}
+    <div
+      class="flex min-h-15 items-center gap-3 border-b border-border bg-card px-4 py-1.5"
+    >
+      <p class="min-w-0 flex-1 text-[16px] text-muted-foreground">
+        Trip running. {gearCounts(trip).inWater}.
+      </p>
+      <button
+        bind:this={endButton}
+        type="button"
+        class="min-h-12 rounded-control border-2 border-destructive px-4 text-[17px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        aria-haspopup="dialog"
+        onclick={onend}>End trip</button
+      >
+    </div>
+  {/if}
   {#if !trip}
     <p class="border-b border-border bg-card px-4 py-3 text-[17px]">
       No trip running. Drop a pot or a net to start one.
@@ -185,7 +233,7 @@
         {onshown}
       >
         {#snippet controls()}
-          {#if trip}
+          {#if trip || past.length > 0}
             <button
               bind:this={filterButton}
               type="button"
@@ -210,6 +258,7 @@
         {#snippet pin(id: string)}
           {@const row = rowsById.get(id)}
           {@const done = collectedById.get(id)}
+          {@const ended = pastById.get(id)}
           {#if row}
             <button
               type="button"
@@ -252,6 +301,21 @@
                 {/if}
               </span>
             </button>
+          {:else if ended}
+            <button
+              type="button"
+              class="group grid size-11 place-items-center focus-visible:outline-none"
+              aria-label={pastLabel(ended)}
+              onclick={(event) => {
+                onopen(id, event.currentTarget);
+              }}
+            >
+              <span
+                class="inline-flex items-center rounded-md border-2 border-dotted border-[#4b5b6c] bg-white/85 p-0.5 text-[#4b5b6c] group-focus-visible:outline-3 group-focus-visible:outline-offset-3 group-focus-visible:outline-[#c2410c]"
+              >
+                <GearIcon kind={ended.gear.kind} size={15} />
+              </span>
+            </button>
           {/if}
         {/snippet}
       </ChartMap>
@@ -267,6 +331,7 @@
   open={filterOpen}
   bind:filter
   {multiDay}
+  hasPast={past.length > 0}
   onclose={() => {
     filterOpen = false;
   }}
