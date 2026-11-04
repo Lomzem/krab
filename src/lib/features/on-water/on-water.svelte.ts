@@ -52,6 +52,7 @@ export type PendingDrop = {
   kind: Kind;
   attempt: DropAttempt;
   phase: DropPhase;
+  waited: boolean;
 };
 
 export type Load = 'opening' | 'ready' | 'failed';
@@ -143,22 +144,17 @@ export class OnWater {
 
   async #place(target: DropTarget, kind: Kind) {
     if (this.pending) return false;
-    const attempt = await Effect.runPromise(this.#book.placeDrop(target));
+    const attempt = this.#book.placeDrop(target);
     const waited = attempt.phase() === 'acquiring';
-    const unfollow = waited ? this.#follow(kind, attempt) : () => undefined;
+    this.pending = { kind, attempt, phase: attempt.phase(), waited };
+    const unfollow = attempt.subscribe(() => {
+      this.pending = { kind, attempt, phase: attempt.phase(), waited };
+    });
     const outcome = await Effect.runPromise(Effect.result(attempt.result));
     unfollow();
     this.pending = null;
     this.#settle(outcome);
     return waited;
-  }
-
-  #follow(kind: Kind, attempt: DropAttempt) {
-    const show = () => {
-      this.pending = { kind, attempt, phase: attempt.phase() };
-    };
-    show();
-    return attempt.subscribe(show);
   }
 
   async retry(retry: Retry) {

@@ -16,7 +16,7 @@ const saveDepth = async (typed: string) => {
     },
     idb: new IDBFactory()
   });
-  const attempt = await Effect.runPromise(book.placeDrop({ kind: 'pot' }));
+  const attempt = book.placeDrop({ kind: 'pot' });
   const placed = await Effect.runPromise(attempt.result);
   const edit = editOf({ ...emptyDraft(), depth: typed }, null);
   const saved = await Effect.runPromise(

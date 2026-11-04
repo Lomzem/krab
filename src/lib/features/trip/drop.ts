@@ -129,41 +129,41 @@ export const startDrop = (
   deps: TripDeps,
   storage: TripStorage,
   target: DropTarget
-) =>
-  Effect.suspend(() => {
-    const tapAt = deps.clock.now();
-    const command = dropCommand(target, tapAt);
-    const atTap = settledAt(deps.positions, tapAt);
-    const choice = Deferred.makeUnsafe<Located, DropCancelled>();
-    if (atTap) Deferred.doneUnsafe(choice, Effect.succeed(atTap));
-    const phase = observedPhase(atTap ? 'saving' : 'acquiring');
-    const unsubscribe = atTap
-      ? () => undefined
-      : listen(deps.positions, tapAt, choice);
-    const where = Effect.raceFirst(
-      Deferred.await(choice),
-      Effect.as(deps.clock.sleepUntil(tapAt + FIX_WAIT_MS), NO_FIX)
-    ).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          unsubscribe();
-        })
-      )
-    );
-    const work = where.pipe(
-      Effect.tap(() => phase.enter('saving')),
-      Effect.flatMap((found) => store(storage, command, found)),
-      Effect.ensuring(phase.enter('settled'))
-    );
-    return Effect.map(Effect.forkDetach(work), (fiber): DropAttempt => ({
-      phase: phase.current,
-      subscribe: phase.subscribe,
-      saveWithoutPosition: () => {
-        Deferred.doneUnsafe(choice, Effect.succeed(SKIPPED));
-      },
-      cancel: () => {
-        Deferred.doneUnsafe(choice, Effect.fail(new DropCancelled()));
-      },
-      result: Fiber.join(fiber)
-    }));
-  });
+): DropAttempt => {
+  const tapAt = deps.clock.now();
+  const command = dropCommand(target, tapAt);
+  const atTap = settledAt(deps.positions, tapAt);
+  const choice = Deferred.makeUnsafe<Located, DropCancelled>();
+  if (atTap) Deferred.doneUnsafe(choice, Effect.succeed(atTap));
+  const phase = observedPhase(atTap ? 'saving' : 'acquiring');
+  const unsubscribe = atTap
+    ? () => undefined
+    : listen(deps.positions, tapAt, choice);
+  const where = Effect.raceFirst(
+    Deferred.await(choice),
+    Effect.as(deps.clock.sleepUntil(tapAt + FIX_WAIT_MS), NO_FIX)
+  ).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        unsubscribe();
+      })
+    )
+  );
+  const work = where.pipe(
+    Effect.tap(() => phase.enter('saving')),
+    Effect.flatMap((found) => store(storage, command, found)),
+    Effect.ensuring(phase.enter('settled'))
+  );
+  const fiber = Effect.runFork(work);
+  return {
+    phase: phase.current,
+    subscribe: phase.subscribe,
+    saveWithoutPosition: () => {
+      Deferred.doneUnsafe(choice, Effect.succeed(SKIPPED));
+    },
+    cancel: () => {
+      Deferred.doneUnsafe(choice, Effect.fail(new DropCancelled()));
+    },
+    result: Fiber.join(fiber)
+  };
+};

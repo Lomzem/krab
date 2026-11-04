@@ -125,7 +125,7 @@ export type DeletedDrop = {
 
 export type TripBook = {
   activeTrip: () => Effect.Effect<Trip | null, StorageFailed>;
-  placeDrop: (target: DropTarget) => Effect.Effect<DropAttempt>;
+  placeDrop: (target: DropTarget) => DropAttempt;
   undoDrop: (dropId: string) => Effect.Effect<Trip | null, StorageFailed>;
   saveDrop: (
     dropId: string,

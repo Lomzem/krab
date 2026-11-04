@@ -447,7 +447,7 @@
       oncancel={attempt.cancel}
       onskip={attempt.saveWithoutPosition}
     />
-  {:else if water.pending}
+  {:else if water.pending?.waited}
     <SavingDrop />
   {:else if tab !== 'trips'}
     {#if explained}

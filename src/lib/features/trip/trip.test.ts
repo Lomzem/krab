@@ -166,10 +166,10 @@ const withStoredTrips = async <A>(
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect);
 
 const place = async (book: TripBook, kind: 'pot' | 'net') =>
-  run((await run(book.placeDrop({ kind }))).result);
+  run(book.placeDrop({ kind }).result);
 
 const dropAgain = async (book: TripBook, dropId: string) =>
-  run((await run(book.placeDrop({ again: dropId }))).result);
+  run(book.placeDrop({ again: dropId }).result);
 
 const dropAt = async (
   book: TripBook,
@@ -192,7 +192,7 @@ it('waits for a late fix and stores it with the tap time', async () => {
   state.fix = null;
   const book = await open();
 
-  const attempt = await run(book.placeDrop({ kind: 'pot' }));
+  const attempt = book.placeDrop({ kind: 'pot' });
   const phaseAtTap = attempt.phase();
   advance(12_000);
   report({ lat: 0.0001, lon: -140, accuracyM: 9, at: state.now });
@@ -219,7 +219,7 @@ it('saves nothing until 20 s after the tap, then saves without a position', asyn
   state.fix = null;
   const book = await open();
 
-  const attempt = await run(book.placeDrop({ kind: 'net' }));
+  const attempt = book.placeDrop({ kind: 'net' });
   advance(19_999);
   await drain();
   expect(await run(book.activeTrip())).toBeNull();
@@ -241,7 +241,7 @@ it('stores nothing when the wait is cancelled, even if a fix arrives later', asy
   state.fix = null;
   const book = await open();
 
-  const attempt = await run(book.placeDrop({ kind: 'pot' }));
+  const attempt = book.placeDrop({ kind: 'pot' });
   advance(4000);
   attempt.cancel();
   const failure = await run(Effect.flip(attempt.result));
@@ -259,7 +259,7 @@ it('records the skipped reason when saved without a position during the wait', a
   state.fix = null;
   const book = await open();
 
-  const attempt = await run(book.placeDrop({ kind: 'pot' }));
+  const attempt = book.placeDrop({ kind: 'pot' });
   advance(3000);
   attempt.saveWithoutPosition();
   const placed = await run(attempt.result);
@@ -276,7 +276,7 @@ it('records the denied reason as soon as location is denied during the wait', as
   state.fix = null;
   const book = await open();
 
-  const attempt = await run(book.placeDrop({ kind: 'pot' }));
+  const attempt = book.placeDrop({ kind: 'pot' });
   advance(2000);
   deny();
   const placed = await run(attempt.result);
@@ -292,7 +292,7 @@ it('records the denied reason without waiting when location is denied, even over
   report({ ...SEA, accuracyM: 5, at: state.now });
   deny();
 
-  const attempt = await run(book.placeDrop({ kind: 'net' }));
+  const attempt = book.placeDrop({ kind: 'net' });
   const phaseAtTap = attempt.phase();
   const placed = await run(attempt.result);
 
@@ -326,7 +326,7 @@ it('stores nothing when a save fails, and replaying its Retry saves that drop on
   const book = await open();
   abortNextTransaction();
 
-  const attempt = await run(book.placeDrop({ kind: 'pot' }));
+  const attempt = book.placeDrop({ kind: 'pot' });
   const failure = await run(Effect.flip(attempt.result));
   const afterFailure = await run(book.activeTrip());
   assert(failure._tag === 'DropNotSaved');
@@ -411,7 +411,7 @@ it('fails a save on a connection that closed as not saved, and Retry saves it on
   const book = await open();
   closeConnectionAtNextTransaction();
 
-  const attempt = await run(book.placeDrop({ kind: 'pot' }));
+  const attempt = book.placeDrop({ kind: 'pot' });
   const failure = await run(Effect.flip(attempt.result));
   assert(failure._tag === 'DropNotSaved');
   const retried = await run(failure.retry);
@@ -443,7 +443,7 @@ it('reports a storage error thrown while starting a save as not saved, and leave
     return this.objectStore('a-store-that-was-never-created');
   });
 
-  const attempt = await run(book.placeDrop({ kind: 'pot' }));
+  const attempt = book.placeDrop({ kind: 'pot' });
   const failure = await run(Effect.flip(attempt.result));
   const active = await run(book.activeTrip());
 
@@ -496,7 +496,7 @@ it.each([
     );
 
     const read = await run(Effect.flip(book.activeTrip()));
-    const attempt = await run(book.placeDrop({ kind: 'pot' }));
+    const attempt = book.placeDrop({ kind: 'pot' });
     const failure = await run(Effect.flip(attempt.result));
     const stored = await withStoredTrips(idb, 'readonly', (trips) =>
       trips.getAll()
@@ -545,11 +545,11 @@ it('uses a fix exactly 5 s old at once, but waits when the fix is older', async 
   const book = await open();
 
   state.fix = { ...SEA, accuracyM: 8, at: T0 - 5000 };
-  const fresh = await run(book.placeDrop({ kind: 'pot' }));
+  const fresh = book.placeDrop({ kind: 'pot' });
   const freshPhase = fresh.phase();
   const placed = await run(fresh.result);
   state.fix = { ...SEA, accuracyM: 8, at: T0 - 5001 };
-  const stale = await run(book.placeDrop({ kind: 'net' }));
+  const stale = book.placeDrop({ kind: 'net' });
 
   expect(freshPhase).toBe('saving');
   expect(placed.drop.position).toEqual({ lat: 0, lon: -140, accuracyM: 8 });
@@ -985,10 +985,10 @@ it('drops the same gear again from its latest collected drop with its number, la
   advance(10 * 60_000);
   const again = await dropAgain(book, pot.drop.id);
   const fromOlder = await Effect.runPromise(
-    Effect.flip((await run(book.placeDrop({ again: pot.drop.id }))).result)
+    Effect.flip(book.placeDrop({ again: pot.drop.id }).result)
   );
   const fromInWater = await Effect.runPromise(
-    Effect.flip((await run(book.placeDrop({ again: net.drop.id }))).result)
+    Effect.flip(book.placeDrop({ again: net.drop.id }).result)
   );
   const next = await place(book, 'pot');
   const trip = next.trip;
@@ -1053,7 +1053,7 @@ it('retries a failed drop again into exactly one new drop of the same gear', asy
   await run(book.collect(first.drop.id));
   abortNextTransaction();
 
-  const attempt = await run(book.placeDrop({ again: first.drop.id }));
+  const attempt = book.placeDrop({ again: first.drop.id });
   const failure = await run(Effect.flip(attempt.result));
   const retries =
     failure._tag === 'DropNotSaved'

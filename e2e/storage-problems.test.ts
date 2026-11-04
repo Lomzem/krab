@@ -1,7 +1,14 @@
 import type { Page } from '@playwright/test';
 import { expect, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
-import { failStorage, injectStorageFaults } from './storage-faults';
+import { MADE_UP_SEA } from '../playwright.config';
+import { deliverFix, holdFixes } from './held-geolocation';
+import {
+  failStorage,
+  holdFirstOpen,
+  injectStorageFaults,
+  releaseFirstOpen
+} from './storage-faults';
 
 const MORNING = new Date('2031-06-10T07:30:00-04:00');
 const TRIP_LOAD_FAILED = "Couldn't load your trip.";
@@ -104,4 +111,64 @@ test('storage that fails to open says the trip could not load, Retry opens it ag
   await expect(inWaterRow(page, 'Pot 1')).toBeVisible();
   await expect(inWaterRow(page, 'Pot 2')).toBeVisible();
   await expect(main).not.toContainText(TRIP_LOAD_FAILED);
+});
+
+test('a double tap while storage is still opening makes one drop attempt, and its Cancel saves nothing', async ({
+  page
+}) => {
+  const main = page.getByRole('main');
+
+  await holdFixes(page);
+  await holdFirstOpen(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding your position')).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Drop pot' })
+    .evaluate((button: HTMLElement) => {
+      button.click();
+      button.click();
+    });
+  await expect(
+    page.getByRole('heading', { name: 'Getting position' })
+  ).toBeFocused();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(toastOf(page)).toContainText(
+    'Drop cancelled. Nothing was saved.'
+  );
+  await releaseFirstOpen(page);
+
+  await deliverFix(page, MADE_UP_SEA);
+  await expect(page.getByText('Position ready')).toBeVisible();
+  await dropPot(page, 'Pot 1');
+  await tab(page, 'Gear').click();
+  await expect(main).toContainText('1 in the water');
+  await expect(inWaterRow(page, 'Pot 1')).toHaveCount(1);
+});
+
+test('a drop tapped while storage is still opening keeps the tap time and the fix at the tap', async ({
+  page
+}) => {
+  const pot = inWaterRow(page, 'Pot 1');
+
+  await holdFixes(page);
+  await holdFirstOpen(page);
+  await page.clock.install({ time: MORNING });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await deliverFix(page, MADE_UP_SEA);
+  await expect(page.getByText('Position ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+
+  await page.clock.fastForward('10:00');
+  await deliverFix(page, {
+    latitude: MADE_UP_SEA.latitude + 0.01,
+    longitude: MADE_UP_SEA.longitude
+  });
+  await releaseFirstOpen(page);
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.clock.fastForward(15_000);
+  await tab(page, 'Gear').click();
+  await expect(pot).toContainText('10m');
+  await expect(pot).toContainText('0.7 mi');
 });

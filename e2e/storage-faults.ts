@@ -51,3 +51,35 @@ export const failStorage = (page: Page, fault: StorageFault | null) =>
     },
     [FAULT, fault] as const
   );
+
+const OPEN_HELD = 'krab-e2e-open-held';
+
+type HeldOpen = { releaseOpen?: () => void };
+
+export const holdFirstOpen = (page: Page) =>
+  page.addInitScript((flag) => {
+    if (sessionStorage.getItem(flag)) return;
+    sessionStorage.setItem(flag, 'held');
+    const request = indexedDB.open('krab', 1);
+    request.onupgradeneeded = () => {
+      const upgrade = request.transaction;
+      const held = request.result.createObjectStore('held');
+      let released = false;
+      (window as HeldOpen).releaseOpen = () => {
+        released = true;
+      };
+      const keepBusy = () => {
+        if (released) {
+          upgrade?.abort();
+          return;
+        }
+        held.count().onsuccess = keepBusy;
+      };
+      keepBusy();
+    };
+  }, OPEN_HELD);
+
+export const releaseFirstOpen = (page: Page) =>
+  page.evaluate(() => {
+    (window as HeldOpen).releaseOpen?.();
+  });
