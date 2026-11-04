@@ -28,6 +28,7 @@
   import GettingPosition from './GettingPosition.svelte';
   import SavingDrop from './SavingDrop.svelte';
   import LocationIntro from './LocationIntro.svelte';
+  import LoadFailed from './LoadFailed.svelte';
   import LocationStatus from './LocationStatus.svelte';
   import { DEFAULT_MAP_FILTER, filterToShow } from './map-filter';
   import MapTab from './MapTab.svelte';
@@ -49,6 +50,7 @@
   import UndoToast from './UndoToast.svelte';
 
   const TICK_MS = 15_000;
+  const TRIP_LOAD_FAILED = "Couldn't load your trip.";
 
   const watch = new PositionWatch();
   const water = new OnWater(watch);
@@ -131,6 +133,8 @@
   $effect(() => {
     saveKind(kind);
   });
+
+  const reload = () => water.reload();
 
   const toggleCompass = () => {
     compass.toggle();
@@ -283,7 +287,12 @@
     style:scroll-padding-bottom={listClearance}
   >
     {#if tab === 'map'}
-      {#if water.ready}
+      {#if water.load === 'failed'}
+        <section aria-labelledby="map-title">
+          <h1 id="map-title" class="sr-only">Map</h1>
+          <LoadFailed text={TRIP_LOAD_FAILED} onretry={reload} />
+        </section>
+      {:else if water.load === 'ready'}
         <MapTab
           trip={water.trip}
           past={water.past}
@@ -308,7 +317,12 @@
         />
       {/if}
     {:else if tab === 'gear'}
-      {#if water.ready}
+      {#if water.load === 'failed'}
+        <header class="px-4 pt-5">
+          <h1 class="text-[34px] leading-tight font-bold">Gear</h1>
+        </header>
+        <LoadFailed text={TRIP_LOAD_FAILED} onretry={reload} />
+      {:else if water.load === 'ready'}
         <GearList
           trip={water.trip}
           from={watch.fix}
@@ -317,10 +331,10 @@
           onopen={opensFrom('list')}
         />
       {/if}
-    {:else if water.ready}
+    {:else if water.load !== 'opening'}
       <PastTrips
         past={water.past}
-        failed={water.pastFailed}
+        failed={water.load === 'failed'}
         bind:selected={pastTripId}
         bind:titleHeading={pastHeading}
         show={pastShow}
@@ -331,7 +345,7 @@
           sheet = { dropId, from, opener };
         }}
         ondelete={(tripId: string) => water.deleteTrip(tripId)}
-        onretry={() => water.retryPast()}
+        onretry={reload}
       />
     {/if}
   </main>

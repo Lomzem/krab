@@ -13,10 +13,10 @@ import {
   gearInWater,
   isMultiDay,
   nearestGear,
-  openTripBook,
   pastDrops,
   pastTripCounts,
   tripDates,
+  tripBook,
   tripDays,
   type DaySelection,
   type PastDaySelection,
@@ -95,7 +95,11 @@ const harness = () => {
     state.denied = true;
     tell();
   };
-  const open = () => Effect.runPromise(openTripBook(deps));
+  const open = async () => {
+    const book = tripBook(deps);
+    await Effect.runPromise(book.activeTrip());
+    return book;
+  };
   return { state, idb, open, advance, report, deny };
 };
 

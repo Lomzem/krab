@@ -137,7 +137,7 @@ export type TripStorage = {
   readTrips: () => Effect.Effect<readonly Trip[], StorageFailed>;
 };
 
-const ownConnection = (idb: IDBFactory, first: IDBDatabase): TripStorage => {
+export const tripStorage = (idb: IDBFactory): TripStorage => {
   let current: IDBDatabase | null = null;
   const forget = (db: IDBDatabase) => {
     if (current === db) current = null;
@@ -157,7 +157,6 @@ const ownConnection = (idb: IDBFactory, first: IDBDatabase): TripStorage => {
     current = db;
     return db;
   };
-  keep(first);
   const connection = Effect.suspend(() =>
     current ? Effect.succeed(current) : Effect.map(openConnection(idb), keep)
   );
@@ -180,6 +179,3 @@ const ownConnection = (idb: IDBFactory, first: IDBDatabase): TripStorage => {
       )
   };
 };
-
-export const openTripStorage = (idb: IDBFactory) =>
-  Effect.map(openConnection(idb), (first) => ownConnection(idb, first));

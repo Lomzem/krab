@@ -3,6 +3,7 @@ import { expect, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
 import { deliverFix, holdFixes } from './held-geolocation';
+import { failStorage, injectStorageFaults } from './storage-faults';
 
 const MORNING = new Date('2031-06-10T07:30:00-04:00');
 const LATE_EVENING = new Date('2031-06-10T23:40:00-04:00');
@@ -273,36 +274,6 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   await expect(main).toContainText('No past trips yet.');
 });
 
-const FAIL_READS = 'krab-e2e-fail-trip-reads';
-
-type Begin = (this: IDBDatabase, ...args: unknown[]) => IDBTransaction;
-
-const injectReadFaults = (page: Page) =>
-  page.addInitScript((flag) => {
-    const database = IDBDatabase.prototype;
-    const begin = Reflect.get(database, 'transaction') as Begin;
-    const abort = (tx: IDBTransaction) => () => {
-      tx.abort();
-    };
-    const faulty: Begin = function (...args) {
-      const tx = Reflect.apply(begin, this, args);
-      if (tx.mode === 'readonly' && sessionStorage.getItem(flag) === 'on') {
-        queueMicrotask(abort(tx));
-      }
-      return tx;
-    };
-    Reflect.set(database, 'transaction', faulty);
-  }, FAIL_READS);
-
-const failReads = (page: Page, on: boolean) =>
-  page.evaluate(
-    ([flag, state]) => {
-      if (state) sessionStorage.setItem(flag, 'on');
-      else sessionStorage.removeItem(flag);
-    },
-    [FAIL_READS, on] as const
-  );
-
 test('past trips show what was just written even while storage reads fail, and history that fails to load offers Retry instead of reading as empty', async ({
   page
 }) => {
@@ -313,14 +284,14 @@ test('past trips show what was just written even while storage reads fail, and h
     exact: true
   });
 
-  await injectReadFaults(page);
+  await injectStorageFaults(page);
   await page.clock.install({ time: MORNING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Position ready')).toBeVisible();
   await dropOf(page, 'Pot', 'Pot 1');
 
-  await failReads(page, true);
+  await failStorage(page, 'reads');
   await endTheTrip(
     page,
     "1 drop is still in the water. It'll be saved as uncollected."
@@ -344,7 +315,7 @@ test('past trips show what was just written even while storage reads fail, and h
   await expect(main).not.toContainText('No past trips yet.');
   await expect(pastTrip).toHaveCount(0);
 
-  await failReads(page, false);
+  await failStorage(page, null);
   await main.getByRole('button', { name: 'Retry' }).click();
   await expect(pastTrip).toBeVisible();
   await expect(main).not.toContainText("Couldn't load past trips.");

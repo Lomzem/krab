@@ -34,8 +34,8 @@ import {
   withoutDrop
 } from './rules';
 import {
-  openTripStorage,
   StorageFailed,
+  tripStorage,
   type Change,
   type TripStorage
 } from './storage';
@@ -304,5 +304,5 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
     })
 });
 
-export const openTripBook = (deps: TripDeps) =>
-  Effect.map(openTripStorage(deps.idb), (storage) => bookFor(deps, storage));
+export const tripBook = (deps: TripDeps): TripBook =>
+  bookFor(deps, tripStorage(deps.idb));

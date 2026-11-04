@@ -1,23 +1,21 @@
 import { Effect } from 'effect';
 import { IDBFactory } from 'fake-indexeddb';
 import { expect, it } from 'vitest';
-import { openTripBook } from '#lib/features/trip/index.js';
+import { tripBook } from '#lib/features/trip/index.js';
 import { editOf, emptyDraft } from './details-draft';
 
 const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
 
 const saveDepth = async (typed: string) => {
-  const book = await Effect.runPromise(
-    openTripBook({
-      clock: { now: () => T0, sleepUntil: () => Effect.succeed(undefined) },
-      positions: {
-        latest: () => null,
-        denied: () => true,
-        subscribe: () => () => undefined
-      },
-      idb: new IDBFactory()
-    })
-  );
+  const book = tripBook({
+    clock: { now: () => T0, sleepUntil: () => Effect.succeed(undefined) },
+    positions: {
+      latest: () => null,
+      denied: () => true,
+      subscribe: () => () => undefined
+    },
+    idb: new IDBFactory()
+  });
   const attempt = await Effect.runPromise(book.placeDrop({ kind: 'pot' }));
   const placed = await Effect.runPromise(attempt.result);
   const edit = editOf({ ...emptyDraft(), depth: typed }, null);

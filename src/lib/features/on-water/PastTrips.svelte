@@ -13,6 +13,7 @@
   } from '#lib/features/trip/index.js';
   import DayMarker from './DayMarker.svelte';
   import GearIcon from './GearIcon.svelte';
+  import LoadFailed from './LoadFailed.svelte';
   import Sheet from './Sheet.svelte';
 
   const DELETE_TITLE_ID = 'delete-trip-title';
@@ -47,7 +48,6 @@
   let selection = $state<PastDaySelection>('all');
   let deleteOpen = $state(false);
   let deleting = $state(false);
-  let retrying = $state(false);
   let deleteButton = $state<HTMLButtonElement>();
   let list = $state<HTMLUListElement>();
 
@@ -105,13 +105,6 @@
     const deleted = await ondelete(trip.id);
     deleting = false;
     if (deleted) deleteOpen = false;
-  };
-
-  const retry = async () => {
-    if (retrying) return;
-    retrying = true;
-    await onretry();
-    retrying = false;
   };
 
   const pinLabel = (row: PastDropRow) =>
@@ -278,15 +271,7 @@
       Past trips
     </h1>
     {#if failed}
-      <div class="flex flex-col items-start gap-3 px-4 pb-4">
-        <p class="text-[17px]">Couldn't load past trips.</p>
-        <button
-          type="button"
-          class="min-h-12 rounded-control border-2 border-primary px-5 text-[17px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
-          aria-disabled={retrying}
-          onclick={() => void retry()}>Retry</button
-        >
-      </div>
+      <LoadFailed text="Couldn't load past trips." {onretry} />
     {/if}
     {#if past.length === 0}
       {#if !failed}
