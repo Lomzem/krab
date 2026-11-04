@@ -372,6 +372,23 @@ it('flags a fix worse than 50 m as rough, in feet, on the drop and its gear row'
   ]);
 });
 
+it.each([
+  [994, '990 ft', '990 feet'],
+  [999, '990 ft', '990 feet'],
+  [1000, '0.2 mi', '0.2 miles']
+])(
+  'shows a fix %i ft rough as %s, never as 1000 ft or miles below 1000 ft',
+  async (feet, short, spoken) => {
+    const { state, open } = harness();
+    const book = await open();
+    state.fix = { ...SEA, accuracyM: feet * 0.3048, at: T0 };
+
+    const placed = await place(book, 'pot');
+
+    expect(placed.rough).toEqual({ short, spoken });
+  }
+);
+
 it('stores nothing when a save fails, and replaying its Retry saves that drop once under one number', async () => {
   const { state, open, advance, report } = harness();
   state.fix = { ...SEA, accuracyM: 7, at: T0 - 1000 };

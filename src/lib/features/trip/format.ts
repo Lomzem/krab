@@ -22,12 +22,16 @@ export const compassPoint = (bearing: number) =>
 
 const FEET_PER_MILE = 5280;
 
+const MOST_FEET_SHOWN = 990;
+
 const roundedFeet = (feet: number) =>
-  feet < 100 ? Math.round(feet) : Math.round(feet / 10) * 10;
+  feet < 100
+    ? Math.round(feet)
+    : Math.min(MOST_FEET_SHOWN, Math.round(feet / 10) * 10);
 
 export const distanceText = (feet: number) => {
   const shown = roundedFeet(feet);
-  if (shown < 1000) {
+  if (feet < 1000) {
     return { short: `${String(shown)} ft`, spoken: `${String(shown)} feet` };
   }
   const miles = (feet / FEET_PER_MILE).toFixed(1);
