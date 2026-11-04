@@ -12,7 +12,6 @@
 
   let {
     subject,
-    editKind = true,
     now,
     operation,
     onclose,
@@ -25,7 +24,6 @@
     endAction
   }: {
     subject: SheetSubject | null;
-    editKind?: boolean;
     now: number;
     operation: SheetOperation | null;
     onclose: () => void;
@@ -62,7 +60,6 @@
       <GearDetailsForm
         {subject}
         formId={FORM_ID}
-        {editKind}
         {now}
         {operation}
         {onsave}
