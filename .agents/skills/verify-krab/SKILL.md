@@ -55,7 +55,7 @@ Configure the parent directory before launch:
 KRAB_VERIFY_EVIDENCE_ROOT=/absolute/ignored/evidence bun scripts/verify-krab/run.ts
 ```
 
-Choose a gitignored location outside this run's scratch directory. Every artifact must contain only made-up coordinates. Browser contexts never use host location. Do not attach real trip data or broaden this recipe to an existing browser profile.
+Choose a gitignored location outside this run's scratch directory. Every artifact must contain only made-up coordinates, except the chart alignment journey's public-landmark tile samples in `alignment.json`; those landmarks are never a browser position or drop, and screenshots, IndexedDB snapshots and every other artifact still hold only made-up positions. Browser contexts never use host location. Do not attach real trip data or broaden this recipe to an existing browser profile.
 
 Each entry point records timestamped `actions.jsonl`, before/action/result screenshots, ARIA snapshots, `doctor.json`, and `indexeddb-before.json` / `indexeddb-after.json`. The latter are read through the page from the real `krab` database's `trips` store in readonly transactions. Require the saved made-up fix and unchanged records after reload alongside the visible Pot 1 row; a toast or final screenshot alone is insufficient. `run.log` records execution and failure output. On failure, keep partial evidence and report the failed action and unmet precondition. Do not claim another entry point's proof covers a skipped path.
 
