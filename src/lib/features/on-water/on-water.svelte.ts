@@ -290,7 +290,10 @@ export class OnWater {
     const deleted = await resultOf(this.#book.deleteDrop(dropId));
     if (Result.isFailure(deleted)) {
       const alreadyGone = deleted.failure._tag === 'DropNotFound';
-      if (alreadyGone) return true;
+      if (alreadyGone) {
+        void this.reload();
+        return true;
+      }
       this.#say("Couldn't delete the drop. Try again.");
       return false;
     }

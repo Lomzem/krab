@@ -85,7 +85,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(label).toHaveValue('red float');
 });
 
-test('deleting a drop already deleted in another tab closes the sheet without an error', async ({
+test('deleting a drop already deleted in another tab closes the sheet without an error and drops its row', async ({
   page,
   context
 }) => {
@@ -114,6 +114,8 @@ test('deleting a drop already deleted in another tab closes the sheet without an
   await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
   await expect(sheet).toBeHidden();
   await expect(toastOf(page)).not.toContainText("Couldn't");
+  await expect(gearRow(page, 'Pot 1')).toHaveCount(0);
+  await expect(gearRow(page, 'Pot 2')).toBeVisible();
 });
 
 test('while a sheet action is storing, the sheet ignores its other actions, and finishing after another gear opens leaves that sheet and its draft alone', async ({
