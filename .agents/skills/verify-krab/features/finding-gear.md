@@ -10,7 +10,7 @@ Find gear still in the water on a north-up chart map or in the Gear list. The Ma
 - Nearest-gear card above the map: "Nearest gear: <name>" with distance and direction.
 - Buttons, so dragging is never needed: Street map (toggle), Zoom in, Zoom out (unavailable at the limits), and Centre on my position (Show all gear when there is no fix).
 - Tapping gear on the map opens its gear sheet without Show on map. Show on map appears in a sheet opened from the Gear list, switches to the Map tab and focuses that gear.
-- Map notices. When base tiles or the Street style fail with a connection error: "No signal, so the map can't load. Your gear and position still show." When the map service answers base tiles busy or failing (HTTP 429 or 5xx), or refuses or sends an unusable Street style: "The map service isn't answering, so the map can't load. Your gear and position still show." Missing tiles (404) show no notice. Gear and position still render either way, and the notice clears once a map tile arrives.
+- Map notices. When base tiles or the Street style fail with a connection error, or the Street style has not fully arrived after 10 seconds: "No signal, so the map can't load. Your gear and position still show." When the map service answers base tiles busy or failing (HTTP 429 or 5xx), or refuses or sends an unusable Street style: "The map service isn't answering, so the map can't load. Your gear and position still show." Missing tiles (404) show no notice. Gear and position still render either way, and the notice clears once a map tile arrives.
 - Chart zoom is capped at XYZ z16, which is NOAA service level 14. The map overscales beyond that, up to z19.
 
 ## How to get to it (user POV)

@@ -328,6 +328,34 @@ test('a Street style still loading when Chart is chosen again or the Map tab clo
   await expect(noSignal(page)).toBeHidden();
 });
 
+test('a Street style that has not arrived after 10 seconds is cancelled and says No signal, with gear and my position still shown', async ({
+  context,
+  page,
+  providers
+}) => {
+  const cancelled: string[] = [];
+  context.on('requestfailed', (request) => {
+    if (request.url().startsWith(OPEN_FREE_MAP)) cancelled.push(request.url());
+  });
+  const streetMap = streetMapButton(page);
+  await page.clock.install();
+  await dropPotAndOpenMap(page);
+
+  providers.hold();
+  await streetMap.click();
+  await expect.poll(() => providers.held()).toBeGreaterThan(0);
+  await page.clock.fastForward(10_000);
+  await expect.poll(() => cancelled.length).toBe(1);
+  await expect(noSignal(page)).toBeVisible();
+  await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+  await expect(potOnMap(page)).toBeVisible();
+  await expect(myPosition(page)).toBeVisible();
+
+  providers.serve();
+  await streetMap.click();
+  await expect(noSignal(page)).toBeHidden();
+});
+
 const offCentre = async (page: Page, target: Locator) => {
   const view = await mapArea(page)
     .getByRole('region', { name: 'Map view' })

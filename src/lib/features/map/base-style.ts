@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Duration, Effect, Exit } from 'effect';
 import type {
   LayerSpecification,
   SourceSpecification,
@@ -83,14 +83,21 @@ const isStyle = (value: unknown): value is StyleSpecification =>
   'layers' in value &&
   Array.isArray(value.layers);
 
-const fetchStreetStyle = (signal: AbortSignal) =>
+const STREET_STYLE_DEADLINE = Duration.seconds(10);
+
+const fetchStreetStyle = Effect.timeoutOrElse(
   Effect.tryPromise({
-    try: async () => {
+    try: async (signal) => {
       const response = await fetch(STREET_STYLE, { signal });
       return response.ok ? await response.text() : null;
     },
     catch: (): Outage => 'no-signal'
-  });
+  }),
+  {
+    duration: STREET_STYLE_DEADLINE,
+    orElse: () => Effect.fail<Outage>('no-signal')
+  }
+);
 
 const usableStyle = (body: string | null) =>
   body === null
@@ -104,21 +111,26 @@ const usableStyle = (body: string | null) =>
         (): Outage => 'not-answering'
       );
 
+const unavailable = (accuracy: Accuracy, outage: Outage): BaseStyle => ({
+  style: noBaseStyle(accuracy),
+  outage
+});
+
 const streetStyle = (
   accuracy: Accuracy,
   signal: AbortSignal
 ): Promise<BaseStyle> =>
-  Effect.runPromise(
-    Effect.match(Effect.flatMap(fetchStreetStyle(signal), usableStyle), {
-      onFailure: (outage): BaseStyle => ({
-        style: noBaseStyle(accuracy),
-        outage
-      }),
+  Effect.runPromiseExit(
+    Effect.match(Effect.flatMap(fetchStreetStyle, usableStyle), {
+      onFailure: (outage) => unavailable(accuracy, outage),
       onSuccess: ({ sources, layers, ...rest }): BaseStyle => ({
         style: withOverlays(sources, [background, ...layers], accuracy, rest),
         outage: null
       })
-    })
+    }),
+    { signal }
+  ).then((exit) =>
+    Exit.isSuccess(exit) ? exit.value : unavailable(accuracy, 'no-signal')
   );
 
 export const baseStyle = (
