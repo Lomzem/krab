@@ -25,7 +25,7 @@ Isolation: container network and fresh browser contexts isolate other checkouts.
 
 ## Doctor
 
-The run first checks `docker info` and `docker image inspect` on that image without pulling or changing Docker. Before every journey, the read-only doctor in `scripts/verify-krab/doctor.ts` reads the preview PID receipt, `/proc/<pid>/cmdline`, its socket descriptors and TCP listener table. It requires that this run's strict-port Vite process owns the listener on 127.0.0.1:4173. The result is `doctor.json` beside each journey's artifacts.
+The run first checks `docker info` and `docker image inspect` on that image without pulling or changing Docker. Before every journey, the read-only doctor in `scripts/verify-krab/doctor.ts` reads the preview PID receipt, `/proc/<pid>/cmdline`, its socket descriptors and TCP listener table. It requires that this run's strict-port Vite process owns the listener on 127.0.0.1:4173. A descriptor that closes during the scan is skipped; any other descriptor read failure fails the doctor, as `scripts/verify-krab/doctor.test.ts` checks. The result is `doctor.json` beside each journey's artifacts.
 
 While a run is active, invoke the same read-only checks from another terminal:
 
@@ -47,7 +47,7 @@ For future permission/offline journeys in this recipe, use fresh contexts: `awai
 
 Default persistent root:
 
-`/home/lomzem/proj/krab/.scratch/on-water-workflow/verify-evidence/<timestamp>-<pid>/`
+`.scratch/on-water-workflow/verify-evidence/<timestamp>-<pid>/`, resolved from the repository root where the command runs
 
 Configure the parent directory before launch:
 
@@ -55,9 +55,9 @@ Configure the parent directory before launch:
 KRAB_VERIFY_EVIDENCE_ROOT=/absolute/ignored/evidence bun scripts/verify-krab/run.ts
 ```
 
-Choose a gitignored location outside this run's scratch directory. Every artifact must contain only made-up coordinates. Browser contexts never use host location. Do not attach real trip data or broaden this recipe to an existing browser profile.
+Choose a gitignored location outside this run's scratch directory. Every artifact must contain only made-up coordinates, except the chart alignment journey's public-landmark tile samples in `alignment.json`; those landmarks are never a browser position or drop, and screenshots, IndexedDB snapshots and every other artifact still hold only made-up positions. Browser contexts never use host location. Do not attach real trip data or broaden this recipe to an existing browser profile.
 
-Each entry point records timestamped `actions.jsonl`, before/action/result screenshots, ARIA snapshots, `doctor.json`, and `indexeddb-before.json` / `indexeddb-after.json`. The latter are read through the page from the real `krab` database's `trips` store in readonly transactions. Require the saved made-up fix and unchanged records after reload alongside the visible Pot 1 row; a toast or final screenshot alone is insufficient. `run.log` records execution and failure output. On failure, keep partial evidence and report the failed action and unmet precondition. Do not claim another entry point's proof covers a skipped path.
+Each entry point records timestamped `actions.jsonl`, before/action/result screenshots, ARIA snapshots, `doctor.json`, and `indexeddb-before.json` / `indexeddb-after.json`. The latter are read through the page from the real `krab` database's `trips` store in readonly transactions. The reader never creates or upgrades that database: it rejects when the database or its `trips` store is missing. Require the saved made-up fix and unchanged records after reload alongside the visible Pot 1 row; a toast or final screenshot alone is insufficient. `run.log` records execution and failure output. On failure, keep partial evidence and report the failed action and unmet precondition. Do not claim another entry point's proof covers a skipped path.
 
 ## Cleanup
 

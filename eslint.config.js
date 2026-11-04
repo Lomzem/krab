@@ -6,6 +6,20 @@ import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 import { plugin as shadcn } from '@shadcn/lint';
 
+const EFFECT_ONLY = [
+  {
+    selector: 'ThrowStatement',
+    message: 'Use Effect failure APIs instead of throw.'
+  },
+  {
+    selector: 'TryStatement',
+    message: 'Use Effect error handling instead of try/catch.'
+  }
+];
+
+const USE_FIXTURE_TEST =
+  "Import test from './fixtures', whose auto fixture answers NOAA and OpenFreeMap.";
+
 export default defineConfig([
   {
     ignores: [
@@ -22,17 +36,7 @@ export default defineConfig([
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     linterOptions: { noInlineConfig: true },
     rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: 'ThrowStatement',
-          message: 'Use Effect failure APIs instead of throw.'
-        },
-        {
-          selector: 'TryStatement',
-          message: 'Use Effect error handling instead of try/catch.'
-        }
-      ],
+      'no-restricted-syntax': ['error', ...EFFECT_ONLY],
       'max-depth': ['error', 3],
       'max-nested-callbacks': ['error', 2],
       'no-nested-ternary': 'error'
@@ -69,8 +73,15 @@ export default defineConfig([
         {
           name: '@playwright/test',
           importNames: ['test'],
-          message:
-            "Import test from './fixtures', whose auto fixture answers NOAA and OpenFreeMap."
+          message: USE_FIXTURE_TEST
+        }
+      ],
+      'no-restricted-syntax': [
+        'error',
+        ...EFFECT_ONLY,
+        {
+          selector: "ImportExpression[source.value='@playwright/test']",
+          message: USE_FIXTURE_TEST
         }
       ]
     }

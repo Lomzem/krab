@@ -4,7 +4,7 @@ A client-rendered SvelteKit app for keeping track of crab pots and nets on the w
 
 ## Setup
 
-Install [Bun](https://bun.sh/docs/installation) **1.4.4** and Node.js **26.13.0** (recorded in `.node-version`). Bun manages packages and developer commands; the tooling also invokes Node. SvelteKit requires Node >=22.17.0. No environment file, cloud account, API key, or service credentials are needed.
+Install [Bun](https://bun.sh/docs/installation) **1.4.4** and Node.js **26.13.0** (recorded in `.node-version`). Bun manages packages and developer commands; the tooling also invokes Node. The minimum is Node >=22.18.0: SvelteKit needs 22.17.0, and the verification helpers run TypeScript files directly with `node`, which Node 22 does by default from 22.18.0. No environment file, cloud account, API key, or service credentials are needed.
 
 From a fresh checkout:
 
@@ -36,7 +36,7 @@ bun run test:unit
 bun run test:e2e:container
 ```
 
-`test:unit` runs Vitest against the trip module's public interface over `fake-indexeddb`, with a fixed clock and position source. `test:e2e:container` builds the site twice (the second build stands in for an update) and runs the Playwright WebKit suite with iPhone emulation, an emulated made-up position and axe (WCAG 2.2 AA, light and dark) inside the official `mcr.microsoft.com/playwright:v<version>-noble` image whose version matches the installed `@playwright/test`, because WebKit does not launch natively on every Linux host. It needs Docker. Where WebKit runs natively (as in CI), `bun run build && bun run build:next && bun run test:e2e` runs the same suite directly. Test output goes to the ignored `test-results/`.
+`test:unit` runs every Vitest suite under `src/**/*.test.ts` and `scripts/verify-krab/**/*.test.ts`; the trip module's suite drives its public interface over `fake-indexeddb`, with a fixed clock and position source. `test:e2e:container` builds the site twice (the second build stands in for an update) and runs the Playwright WebKit suite with iPhone emulation, an emulated made-up position and axe (WCAG 2.2 AA, light and dark) inside the official `mcr.microsoft.com/playwright:v<version>-noble` image whose version matches the installed `@playwright/test`, because WebKit does not launch natively on every Linux host. It needs Docker. Where WebKit runs natively (as in CI), `bun run build && bun run build:next && bun run test:e2e` runs the same suite directly. Test output goes to the ignored `test-results/`.
 
 ## Installation assets
 

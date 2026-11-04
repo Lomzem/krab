@@ -254,10 +254,10 @@ export const switchKind = (
   kind: Kind
 ): Result.Result<{ trip: Trip; gear: Gear }, KindLocked> => {
   const gear = trip.gear.find((item) => item.id === drop.gearId);
+  if (gear?.kind === kind) return Result.succeed({ trip, gear });
   if (!gear || !canChangeKind(trip, gear.id)) {
     return Result.fail(new KindLocked({ dropId: drop.id }));
   }
-  if (gear.kind === kind) return Result.succeed({ trip, gear });
   const changed: Gear = { ...gear, kind, number: trip.next[kind] };
   return Result.succeed({
     trip: {

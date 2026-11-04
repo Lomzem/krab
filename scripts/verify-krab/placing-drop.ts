@@ -13,6 +13,17 @@ for (const entry of ['Map', 'Gear']) {
     const { log, capture, keep } = recorder(page, info, 'placing-drop', entry);
     keep('doctor.json', doctor());
     log('doctor passed: our preview process owns 4173');
+    if (entry === 'Map') {
+      await page.goto('/licenses/barlow-OFL.txt');
+      await expect(readTrips(page)).rejects.toThrow(
+        'Cannot read Krab IndexedDB'
+      );
+      expect(
+        await page.evaluate(() => indexedDB.databases()),
+        'reading evidence before Krab starts creates no database'
+      ).toEqual([]);
+      log('evidence read before Krab starts rejects and creates no database');
+    }
     await page.goto('/');
     await expect(
       page.getByRole('heading', { name: 'Krab needs your location' })

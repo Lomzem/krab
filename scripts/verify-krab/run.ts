@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
 import { strict as assert } from 'node:assert';
 import { missingPlaywrightImage, playwrightImage } from '../playwright-image';
 
@@ -16,7 +16,7 @@ const runId =
   new Date().toISOString().replaceAll(':', '-') + `-${String(process.pid)}`;
 const evidence = resolve(
   process.env.KRAB_VERIFY_EVIDENCE_ROOT ??
-    '/home/lomzem/proj/krab/.scratch/on-water-workflow/verify-evidence',
+    '.scratch/on-water-workflow/verify-evidence',
   runId
 );
 const docker = (args: string[]) =>
@@ -61,7 +61,7 @@ assert.ok(
   `Run already active or interrupted: ${scratch}; inspect before cleanup`
 );
 assert.ok(
-  !evidence.startsWith(scratch),
+  evidence !== scratch && !evidence.startsWith(scratch + sep),
   'Evidence must survive scratch cleanup'
 );
 mkdirSync(resolve('test-results'), { recursive: true });
