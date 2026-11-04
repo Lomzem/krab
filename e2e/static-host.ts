@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { extname, join, normalize } from 'node:path';
+import { Result } from 'effect';
 
 const TYPES: Record<string, string> = {
   '.css': 'text/css',
@@ -17,8 +18,14 @@ const TYPES: Record<string, string> = {
 const typeOf = (file: string) =>
   TYPES[extname(file)] ?? 'application/octet-stream';
 
-const read = (root: string, pathname: string) => {
-  const file = join(root, normalize(decodeURIComponent(pathname)));
+const decoded = (pathname: string) =>
+  Result.try({
+    try: () => decodeURIComponent(pathname),
+    catch: () => 'malformed' as const
+  });
+
+const read = (root: string, path: string) => {
+  const file = join(root, normalize(path));
   const fallback = join(root, 'index.html');
   return readFile(file).then(
     (body) => ({ body, type: typeOf(file) }),
@@ -40,7 +47,13 @@ const listen = (
         response.end();
         return;
       }
-      void read(root, pathname).then(({ body, type }) => {
+      const path = decoded(pathname);
+      if (Result.isFailure(path)) {
+        response.writeHead(400, { 'cache-control': 'no-cache' });
+        response.end();
+        return;
+      }
+      void read(root, path.success).then(({ body, type }) => {
         response.writeHead(200, {
           'content-type': type,
           'cache-control': 'no-cache'

@@ -147,6 +147,18 @@ test('Krab leaves third-party requests to the network', async ({
   expect(await fetchFrom(offline, tile)).toBe('failed');
 });
 
+test('the test host answers a malformed path with 400 and keeps serving the app', async ({
+  request
+}) => {
+  const site = openSite(4178);
+  await site.deploy(CURRENT_BUILD);
+
+  const malformed = await request.get(`${site.origin}%E0%A4%A`);
+  expect(malformed.status()).toBe(400);
+  const shell = await request.get(site.origin);
+  expect(shell.status()).toBe(200);
+});
+
 test('a new build waits while Krab is open and takes over on the next launch', async ({
   context,
   page
