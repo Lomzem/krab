@@ -10,7 +10,15 @@ const PHONES = [
   },
   {
     phone: 'that refuses to keep the screen on',
-    setup: () => undefined
+    setup: () => {
+      Object.defineProperty(navigator, 'wakeLock', {
+        configurable: true,
+        value: {
+          request: () =>
+            Promise.reject(new DOMException('refused', 'NotAllowedError'))
+        }
+      });
+    }
   }
 ];
 
