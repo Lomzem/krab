@@ -123,6 +123,7 @@ const askToPersist = () => {
 
 export class OnWater {
   trip = $state.raw<Trip | null>(null);
+  past = $state.raw<readonly Trip[]>([]);
   ready = $state(false);
   notice = $state.raw<Notice | null>(null);
   pending = $state.raw<PendingDrop | null>(null);
@@ -239,6 +240,7 @@ export class OnWater {
     }
     const { trip } = restored.success;
     if (trip.endedAt === null) this.trip = trip;
+    else await this.#loadPast(book);
     this.#say(`${undo.name} restored`);
   }
 
@@ -252,6 +254,7 @@ export class OnWater {
     const saved = await resultOf(book.saveDrop(dropId, edit, kind));
     if (Result.isFailure(saved)) return PROBLEMS[saved.failure._tag];
     this.#show(saved.success.trip);
+    if (saved.success.trip.endedAt !== null) await this.#loadPast(book);
     return null;
   }
 
@@ -313,7 +316,36 @@ export class OnWater {
     }
     const { trip, name, deletion } = deleted.success;
     if (this.trip?.id === deletion.trip.id) this.trip = trip;
+    if (deletion.trip.endedAt !== null) await this.#loadPast(book);
     this.#say(`${name} deleted`, { action: 'restore', deletion, name });
+    return true;
+  }
+
+  async endTrip(tripId: string) {
+    if (this.pending) return false;
+    const book = await this.#book;
+    if (!book) return false;
+    const ended = await resultOf(book.endTrip(tripId));
+    if (Result.isFailure(ended) && ended.failure._tag === 'StorageFailed') {
+      this.#say("Couldn't end the trip. Try again.");
+      return false;
+    }
+    if (this.trip?.id === tripId) this.trip = null;
+    await this.#loadPast(book);
+    this.#say('Trip ended. It is under Past trips.');
+    return true;
+  }
+
+  async deleteTrip(tripId: string) {
+    const book = await this.#book;
+    if (!book) return false;
+    const deleted = await resultOf(book.deleteTrip(tripId));
+    if (Result.isFailure(deleted)) {
+      this.#say("Couldn't delete the trip. Try again.");
+      return false;
+    }
+    await this.#loadPast(book);
+    this.#say('Trip deleted');
     return true;
   }
 
@@ -326,8 +358,14 @@ export class OnWater {
     if (book) {
       const exit = await Effect.runPromiseExit(book.activeTrip());
       if (Exit.isSuccess(exit)) this.trip = exit.value;
+      await this.#loadPast(book);
     }
     this.ready = true;
+  }
+
+  async #loadPast(book: TripBook) {
+    const exit = await Effect.runPromiseExit(book.pastTrips());
+    if (Exit.isSuccess(exit)) this.past = exit.value;
   }
 
   #show(trip: Trip) {

@@ -15,12 +15,14 @@
     open,
     filter = $bindable({ ...DEFAULT_MAP_FILTER }),
     multiDay,
+    hasPast,
     onclose,
     returnFocus
   }: {
     open: boolean;
     filter?: MapFilter;
     multiDay: boolean;
+    hasPast: boolean;
     onclose: () => void;
     returnFocus: () => HTMLElement | null | undefined;
   } = $props();
@@ -58,6 +60,21 @@
         <span class="pointer-events-none flex-1">Collected gear</span>
         {@render check()}
       </label>
+      {#if hasPast}
+        <label class={choiceClass}>
+          <input
+            type="checkbox"
+            class={inputClass}
+            bind:checked={filter.past}
+          />
+          <span
+            class="pointer-events-none inline-flex items-center rounded-md border-2 border-dotted border-[#4b5b6c] bg-white p-0.5 text-[#4b5b6c]"
+            aria-hidden="true"><GearIcon kind="pot" size={14} /></span
+          >
+          <span class="pointer-events-none flex-1">Past trips</span>
+          {@render check()}
+        </label>
+      {/if}
       <label class={choiceClass}>
         <input
           type="checkbox"

@@ -26,6 +26,11 @@
   import type { Camera, MapPlace, MyPosition } from './types';
 
   const SHOW_ZOOM = 15;
+  const LAYER_ORDER: Record<MapPlace['layer'], number> = {
+    past: 0,
+    collected: 1,
+    'in-water': 3
+  };
   const MAX_ZOOM = 19;
   const MIN_ZOOM = 0;
   const FIT_PADDING = 64;
@@ -288,7 +293,7 @@
       <div class="contents">
         <div
           data-place={place.id}
-          style:z-index={place.layer === 'collected' ? 1 : 3}
+          style:z-index={LAYER_ORDER[place.layer]}
           use:marker={place.at}
         >
           {@render pin(place.id)}
