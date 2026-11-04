@@ -233,6 +233,27 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   );
   await capture('04-show-on-map');
 
+  await pot1.click();
+  await sheet.getByRole('button', { name: 'One more kept' }).click();
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(
+    detail.getByRole('button', {
+      name: 'Pot 1 3 kept, 0 released',
+      exact: true
+    })
+  ).toBeVisible();
+  await expect(pot1).toHaveCount(0);
+  const edited = await readTrips(page);
+  expect(edited).toMatchObject([
+    { drops: [{ catch: { kept: 3, released: 0 } }, { catch: null }] }
+  ]);
+  keep('indexeddb-catch-edited.json', edited);
+  log(
+    'edit the past Pot 1 catch to 3 kept and Save; the trip list shows Pot 1 3 kept, 0 released once the sheet closes, and the store holds it'
+  );
+  await capture('05-catch-edited');
+
   const before = await readTrips(page);
   await page.reload();
   await tab(page, 'Past trips').click();
@@ -248,7 +269,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   await expect(
     sheet.getByRole('heading', { name: 'Delete this trip?' })
   ).toBeVisible();
-  await capture('05-delete-confirm');
+  await capture('06-delete-confirm');
   await sheet.getByRole('button', { name: 'Keep it' }).click();
   await expect(deleteTrip).toBeFocused();
   expect(await readTrips(page)).toHaveLength(1);
@@ -266,5 +287,5 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   log(
     'Delete trip asks first; Keep it refocuses the button and stores nothing; confirming deletes it, toast Trip deleted, empty list with its heading focused, store empty'
   );
-  await capture('06-deleted');
+  await capture('07-deleted');
 });

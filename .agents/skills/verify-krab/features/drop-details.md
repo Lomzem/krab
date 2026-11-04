@@ -8,7 +8,8 @@ Open a dropped pot or net in its gear sheet to add a label, bait, depth and note
 - `details-save`: Save in the footer stores label, bait, depth (ft) and notes, closes the sheet and survives reload.
 - `details-depth`: a negative or non-numeric depth keeps the sheet open, marks Depth invalid and focuses it.
 - `details-kind`: switching kind gives the next number of the new kind (Net 1 becomes Pot 2 after Pot 1) and is refused once the gear has been dropped again.
-- `details-delete`: Delete drop removes the row at once, shows `{name} deleted`, and Undo restores the same record in its original position. Deleting a trip's only drop removes the trip; Undo brings back the same trip.
+- `details-delete`: Delete drop removes the row at once, shows `{name} deleted`, and Undo restores the same record in its original position. Deleting a trip's only drop removes the trip; Undo brings back the same trip. Deleting a drop that is already gone, for example deleted in another tab, closes the sheet without an error.
+- `details-restore-order`: a restored drop goes back among its gear's drops by drop time, and restored gear goes back among the other gear by when it was first dropped. Undo is refused with `Couldn't undo. {name} has been dropped again since.` when that gear has a drop in the water by then, so a gear is never in the water twice.
 - `details-focus`: the sheet is a modal dialog: focus moves in, stays in while open, and returns to the opening row (or to the Drop button after a delete).
 
 ## How to get to it (user POV)
@@ -34,6 +35,7 @@ Preconditions: launch and doctor from the parent skill; fresh context; complete 
 - A row may carry a second line, `Rough position, within about …`, when the fix was rough; it is part of the row button's name, so filter rows by gear name rather than matching the whole name.
 - Every list row is now a button inside its list item. Scope rows to `main`, because the navigation buttons are also buttons.
 - The kind-locked refusal needs a gear dropped twice: collect it and use `Drop pot again here` (see [Collecting](collecting.md)). Do not seed records to reach it; the trip module tests own that rule.
+- The already-gone delete is proven in `e2e/gear-sheet.test.ts` with a second page in the same context. Restore order and the dropped-again refusal belong to the trip module tests: one page can't reach the refusal, because a newer notice replaces the Undo toast.
 - `e2e/gear-sheet.test.ts` is a product test run by `bun run test:e2e:container`. It is not verification evidence for this map.
 - Click `Delete drop` once. A double click can land its second click on whatever sits under the closed sheet.
 - Press Escape after the reload check, before opening Net 1, so the row click reaches the list rather than the open sheet.
