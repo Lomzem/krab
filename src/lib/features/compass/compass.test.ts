@@ -186,11 +186,17 @@ test('readings that cancel out give the latest reading, not a made-up direction'
   expectHeading(read(270), 270 + NOAA_ARCTIC_D_2025);
 });
 
-test('a long gap between readings starts smoothing afresh', async () => {
-  const { read } = await turnedOn();
-  read(0);
-  expectHeading(read(90, { afterMs: 5000 }), 90 + NOAA_ARCTIC_D_2025);
-});
+test.each([
+  { gapMs: 499, shows: 'halfway', expected: 45 + NOAA_ARCTIC_D_2025 },
+  { gapMs: 500, shows: 'the turn', expected: 90 + NOAA_ARCTIC_D_2025 }
+])(
+  'a turn from 0° to 90° read $gapMs ms later shows $shows, as smoothing keeps only the last 500 ms',
+  async ({ gapMs, expected }) => {
+    const { read } = await turnedOn();
+    read(0);
+    expectHeading(read(90, { afterMs: gapMs }), expected);
+  }
+);
 
 test.each([
   { screenAngleDeg: 0, heading: 45, expected: 46.28 },
