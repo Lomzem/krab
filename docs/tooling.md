@@ -9,7 +9,7 @@ Use Bun 1.4.4 and the Node version in `.node-version`. Install the pinned tools 
 | `bun run lint`               | Run the absolute comment check and then ESLint                                                                             |
 | `bun run check`              | Synchronize SvelteKit and check the whole TypeScript/Svelte project, including tooling, then type-check the service worker |
 | `bun run test:policy`        | Exercise paired valid/invalid inputs through those real commands in a disposable checkout                                  |
-| `bun run test:unit`          | Run the Vitest suites under `src/**/*.test.ts`                                                                             |
+| `bun run test:unit`          | Run the Vitest suites under `src/**/*.test.ts` and `scripts/verify-krab/**/*.test.ts`                                      |
 | `bun run build:next`         | Keep the current `build/` as `.svelte-kit/previous-build`, then build again as a newer version                             |
 | `bun run test:e2e`           | Run the Playwright suite in `e2e/` against existing builds                                                                 |
 | `bun run test:e2e:container` | Run `build` and `build:next`, then run `test:e2e` inside the pinned Playwright Docker image                                |

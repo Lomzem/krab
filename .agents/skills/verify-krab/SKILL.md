@@ -25,7 +25,7 @@ Isolation: container network and fresh browser contexts isolate other checkouts.
 
 ## Doctor
 
-The run first checks `docker info` and `docker image inspect` on that image without pulling or changing Docker. Before every journey, the read-only doctor in `scripts/verify-krab/doctor.ts` reads the preview PID receipt, `/proc/<pid>/cmdline`, its socket descriptors and TCP listener table. It requires that this run's strict-port Vite process owns the listener on 127.0.0.1:4173. The result is `doctor.json` beside each journey's artifacts.
+The run first checks `docker info` and `docker image inspect` on that image without pulling or changing Docker. Before every journey, the read-only doctor in `scripts/verify-krab/doctor.ts` reads the preview PID receipt, `/proc/<pid>/cmdline`, its socket descriptors and TCP listener table. It requires that this run's strict-port Vite process owns the listener on 127.0.0.1:4173. A descriptor that closes during the scan is skipped; any other descriptor read failure fails the doctor, as `scripts/verify-krab/doctor.test.ts` checks. The result is `doctor.json` beside each journey's artifacts.
 
 While a run is active, invoke the same read-only checks from another terminal:
 

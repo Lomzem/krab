@@ -36,7 +36,7 @@ bun run test:unit
 bun run test:e2e:container
 ```
 
-`test:unit` runs every Vitest suite under `src/**/*.test.ts`; the trip module's suite drives its public interface over `fake-indexeddb`, with a fixed clock and position source. `test:e2e:container` builds the site twice (the second build stands in for an update) and runs the Playwright WebKit suite with iPhone emulation, an emulated made-up position and axe (WCAG 2.2 AA, light and dark) inside the official `mcr.microsoft.com/playwright:v<version>-noble` image whose version matches the installed `@playwright/test`, because WebKit does not launch natively on every Linux host. It needs Docker. Where WebKit runs natively (as in CI), `bun run build && bun run build:next && bun run test:e2e` runs the same suite directly. Test output goes to the ignored `test-results/`.
+`test:unit` runs every Vitest suite under `src/**/*.test.ts` and `scripts/verify-krab/**/*.test.ts`; the trip module's suite drives its public interface over `fake-indexeddb`, with a fixed clock and position source. `test:e2e:container` builds the site twice (the second build stands in for an update) and runs the Playwright WebKit suite with iPhone emulation, an emulated made-up position and axe (WCAG 2.2 AA, light and dark) inside the official `mcr.microsoft.com/playwright:v<version>-noble` image whose version matches the installed `@playwright/test`, because WebKit does not launch natively on every Linux host. It needs Docker. Where WebKit runs natively (as in CI), `bun run build && bun run build:next && bun run test:e2e` runs the same suite directly. Test output goes to the ignored `test-results/`.
 
 ## Installation assets
 
