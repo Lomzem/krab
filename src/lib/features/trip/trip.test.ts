@@ -33,6 +33,7 @@ const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 const SEA = { lat: 0, lon: -140 };
 
@@ -1567,3 +1568,20 @@ it.each<{ selection: PastDaySelection; names: string[] }>([
     ]);
   }
 );
+
+it('dates and groups a past trip in the phone’s current time zone after the zone changes', async () => {
+  const { state, open } = withoutLocation();
+  const book = await open();
+  await placeAt(book, state, '2031-06-11T01:00:00-04:00');
+  const last = await placeAt(book, state, '2031-06-11T08:00:00-04:00');
+  const ended = await run(book.endTrip(last.trip.id));
+  expect(tripDates(ended)).toBe('Wednesday, June 11, 2031');
+
+  vi.stubEnv('TZ', 'America/Los_Angeles');
+
+  expect(tripDates(ended)).toBe('Tuesday, June 10 to Wednesday, June 11, 2031');
+  expect(statusByDay(ended)).toEqual([
+    ['Day 1', [['Pot 1', 'Uncollected']]],
+    ['Day 2', [['Pot 2', 'Uncollected']]]
+  ]);
+});
