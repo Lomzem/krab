@@ -1,9 +1,13 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test, toastOf } from './fixtures';
+import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
+import { deliverFix, holdFixes } from './held-geolocation';
 
 const MORNING = new Date('2031-06-10T07:30:00-04:00');
+const LATE_EVENING = new Date('2031-06-10T23:40:00-04:00');
 const TRIP_DATE = 'Tuesday, June 10, 2031';
+const TWO_DAYS = 'Tuesday, June 10 to Wednesday, June 11, 2031';
 
 test.use({ timezoneId: 'America/New_York' });
 
@@ -18,6 +22,16 @@ const dropOf = async (page: Page, kind: 'Pot' | 'Net', name: string) => {
   await page
     .getByRole('button', { name: `Drop ${kind.toLowerCase()}` })
     .click();
+  await expect(toastOf(page)).toContainText(`${name} dropped`);
+};
+
+const dropPotAt = async (page: Page, north: number, name: string) => {
+  await deliverFix(page, {
+    latitude: MADE_UP_SEA.latitude + north,
+    longitude: MADE_UP_SEA.longitude
+  });
+  await expect(page.getByText('Position ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText(`${name} dropped`);
 };
 
@@ -165,7 +179,7 @@ test('collect Pot 1 with its catch, end the trip with Net 1 still in, and find b
   await expect(pastTrip).toBeFocused();
 });
 
-test('deleting the only drop of a past trip removes the trip until Undo brings it back, and Delete trip asks first and then removes it for good', async ({
+test('a past trip over two days opens on All, and Last day and Earlier days narrow its rows and pins together; deleting its only remaining drop removes the trip until Undo brings it back, and Delete trip asks first and then removes it for good', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -174,20 +188,53 @@ test('deleting the only drop of a past trip removes the trip until Undo brings i
     level: 1,
     name: 'Past trips'
   });
+  const detail = page.getByRole('region', { name: TWO_DAYS });
+  const days = detail.getByRole('group', { name: 'Days on this trip' });
+  const named = (name: string) =>
+    detail.getByRole('button', { name, exact: true });
+  const pot1 = [named('Pot 1 Uncollected'), named('Pot 1, Day 1, Uncollected')];
+  const pot2 = [named('Pot 2 Uncollected'), named('Pot 2, Day 2, Uncollected')];
+  const expectShown = async (shown: Locator[], hidden: Locator[]) => {
+    for (const target of shown) await expect(target).toBeVisible();
+    for (const target of hidden) await expect(target).toHaveCount(0);
+  };
 
-  await page.clock.install({ time: MORNING });
+  await holdFixes(page);
+  await page.clock.install({ time: LATE_EVENING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
-  await dropOf(page, 'Pot', 'Pot 1');
+  await dropPotAt(page, 0, 'Pot 1');
+  await page.clock.fastForward('30:00');
+  await dropPotAt(page, 0.0005, 'Pot 2');
   await endTheTrip(
     page,
-    "1 drop is still in the water. It'll be saved as uncollected."
+    "2 drops are still in the water. They'll be saved as uncollected."
   );
 
   await tab(page, 'Past trips').click();
+  await main
+    .getByRole('button', {
+      name: `${TWO_DAYS} 2 drops, 2 uncollected`,
+      exact: true
+    })
+    .click();
+  await expect(days.getByRole('radio', { name: 'All' })).toBeChecked();
+  await expectShown([...pot1, ...pot2], []);
+  await days.getByRole('radio', { name: 'Last day' }).check();
+  await expectShown(pot2, pot1);
+  await days.getByRole('radio', { name: 'Earlier days' }).check();
+  await expectShown(pot1, pot2);
+  await days.getByRole('radio', { name: 'All' }).check();
+  await expectShown([...pot1, ...pot2], []);
+
+  await named('Pot 2 Uncollected').click();
+  await sheet.getByRole('button', { name: 'Delete drop' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(toastOf(page)).toContainText('Pot 2 deleted');
   const pastTrip = main.getByRole('button', { name: new RegExp(TRIP_DATE) });
-  await pastTrip.click();
+  await expect(
+    main.getByRole('heading', { level: 1, name: TRIP_DATE })
+  ).toBeVisible();
   await main
     .getByRole('button', { name: 'Pot 1 Uncollected', exact: true })
     .click();
