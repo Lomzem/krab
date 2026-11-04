@@ -110,7 +110,7 @@ const relaunchUntilServing = async (
   return serving;
 };
 
-test('after one online load Krab opens offline and shows the stored trip', async ({
+test('after one online load Krab opens offline and shows the stored trip on the map and in Gear', async ({
   context,
   page
 }) => {
@@ -123,6 +123,10 @@ test('after one online load Krab opens offline and shows the stored trip', async
   await goOffline(context, site);
   const offline = await launch(context, site);
 
+  await offline.getByRole('button', { name: 'Map', exact: true }).click();
+  const map = offline.getByRole('region', { name: 'Map', exact: true });
+  await expect(map.getByRole('region', { name: 'Map view' })).toBeVisible();
+  await expect(map.getByRole('button', { name: /^Pot 1,/ })).toBeVisible();
   await expectStoredPot(offline);
 });
 
