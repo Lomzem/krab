@@ -6,7 +6,7 @@ Krab keeps working with no signal after one online load. The service worker in `
 
 - Each build has one cache named `krab-shell-<version>`, where the version is the build's SvelteKit version (`_app/version.json`).
 - Install fetches the shell `/`, every immutable build file and the static assets, bypassing the HTTP cache. Deployment metadata (paths starting with `_`, such as `_app/version.json`) is not cached. A missing file or an unexpected response type fails the install, so a broken deploy never replaces a working copy.
-- The worker serves only same-origin `GET` requests. A precached path comes from the cache. A navigation gets the cached shell, which then restores the stored trip. Anything else, including map tiles and every third-party request, goes to the network untouched.
+- The worker serves only same-origin `GET` requests. A precached path comes from the cache. A navigation gets the cached shell, which then restores the stored trip. If the cache can't be opened or read, those requests go to the network instead. Anything else, including map tiles and every third-party request, goes to the network untouched.
 - There is no `skipWaiting`. A new build installs in the background and waits while any Krab page is open, so a skipper never has the app change under them mid-trip. It takes over on the next launch after every Krab page has closed.
 - Activation deletes every other `krab-shell-` cache, then claims open pages.
 
@@ -48,7 +48,7 @@ After the worker build is deployed (ticket 11), run these checks:
 
 ## Kill switch
 
-If a broken worker gets onto phones, ship the recovery worker in `src/service-worker/kill-switch.ts`. Nothing imports it day to day. It activates straight away, deletes every `krab-shell-` cache and unregisters itself. The next load then comes straight from the network. IndexedDB, and with it the active trip and past trips, is never touched.
+If a broken worker gets onto phones, ship the recovery worker in `src/service-worker/kill-switch.ts`. Nothing imports it day to day. It activates straight away, deletes every `krab-shell-` cache and unregisters itself. It unregisters even if deleting a cache fails, and that failure is still reported. The next load then comes straight from the network. IndexedDB, and with it the active trip and past trips, is never touched.
 
 To deploy it:
 
@@ -58,6 +58,6 @@ To deploy it:
 
 Keep the worker at the same URL with the same headers. Phones only replace a worker by fetching a new script from `/service-worker.js`. Deleting the file, or serving HTML there, leaves the broken worker in charge.
 
-To verify, open Krab online once on an affected phone, then reload. `navigator.serviceWorker.getRegistration()` should resolve to `undefined`, `caches.keys()` should contain no `krab-shell-` entry, and the stored trip should still show. This procedure was checked once by hand in Playwright WebKit during ticket 07. It has no automated test.
+To verify, open Krab online once on an affected phone, then reload. `navigator.serviceWorker.getRegistration()` should resolve to `undefined`, `caches.keys()` should contain no `krab-shell-` entry, and the stored trip should still show. This procedure was checked once by hand in Playwright WebKit during ticket 07. `src/service-worker/worker.test.ts` runs the recovery worker's activation against stand-in caches; the browser procedure itself has no automated test.
 
 To restore offline support, revert both changes and deploy normally.

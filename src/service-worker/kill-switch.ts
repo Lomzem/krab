@@ -7,6 +7,6 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    deleteCaches(() => false).then(() => self.registration.unregister())
+    deleteCaches(() => false).finally(() => self.registration.unregister())
   );
 });

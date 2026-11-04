@@ -44,6 +44,7 @@ const fromCache = (path: string, request: Request) =>
   caches
     .open(CACHE)
     .then((cache) => cache.match(path))
+    .catch(() => undefined)
     .then((cached) => cached ?? fetch(request));
 
 const cachedPath = (request: Request) => {
