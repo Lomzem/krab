@@ -51,7 +51,7 @@ export default defineConfig([
   },
   svelte.configs.recommended,
   {
-    files: ['**/*.svelte'],
+    files: ['**/*.svelte', '**/*.svelte.ts'],
     languageOptions: { parserOptions: { parser: ts.parser } },
     rules: { 'svelte/comment-directive': 'off' }
   },
@@ -60,6 +60,20 @@ export default defineConfig([
     plugins: { shadcn },
     settings: { shadcn: { ui: '#lib/components/ui' } },
     rules: { 'shadcn/no-restyle': ['error', { allow: ['layout'] }] }
+  },
+  {
+    files: ['e2e/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          name: '@playwright/test',
+          importNames: ['test'],
+          message:
+            "Import test from './fixtures', whose auto fixture answers NOAA and OpenFreeMap."
+        }
+      ]
+    }
   },
   {
     files: ['src/lib/components/ui/**'],
