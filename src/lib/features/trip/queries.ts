@@ -188,3 +188,79 @@ export const collectedGear = (trip: Trip) => {
 
 export const nearestGear = (rows: readonly GearRow[]): GearRow | null =>
   rows.find((row) => row.direction !== null) ?? null;
+
+const latestDrop = (trip: Trip) =>
+  Math.max(trip.startedAt, ...trip.drops.map((drop) => drop.placedAt));
+
+const earliestDrop = (trip: Trip) =>
+  Math.min(...trip.drops.map((drop) => drop.placedAt));
+
+const fullDate = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric'
+});
+
+const dateInYear = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric'
+});
+
+export const tripDates = (trip: Trip) => {
+  const first = new Date(earliestDrop(trip));
+  const last = new Date(latestDrop(trip));
+  if (localDate(first.getTime()) === localDate(last.getTime())) {
+    return fullDate.format(first);
+  }
+  if (first.getFullYear() === last.getFullYear()) {
+    return `${dateInYear.format(first)} to ${fullDate.format(last)}`;
+  }
+  return `${fullDate.format(first)} to ${fullDate.format(last)}`;
+};
+
+export const pastTripCounts = (trip: Trip) => {
+  const drops = trip.drops.length;
+  const uncollected = trip.drops.filter(isInWater).length;
+  const total = `${String(drops)} ${drops === 1 ? 'drop' : 'drops'}`;
+  return uncollected === 0
+    ? total
+    : `${total}, ${String(uncollected)} uncollected`;
+};
+
+export type PastDaySelection = 'last' | 'earlier' | 'all';
+
+export type PastDropRow = {
+  drop: Drop;
+  gear: Gear;
+  name: string;
+  status: string;
+  day: Day | null;
+};
+
+const DAY_OF_PAST: Record<PastDaySelection, DaySelection> = {
+  last: 'today',
+  earlier: 'earlier',
+  all: 'all'
+};
+
+export const pastDrops = (trip: Trip, selection: PastDaySelection) => {
+  const dayFor = dayNamer(trip);
+  return dropsInDays(trip, DAY_OF_PAST[selection], latestDrop(trip)).flatMap(
+    (drop): PastDropRow[] => {
+      const gear = trip.gear.find((item) => item.id === drop.gearId);
+      if (!gear) return [];
+      return [
+        {
+          drop,
+          gear,
+          name: gearName(gear),
+          status:
+            drop.collectedAt === null ? 'Uncollected' : catchText(drop.catch),
+          day: dayFor(drop)
+        }
+      ];
+    }
+  );
+};

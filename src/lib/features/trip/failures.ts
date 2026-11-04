@@ -32,3 +32,11 @@ export class DroppedAgain extends Data.TaggedError('DroppedAgain')<{
 export class CannotDropAgain extends Data.TaggedError('CannotDropAgain')<{
   readonly dropId: string;
 }> {}
+
+export class TripNotFound extends Data.TaggedError('TripNotFound')<{
+  readonly tripId: string;
+}> {}
+
+export class TripNotEnded extends Data.TaggedError('TripNotEnded')<{
+  readonly tripId: string;
+}> {}

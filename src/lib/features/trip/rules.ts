@@ -25,6 +25,14 @@ export const KIND_NAMES: Record<Kind, string> = { pot: 'Pot', net: 'Net' };
 export const activeOf = (trips: readonly Trip[]) =>
   trips.find((trip) => trip.endedAt === null) ?? null;
 
+export const pastOf = (trips: readonly Trip[]) =>
+  trips
+    .filter((trip) => trip.endedAt !== null)
+    .sort((a, b) => b.startedAt - a.startedAt);
+
+export const endTrip = (trip: Trip, at: number): Trip | null =>
+  trip.endedAt === null ? { ...trip, endedAt: at } : null;
+
 export const gearName = (gear: Gear) =>
   `${KIND_NAMES[gear.kind]} ${String(gear.number)}`;
 

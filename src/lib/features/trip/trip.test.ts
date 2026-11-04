@@ -14,8 +14,12 @@ import {
   isMultiDay,
   nearestGear,
   openTripBook,
+  pastDrops,
+  pastTripCounts,
+  tripDates,
   tripDays,
   type DaySelection,
+  type PastDaySelection,
   type Drop,
   type DropEdit,
   type Fix,
@@ -753,39 +757,6 @@ it('changes kind to the next number of the new kind and never reuses the old one
   expect(names).toEqual(['Net 2', 'Pot 3', 'Net 3', 'Pot 4']);
 });
 
-const storedDrop = (id: string, gearId: string, placedAt: number): Drop => ({
-  id,
-  gearId,
-  placedAt,
-  position: null,
-  noPosition: 'skipped',
-  label: '',
-  bait: '',
-  depthFt: null,
-  notes: '',
-  collectedAt: placedAt + 60_000,
-  catch: null
-});
-
-const storeTrip = (idb: IDBFactory, trip: Trip) =>
-  new Promise<void>((resolve, reject) => {
-    const request = idb.open('krab');
-    request.onsuccess = () => {
-      const tx = request.result.transaction('trips', 'readwrite');
-      tx.objectStore('trips').put(trip);
-      tx.oncomplete = () => {
-        request.result.close();
-        resolve();
-      };
-      tx.onabort = () => {
-        reject(tx.error ?? new Error('aborted'));
-      };
-    };
-    request.onerror = () => {
-      reject(request.error ?? new Error('not opened'));
-    };
-  });
-
 it('a Save whose kind is locked because the gear was dropped again stores none of its details', async () => {
   const { open } = withoutLocation();
   const book = await open();
@@ -855,34 +826,6 @@ it('removes the trip with its only drop, and restoring brings back the same trip
   expect(next.trip.id).toBe(pot2.trip.id);
   expect(next.trip.drops.slice(0, 2)).toEqual(pot2.trip.drops);
   expect(next.name).toBe('Pot 3');
-});
-
-it('deletes and restores the only drop of a past trip, and the restored trip is stored', async () => {
-  const { open, idb } = withoutLocation();
-  const book = await open();
-  const past: Trip = {
-    id: 'trip-past',
-    startedAt: T0 - 86_400_000,
-    endedAt: T0 - 80_000_000,
-    gear: [{ id: 'gear-p', kind: 'net', number: 4 }],
-    drops: [storedDrop('drop-p', 'gear-p', T0 - 86_400_000)],
-    next: { pot: 3, net: 5 }
-  };
-  await storeTrip(idb, past);
-  const active = await place(book, 'pot');
-
-  const deleted = await run(book.deleteDrop('drop-p'));
-  const restored = await run(book.restoreDrop(deleted.deletion));
-  await run(book.restoreDrop(deleted.deletion));
-
-  const stored: unknown = await withStoredTrips(idb, 'readonly', (trips) =>
-    trips.get('trip-past')
-  );
-
-  expect([deleted.name, deleted.trip]).toEqual(['Net 4', null]);
-  expect(restored.trip).toEqual(past);
-  expect(stored).toEqual(past);
-  expect(await run(book.activeTrip())).toEqual(active.trip);
 });
 
 it('refuses to restore an emptied active trip after another trip has started', async () => {
@@ -1358,3 +1301,269 @@ it('selects every drop of a one-day trip whatever day is chosen, even when that 
   expect(dropsInDays(trip, 'today', nextMorning)).toHaveLength(2);
   expect(dropsInDays(trip, 'earlier', nextMorning)).toHaveLength(2);
 });
+
+const flip = <A, E>(effect: Effect.Effect<A, E>) =>
+  Effect.runPromise(Effect.flip(effect));
+
+it('ends the trip once, keeping its gear in the water as uncollected drops, and the next drop starts a new trip at Pot 1 and Net 1', async () => {
+  const { open, advance } = withoutLocation();
+  const book = await open();
+  const pot1 = await place(book, 'pot');
+  await place(book, 'pot');
+  await place(book, 'net');
+  await run(book.collect(pot1.drop.id));
+  advance(2 * 3_600_000);
+
+  abortNextTransaction();
+  const failed = await flip(book.endTrip(pot1.trip.id));
+  const stillRunning = await run(book.activeTrip());
+  const ended = await run(book.endTrip(pot1.trip.id));
+  advance(60_000);
+  const again = await run(book.endTrip(pot1.trip.id));
+  const afterEnd = await run(book.activeTrip());
+  const nextNet = await place(book, 'net');
+  const nextPot = await place(book, 'pot');
+
+  expect(failed._tag).toBe('StorageFailed');
+  expect(stillRunning?.endedAt).toBeNull();
+  expect(ended.endedAt).toBe(T0 + 2 * 3_600_000);
+  expect(again).toEqual(ended);
+  expect(pastTripCounts(ended)).toBe('3 drops, 2 uncollected');
+  expect(afterEnd).toBeNull();
+  expect(await run(book.pastTrips())).toEqual([ended]);
+  expect([nextNet.name, nextPot.name]).toEqual(['Net 1', 'Pot 1']);
+  expect(nextPot.trip.id).not.toBe(pot1.trip.id);
+});
+
+it('refuses to end a trip that is gone, such as one whose only drop was undone', async () => {
+  const { open } = withoutLocation();
+  const book = await open();
+  const only = await place(book, 'pot');
+  await run(book.undoDrop(only.drop.id));
+
+  const refusal = await flip(book.endTrip(only.trip.id));
+
+  expect(refusal._tag).toBe('TripNotFound');
+  expect(await run(book.pastTrips())).toEqual([]);
+});
+
+it('never collects or undoes a collect on a past trip, refuses a catch on an uncollected past drop, and saves details and catch on a collected one with its position kept', async () => {
+  const { open } = harness();
+  const book = await open();
+  const pot = await place(book, 'pot');
+  const net = await place(book, 'net');
+  const { trip: collected } = await run(book.collect(pot.drop.id));
+  const ended = await run(book.endTrip(pot.trip.id));
+  const details = {
+    label: ' red float ',
+    bait: 'squid',
+    depthFt: 12,
+    notes: 'late '
+  };
+
+  const refusals = await Promise.all([
+    flip(book.collect(net.drop.id)),
+    flip(book.undoCollect(pot.drop.id)),
+    flip(
+      book.saveDrop(
+        net.drop.id,
+        { details, catch: { kept: 1, released: 0 } },
+        null
+      )
+    )
+  ]);
+  await run(
+    book.saveDrop(
+      pot.drop.id,
+      { details, catch: { kept: 3, released: 2 } },
+      null
+    )
+  );
+  await run(book.saveDrop(net.drop.id, { details, catch: null }, null));
+  const [past] = await run(book.pastTrips());
+  const trimmed = {
+    label: 'red float',
+    bait: 'squid',
+    depthFt: 12,
+    notes: 'late'
+  };
+
+  expect(refusals.map((failure) => failure._tag)).toEqual([
+    'DropNotFound',
+    'DropNotFound',
+    'NotCollected'
+  ]);
+  expect(past.endedAt).toBe(ended.endedAt);
+  expect(past.drops).toEqual([
+    { ...collected.drops[0], ...trimmed, catch: { kept: 3, released: 2 } },
+    { ...net.drop, ...trimmed }
+  ]);
+  expect(past.drops.map((drop) => drop.position)).toEqual([
+    { ...SEA, accuracyM: 5 },
+    { ...SEA, accuracyM: 5 }
+  ]);
+  expectTypeOf<DropEdit>().not.toHaveProperty('position');
+  expectTypeOf<DropEdit['details']>().not.toHaveProperty('position');
+});
+
+it('changes the kind of past gear with one drop to that trip’s next number, and locks it while that trip’s gear has another drop', async () => {
+  const { open } = withoutLocation();
+  const book = await open();
+  const pot1 = await place(book, 'pot');
+  await run(book.collect(pot1.drop.id));
+  const again = await dropAgain(book, pot1.drop.id);
+  const pot2 = await place(book, 'pot');
+  await place(book, 'net');
+  const ended = await run(book.endTrip(pot1.trip.id));
+  await place(book, 'pot');
+
+  const locked = await flip(book.saveDrop(pot1.drop.id, NO_DETAILS, 'net'));
+  const renamed = await run(book.saveDrop(pot2.drop.id, NO_DETAILS, 'net'));
+  await run(book.deleteDrop(again.drop.id));
+  const unlocked = await run(book.saveDrop(pot1.drop.id, NO_DETAILS, 'net'));
+  const nextPot = await place(book, 'pot');
+  const nextNet = await place(book, 'net');
+
+  expect(locked._tag).toBe('KindLocked');
+  expect([renamed.name, unlocked.name]).toEqual(['Net 2', 'Net 3']);
+  expect(unlocked.trip.endedAt).toBe(ended.endedAt);
+  expect([nextPot.name, nextNet.name]).toEqual(['Pot 2', 'Net 1']);
+});
+
+it('deletes past drops down to removing the trip, and restoring brings back the same stored past trip while another trip runs', async () => {
+  const { open, idb } = withoutLocation();
+  const book = await open();
+  const net = await place(book, 'net');
+  const pot = await place(book, 'pot');
+  await run(book.collect(net.drop.id));
+  const ended = await run(book.endTrip(net.trip.id));
+  const active = await place(book, 'pot');
+
+  const second = await run(book.deleteDrop(pot.drop.id));
+  const kept = await run(book.pastTrips());
+  const only = await run(book.deleteDrop(net.drop.id));
+  const emptied = await run(book.pastTrips());
+  const restored = await run(book.restoreDrop(only.deletion));
+  await run(book.restoreDrop(only.deletion));
+  await run(book.restoreDrop(second.deletion));
+  const stored: unknown = await withStoredTrips(idb, 'readonly', (trips) =>
+    trips.get(ended.id)
+  );
+
+  expect([second.name, only.name, only.trip]).toEqual(['Pot 1', 'Net 1', null]);
+  expect(kept.map((trip) => trip.drops.length)).toEqual([1]);
+  expect(emptied).toEqual([]);
+  expect(restored.trip.endedAt).toBe(ended.endedAt);
+  expect(stored).toEqual(ended);
+  expect(await run(book.pastTrips())).toEqual([ended]);
+  expect(await run(book.activeTrip())).toEqual(active.trip);
+});
+
+it('deletes a past trip with its drops, leaving other trips alone, and refuses to delete the active trip', async () => {
+  const { open, advance } = withoutLocation();
+  const book = await open();
+  const first = await place(book, 'pot');
+  await run(book.endTrip(first.trip.id));
+  advance(86_400_000);
+  const second = await place(book, 'net');
+  const kept = await run(book.endTrip(second.trip.id));
+  advance(86_400_000);
+  const active = await place(book, 'pot');
+
+  const refusal = await flip(book.deleteTrip(active.trip.id));
+  await run(book.deleteTrip(first.trip.id));
+  await run(book.deleteTrip(first.trip.id));
+  const gone = await flip(book.deleteDrop(first.drop.id));
+
+  expect(refusal._tag).toBe('TripNotEnded');
+  expect(gone._tag).toBe('DropNotFound');
+  expect(await run(book.pastTrips())).toEqual([kept]);
+  expect(await run(book.activeTrip())).toEqual(active.trip);
+});
+
+it('lists past trips newest first, with their dates and counts in prose', async () => {
+  const { state, open } = withoutLocation();
+  const book = await open();
+  const endAt = async (localTime: string) => {
+    const trip = await run(book.activeTrip());
+    state.now = Date.parse(localTime);
+    if (trip) await run(book.endTrip(trip.id));
+  };
+  const oneDay = await placeAt(book, state, '2026-09-04T10:00:00-04:00');
+  await run(book.collect(oneDay.drop.id));
+  await endAt('2026-09-05T08:00:00-04:00');
+  const twoDays = await placeAt(book, state, '2026-09-10T10:00:00-04:00');
+  await run(book.collect(twoDays.drop.id));
+  await placeAt(book, state, '2026-09-11T08:00:00-04:00');
+  await endAt('2026-09-11T12:00:00-04:00');
+  await placeAt(book, state, '2026-12-31T16:00:00-05:00');
+  await placeAt(book, state, '2027-01-01T09:00:00-05:00');
+  await endAt('2027-01-01T12:00:00-05:00');
+
+  const listed = await run(book.pastTrips());
+
+  expect(listed.map((trip) => [tripDates(trip), pastTripCounts(trip)])).toEqual(
+    [
+      [
+        'Thursday, December 31, 2026 to Friday, January 1, 2027',
+        '2 drops, 2 uncollected'
+      ],
+      [
+        'Thursday, September 10 to Friday, September 11, 2026',
+        '2 drops, 1 uncollected'
+      ],
+      ['Friday, September 4, 2026', '1 drop']
+    ]
+  );
+});
+
+const statusOf = (row: { name: string; status: string }) => [
+  row.name,
+  row.status
+];
+
+const statusByDay = (trip: Trip) =>
+  dayGroups(pastDrops(trip, 'all')).map(({ day, rows }) => [
+    day.text,
+    rows.map(statusOf)
+  ]);
+
+it.each<{ selection: PastDaySelection; names: string[] }>([
+  { selection: 'last', names: ['Net 1'] },
+  { selection: 'earlier', names: ['Pot 1', 'Pot 2'] },
+  { selection: 'all', names: ['Pot 1', 'Pot 2', 'Net 1'] }
+])(
+  'shows a past trip’s $selection days by the trip’s own last day, with each drop’s catch or uncollected status',
+  async ({ selection, names }) => {
+    const { state, open } = withoutLocation();
+    const book = await open();
+    const pot1 = await placeAt(book, state, '2026-09-04T10:00:00-04:00');
+    await placeAt(book, state, '2026-09-04T11:00:00-04:00');
+    await run(book.collect(pot1.drop.id));
+    await run(
+      book.saveDrop(
+        pot1.drop.id,
+        { ...NO_DETAILS, catch: { kept: 2, released: 0 } },
+        null
+      )
+    );
+    state.now = Date.parse('2026-09-05T08:00:00-04:00');
+    const net = await place(book, 'net');
+    await run(book.collect(net.drop.id));
+    const ended = await run(book.endTrip(net.trip.id));
+
+    const rows = pastDrops(ended, selection);
+
+    expect(rows.map((row) => row.name)).toEqual(names);
+    expect(statusByDay(ended)).toEqual([
+      [
+        'Day 1',
+        [
+          ['Pot 1', '2 kept, 0 released'],
+          ['Pot 2', 'Uncollected']
+        ]
+      ],
+      ['Day 2', [['Net 1', 'Catch not recorded']]]
+    ]);
+  }
+);
