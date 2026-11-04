@@ -1,0 +1,585 @@
+import type { BrowserContext, Locator, Page } from '@playwright/test';
+import { expect, test, toastOf } from './fixtures';
+import { MADE_UP_SEA } from '../playwright.config';
+import {
+  expectAccessibleInBothThemes,
+  expectFocusTrapped
+} from './accessibility';
+
+const CHART_TILE =
+  /\/MarineChart_Services_NOAACharts\/default\/default028mm\/(\d+)\/\d+\/\d+\.png$/;
+const NOAA_TOP_LEVEL = 14;
+const OPEN_FREE_MAP = 'https://tiles.openfreemap.org/';
+
+const dropPotAndOpenMap = async (page: Page) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Position ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+};
+
+const mapArea = (page: Page) =>
+  page.getByRole('region', { name: 'Map', exact: true });
+const potOnMap = (page: Page) =>
+  mapArea(page).getByRole('button', { name: /^Pot 1,/ });
+const myPosition = (page: Page) =>
+  mapArea(page).getByRole('img', { name: /^Your position/ });
+
+const chartLevel = (url: string) => Number(CHART_TILE.exec(url)?.[1]);
+
+const writtenForms = (degrees: number) => {
+  const size = Math.abs(degrees);
+  const whole = Math.trunc(size);
+  const fraction = String(size).split('.')[1] ?? '';
+  return Array.from({ length: fraction.length }, (_, index) => index + 1)
+    .flatMap((places) => [
+      `${String(whole)}.${fraction.slice(0, places)}`,
+      size.toFixed(places)
+    ])
+    .flatMap((written) => [written, written.replace('.', ',')]);
+};
+
+const MADE_UP_SEA_FORMS = [
+  ...writtenForms(MADE_UP_SEA.latitude),
+  ...writtenForms(MADE_UP_SEA.longitude)
+];
+
+const expectNoPositionIn = (requested: string[]) => {
+  for (const url of requested.map((url) => decodeURIComponent(url))) {
+    expect(url.toLowerCase()).not.toContain('bbox');
+    for (const written of MADE_UP_SEA_FORMS) {
+      expect(url).not.toContain(written);
+    }
+  }
+};
+
+test('the Map tab shows gear and my position from the phone and asks NOAA only for fixed-grid tiles up to its top level', async ({
+  context,
+  page
+}) => {
+  const requested: string[] = [];
+  context.on('request', (request) => requested.push(request.url()));
+  await dropPotAndOpenMap(page);
+
+  await expect(potOnMap(page)).toBeVisible();
+  await expect(myPosition(page)).toBeVisible();
+  await expect(mapArea(page)).toContainText('Not to be used for navigation');
+
+  const zoomIn = mapArea(page).getByRole('button', { name: 'Zoom in' });
+  await expect(async () => {
+    await zoomIn.press('Enter');
+    await expect(zoomIn).toBeDisabled({ timeout: 1000 });
+  }).toPass();
+
+  const noaa = () => requested.filter((url) => url.includes('charttools'));
+  await expect.poll(() => noaa().map(chartLevel)).toContain(NOAA_TOP_LEVEL);
+  for (const url of noaa()) {
+    expect(url).toMatch(CHART_TILE);
+    expect(chartLevel(url)).toBeLessThanOrEqual(NOAA_TOP_LEVEL);
+  }
+  expectNoPositionIn(requested);
+});
+
+test('on the Street map, panning, every map control, Show on map and reload send no position to OpenFreeMap', async ({
+  context,
+  page
+}) => {
+  const requested: string[] = [];
+  context.on('request', (request) => requested.push(request.url()));
+  const streetTiles = () =>
+    requested.filter(
+      (url) => url.startsWith(OPEN_FREE_MAP) && url.endsWith('.png')
+    );
+  const streetStyles = () =>
+    requested.filter(
+      (url) => url.startsWith(OPEN_FREE_MAP) && !url.endsWith('.png')
+    );
+  const streetMap = mapArea(page).getByRole('button', { name: 'Street map' });
+  const chooseStreet = async () => {
+    const before = streetTiles().length;
+    await streetMap.click();
+    await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => streetTiles().length).toBeGreaterThan(before);
+  };
+  await dropPotAndOpenMap(page);
+  await chooseStreet();
+
+  const mapView = mapArea(page).getByRole('region', { name: 'Map view' });
+  for (const key of ['ArrowLeft', 'ArrowLeft', 'ArrowUp']) {
+    await mapView.press(key);
+  }
+  await mapArea(page).getByRole('button', { name: 'Zoom out' }).click();
+  await mapArea(page).getByRole('button', { name: 'Zoom in' }).click();
+  await mapArea(page)
+    .getByRole('button', { name: 'Centre on my position' })
+    .click();
+  const sheet = page.getByRole('dialog');
+  await mapArea(page)
+    .getByRole('button', { name: /^Filter/ })
+    .click();
+  await expect(
+    sheet.getByRole('heading', { name: 'Map filter' })
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await potOnMap(page).click();
+  await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page
+    .getByRole('main')
+    .getByRole('button')
+    .filter({ hasText: 'Pot 1' })
+    .click();
+  await sheet.getByRole('button', { name: 'Show on map' }).click();
+  await expect(potOnMap(page)).toBeFocused();
+  await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+
+  await page.reload();
+  await chooseStreet();
+  await expect(potOnMap(page)).toBeVisible();
+
+  expect(streetStyles().length).toBeGreaterThanOrEqual(2);
+  expectNoPositionIn(requested);
+});
+
+const CORS = { 'access-control-allow-origin': '*' };
+
+const reconnect = async (context: BrowserContext) => {
+  await context.setOffline(true);
+  await context.setOffline(false);
+};
+
+test('without signal the Map tab says so while the toast still expires, still shows gear and my position, keeps saying so through reconnects that load nothing, and clears once a map tile arrives', async ({
+  context,
+  page,
+  providers
+}) => {
+  providers.cutOff();
+  await dropPotAndOpenMap(page);
+
+  const notice = mapArea(page)
+    .getByRole('status')
+    .filter({ hasText: 'No signal' });
+  await expect(notice).toContainText('No signal');
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
+  await expect(notice).toBeVisible();
+  await expect(potOnMap(page)).toBeVisible();
+  await expect(myPosition(page)).toBeVisible();
+  await expectAccessibleInBothThemes(page);
+
+  providers.hold();
+  await reconnect(context);
+  await expect.poll(() => providers.held()).toBeGreaterThan(0);
+  await expect(notice).toBeVisible();
+  const firstAttempt = providers.held();
+  await reconnect(context);
+  await expect.poll(() => providers.held()).toBeGreaterThan(firstAttempt);
+  await expect(notice).toBeVisible();
+
+  providers.serve();
+  await expect(notice).toBeHidden();
+  await expect(potOnMap(page)).toBeVisible();
+});
+
+const streetMapButton = (page: Page) =>
+  mapArea(page).getByRole('button', { name: 'Street map' });
+const noSignal = (page: Page) =>
+  mapArea(page).getByRole('status').filter({ hasText: 'No signal' });
+const notAnswering = (page: Page) =>
+  mapArea(page)
+    .getByRole('status')
+    .filter({ hasText: "The map service isn't answering" });
+
+test('when NOAA answers map tiles busy or failing, the Map tab says the map service is not answering rather than no signal, still shows gear and clears once a map tile arrives', async ({
+  context,
+  page
+}) => {
+  let failWith: number | null = null;
+  await context.route(CHART_TILE, async (route) => {
+    if (failWith === null) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ status: failWith, headers: CORS });
+  });
+  await dropPotAndOpenMap(page);
+
+  for (const status of [429, 503]) {
+    failWith = status;
+    await reconnect(context);
+    await expect(notAnswering(page)).toBeVisible();
+    await expect(noSignal(page)).toHaveCount(0);
+    await expect(potOnMap(page)).toBeVisible();
+    await expect(myPosition(page)).toBeVisible();
+    failWith = null;
+    await reconnect(context);
+    await expect(notAnswering(page)).toBeHidden();
+  }
+});
+
+test('a Street style the map service refuses or the map cannot use falls back to the plain map saying the service is not answering, gear still shown and no page error', async ({
+  context,
+  page,
+  providers
+}) => {
+  const errors: Error[] = [];
+  page.on('pageerror', (error) => errors.push(error));
+  let refuseStyle = false;
+  await context.route(`${OPEN_FREE_MAP}styles/**`, async (route) => {
+    if (!refuseStyle) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ status: 503, headers: CORS });
+  });
+  const streetMap = streetMapButton(page);
+  await dropPotAndOpenMap(page);
+  await expect(notAnswering(page)).toBeHidden();
+
+  const unusable = [
+    {
+      version: 8,
+      sources: null,
+      layers: [{ id: 'street', type: 'raster', source: 'street' }]
+    },
+    {
+      version: 8,
+      sources: {
+        street: {
+          type: 'raster',
+          tiles: ['https://tiles.openfreemap.org/krab-e2e/{z}/{x}/{y}.png'],
+          tileSize: 256
+        }
+      },
+      layers: [{ id: 'street', type: 'no-such-layer', source: 'street' }]
+    }
+  ];
+  const failures = [
+    ...unusable.map((style) => () => {
+      providers.serve(style);
+    }),
+    () => {
+      refuseStyle = true;
+    }
+  ];
+  for (const fail of failures) {
+    fail();
+    await streetMap.click();
+    await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+    await expect(notAnswering(page)).toBeVisible();
+    await expect(noSignal(page)).toHaveCount(0);
+    await expect(potOnMap(page)).toBeVisible();
+    await expect(myPosition(page)).toBeVisible();
+    refuseStyle = false;
+    providers.serve();
+    await streetMap.click();
+    await expect(notAnswering(page)).toBeHidden();
+  }
+  expect(errors).toEqual([]);
+});
+
+test('a Street style still loading when Chart is chosen again or the Map tab closes is cancelled and never shown', async ({
+  context,
+  page,
+  providers
+}) => {
+  const requested: string[] = [];
+  const cancelled: string[] = [];
+  context.on('request', (request) => requested.push(request.url()));
+  context.on('requestfailed', (request) => {
+    if (request.url().startsWith(OPEN_FREE_MAP)) cancelled.push(request.url());
+  });
+  const streetTiles = () =>
+    requested.filter(
+      (url) => url.startsWith(OPEN_FREE_MAP) && url.endsWith('.png')
+    );
+  const chartTiles = () => requested.filter((url) => CHART_TILE.test(url));
+  const streetMap = streetMapButton(page);
+  await dropPotAndOpenMap(page);
+
+  providers.hold();
+  await streetMap.click();
+  await expect.poll(() => providers.held()).toBeGreaterThan(0);
+  await streetMap.click();
+  await expect(streetMap).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => cancelled.length).toBe(1);
+  const chartBefore = chartTiles().length;
+  providers.serve();
+  await expect.poll(() => chartTiles().length).toBeGreaterThan(chartBefore);
+  await expect(noSignal(page)).toBeHidden();
+  expect(streetTiles()).toEqual([]);
+
+  providers.hold();
+  const heldBefore = providers.held();
+  await streetMap.click();
+  await expect.poll(() => providers.held()).toBeGreaterThan(heldBefore);
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await expect.poll(() => cancelled.length).toBe(2);
+  providers.serve();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => streetTiles().length).toBeGreaterThan(0);
+  await expect(noSignal(page)).toBeHidden();
+});
+
+test('a Street style that has not arrived after 10 seconds is cancelled and says No signal, with gear and my position still shown', async ({
+  context,
+  page,
+  providers
+}) => {
+  const cancelled: string[] = [];
+  context.on('requestfailed', (request) => {
+    if (request.url().startsWith(OPEN_FREE_MAP)) cancelled.push(request.url());
+  });
+  const streetMap = streetMapButton(page);
+  await page.clock.install();
+  await dropPotAndOpenMap(page);
+
+  providers.hold();
+  await streetMap.click();
+  await expect.poll(() => providers.held()).toBeGreaterThan(0);
+  await page.clock.fastForward(10_000);
+  await expect.poll(() => cancelled.length).toBe(1);
+  await expect(noSignal(page)).toBeVisible();
+  await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+  await expect(potOnMap(page)).toBeVisible();
+  await expect(myPosition(page)).toBeVisible();
+
+  providers.serve();
+  await streetMap.click();
+  await expect(noSignal(page)).toBeHidden();
+});
+
+const offCentre = async (page: Page, target: Locator) => {
+  const view = await mapArea(page)
+    .getByRole('region', { name: 'Map view' })
+    .boundingBox();
+  const box = await target.boundingBox();
+  if (!view || !box) return Number.POSITIVE_INFINITY;
+  return Math.hypot(
+    box.x + box.width / 2 - (view.x + view.width / 2),
+    box.y + box.height / 2 - (view.y + view.height / 2)
+  );
+};
+
+const panAway = async (page: Page, target: Locator) => {
+  const mapView = mapArea(page).getByRole('region', { name: 'Map view' });
+  for (const key of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown']) {
+    await mapView.press(key);
+  }
+  await expect.poll(() => offCentre(page, target)).toBeGreaterThan(50);
+};
+
+const CENTRED_PX = 3;
+
+test('gear on the map opens its sheet without Show on map; with my position elsewhere, Show on map centres that gear and Centre on my position centres me', async ({
+  context,
+  page
+}) => {
+  await dropPotAndOpenMap(page);
+  const sheet = page.getByRole('dialog');
+  const showOnMap = sheet.getByRole('button', { name: 'Show on map' });
+
+  await potOnMap(page).click();
+  await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
+  await expect(showOnMap).toHaveCount(0);
+  await expectFocusTrapped(page, sheet);
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(potOnMap(page)).toBeFocused();
+
+  await context.setGeolocation({
+    latitude: MADE_UP_SEA.latitude + 0.02,
+    longitude: MADE_UP_SEA.longitude,
+    accuracy: 8
+  });
+  await expect(potOnMap(page)).toHaveAccessibleName(/miles/);
+  await panAway(page, potOnMap(page));
+
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page
+    .getByRole('main')
+    .getByRole('button')
+    .filter({ hasText: 'Pot 1' })
+    .click();
+  await showOnMap.click();
+  await expect(sheet).toBeHidden();
+  await expect(
+    page.getByRole('button', { name: 'Map', exact: true })
+  ).toHaveAttribute('aria-current', 'page');
+  await expect(potOnMap(page)).toBeFocused();
+  await expect
+    .poll(() => offCentre(page, potOnMap(page)))
+    .toBeLessThan(CENTRED_PX);
+
+  await panAway(page, myPosition(page));
+  await mapArea(page)
+    .getByRole('button', { name: 'Centre on my position' })
+    .click();
+  await expect
+    .poll(() => offCentre(page, myPosition(page)))
+    .toBeLessThan(CENTRED_PX);
+});
+
+test('while moving with a rough fix, my position reads as rough with my heading', async ({
+  page
+}) => {
+  await page.addInitScript((sea) => {
+    navigator.geolocation.watchPosition = (success) => {
+      success({
+        timestamp: Date.now(),
+        coords: {
+          latitude: sea.latitude,
+          longitude: sea.longitude,
+          accuracy: 120,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: 90,
+          speed: 2,
+          toJSON: () => ({})
+        },
+        toJSON: () => ({})
+      });
+      return 1;
+    };
+    navigator.geolocation.clearWatch = () => undefined;
+  }, MADE_UP_SEA);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+
+  await expect(myPosition(page)).toHaveAccessibleName(
+    'Your position, rough, within about 390 feet, heading east'
+  );
+});
+
+const WORLD_PX_AT_SHOW_ZOOM = 512 * 2 ** 15;
+const MIN_PIN_PX = 44;
+
+const shiftedOnScreen = (
+  from: { latitude: number; longitude: number },
+  dx: number,
+  dy: number
+) => {
+  const x = ((from.longitude + 180) / 360) * WORLD_PX_AT_SHOW_ZOOM + dx;
+  const phi = (from.latitude * Math.PI) / 180;
+  const y =
+    ((1 - Math.log(Math.tan(Math.PI / 4 + phi / 2)) / Math.PI) / 2) *
+      WORLD_PX_AT_SHOW_ZOOM +
+    dy;
+  return {
+    longitude: (x / WORLD_PX_AT_SHOW_ZOOM) * 360 - 180,
+    latitude:
+      ((2 *
+        Math.atan(Math.exp(Math.PI * (1 - (2 * y) / WORLD_PX_AT_SHOW_ZOOM))) -
+        Math.PI / 2) *
+        180) /
+      Math.PI
+  };
+};
+
+const centreOf = async (target: Locator) => {
+  const box = await target.boundingBox();
+  expect(box).not.toBeNull();
+  return {
+    x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+    y: (box?.y ?? 0) + (box?.height ?? 0) / 2
+  };
+};
+
+test('a pin under the Filter control never takes its tap: Filter still opens the Map filter', async ({
+  context,
+  page
+}) => {
+  await dropPotAndOpenMap(page);
+  const filterButton = mapArea(page).getByRole('button', { name: /^Filter/ });
+  await expect(potOnMap(page)).toBeVisible();
+  await expect
+    .poll(() => offCentre(page, potOnMap(page)))
+    .toBeLessThan(CENTRED_PX);
+
+  const pot1 = await centreOf(potOnMap(page));
+  const filter = await centreOf(filterButton);
+  await context.setGeolocation({
+    ...shiftedOnScreen(MADE_UP_SEA, filter.x - pot1.x, filter.y - pot1.y),
+    accuracy: 8
+  });
+  await expect
+    .poll(async () => {
+      const me = await centreOf(myPosition(page));
+      return Math.hypot(me.x - filter.x, me.y - filter.y);
+    })
+    .toBeLessThan(CENTRED_PX);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+
+  const pot2 = mapArea(page).getByRole('button', { name: /^Pot 2,/ });
+  await expect
+    .poll(
+      async () => {
+        const pin = await centreOf(pot2);
+        const tap = await centreOf(filterButton);
+        return Math.max(Math.abs(pin.x - tap.x), Math.abs(pin.y - tap.y));
+      },
+      { message: 'Pot 2 sits under the centre of Filter' }
+    )
+    .toBeLessThan(MIN_PIN_PX / 2);
+
+  await filterButton.click({ timeout: 5000 });
+  await expect(
+    page.getByRole('dialog').getByRole('heading', { name: 'Map filter' })
+  ).toBeVisible();
+});
+
+type Box = { x: number; y: number; width: number; height: number };
+
+const boxOf = async (target: Locator): Promise<Box> => {
+  const box = await target.boundingBox();
+  expect(box).not.toBeNull();
+  return box ?? { x: 0, y: 0, width: 0, height: 0 };
+};
+
+const within = (area: Box) => (box: Box) =>
+  box.x >= area.x &&
+  box.x + box.width <= area.x + area.width &&
+  box.y >= area.y &&
+  box.y + box.height <= area.y + area.height;
+
+test('gear either side of the 180th meridian fits the past trip map as one small area, not the whole world', async ({
+  context,
+  page
+}) => {
+  const main = page.getByRole('main');
+  const sheet = page.getByRole('dialog');
+  await context.setGeolocation({ latitude: 0, longitude: 179.995 });
+  await dropPotAndOpenMap(page);
+  await context.setGeolocation({ latitude: 0, longitude: -179.995 });
+  await expect(potOnMap(page)).toHaveAccessibleName(/miles/);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await page.getByRole('button', { name: 'End trip' }).click();
+  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await expect(sheet).toBeHidden();
+  await page.getByRole('button', { name: 'Past trips', exact: true }).click();
+  await main.getByRole('button', { name: /2 drops, 2 uncollected$/ }).click();
+
+  const view = main.getByRole('region', { name: 'Map view' });
+  const pins = [/^Pot 1,/, /^Pot 2,/].map((name) =>
+    main.getByRole('button', { name })
+  );
+  for (const pin of pins) await expect(pin).toBeVisible();
+  await expect
+    .poll(async () => {
+      const area = await boxOf(view);
+      const [first, second] = await Promise.all(pins.map(boxOf));
+      const inside = [first, second].every(within(area));
+      return inside ? Math.abs(first.x - second.x) / area.width : 0;
+    })
+    .toBeGreaterThan(0.5);
+});
