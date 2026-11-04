@@ -85,6 +85,37 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(label).toHaveValue('red float');
 });
 
+test('deleting a drop already deleted in another tab closes the sheet without an error', async ({
+  page,
+  context
+}) => {
+  const sheet = page.getByRole('dialog');
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Position ready')).toBeVisible();
+  for (const name of ['Pot 1', 'Pot 2']) {
+    await page.getByRole('button', { name: 'Drop pot' }).click();
+    await expect(toastOf(page)).toContainText(`${name} dropped`);
+  }
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await gearRow(page, 'Pot 1').click();
+  await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
+
+  const other = await context.newPage();
+  const otherSheet = other.getByRole('dialog');
+  await other.goto('/');
+  await other.getByRole('button', { name: 'Gear', exact: true }).click();
+  await gearRow(other, 'Pot 1').click();
+  await otherSheet.getByRole('button', { name: 'Delete drop' }).dblclick();
+  await expect(toastOf(other)).toContainText('Pot 1 deleted');
+  await other.close();
+
+  await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
+  await expect(sheet).toBeHidden();
+  await expect(toastOf(page)).not.toContainText("Couldn't");
+});
+
 test('while a sheet action is storing, the sheet ignores its other actions, and finishing after another gear opens leaves that sheet and its draft alone', async ({
   page
 }) => {
