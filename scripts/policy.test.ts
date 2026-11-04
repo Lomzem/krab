@@ -266,6 +266,27 @@ const cases: PolicyCase[] = [
     risk: 'Syntax selector is missing or rejects legitimate Effect handling'
   },
   {
+    name: 'throw syntax in end-to-end tests',
+    file: 'e2e/probe.test.ts',
+    valid:
+      'export const fail = () => Promise.reject(new Error("unavailable"));',
+    invalid:
+      'export function fail(): never { throw new Error("unavailable"); }',
+    command: 'lint',
+    diagnostic: 'Use Effect failure APIs instead of throw',
+    risk: 'The end-to-end import rule replaces the inherited syntax restrictions'
+  },
+  {
+    name: 'dynamic Playwright import versus the providers fixture',
+    file: 'e2e/probe.test.ts',
+    valid:
+      'import { expect } from "@playwright/test"; export const load = () => import("./fixtures"); export { expect };',
+    invalid: 'export const load = () => import("@playwright/test");',
+    command: 'lint',
+    diagnostic: "Import test from './fixtures'",
+    risk: 'A dynamic import skips the NOAA and OpenFreeMap fixture, or the fixture and expect are refused'
+  },
+  {
     name: 'code depth boundary',
     file: 'src/probe.ts',
     valid:

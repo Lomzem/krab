@@ -11,7 +11,7 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out full history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -45,7 +45,15 @@ jobs:
         run: bun run test:policy
       - name: Verify hook and secret-scan behavior
         run: bun run test:security
+      - name: Run unit tests
+        run: bun run test:unit
       - name: Build static site
         run: bun run build
       - name: Check emitted installation assets
         run: bun run check:assets
+      - name: Install WebKit for end-to-end tests
+        run: bunx --no-install playwright install --with-deps webkit
+      - name: Build a newer version for the update test
+        run: bun run build:next
+      - name: Run end-to-end tests
+        run: bun run test:e2e
