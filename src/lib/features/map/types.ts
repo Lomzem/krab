@@ -2,7 +2,11 @@ import type { LatLon } from '#lib/features/trip/index.js';
 
 export type Camera = { center: LatLon; zoom: number };
 
-export type MapPlace = { id: string; at: LatLon };
+export type MapPlace = {
+  id: string;
+  at: LatLon;
+  layer: 'in-water' | 'collected';
+};
 
 export type MyPosition = {
   at: LatLon;

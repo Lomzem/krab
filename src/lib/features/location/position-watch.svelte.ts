@@ -1,4 +1,5 @@
 import type { Fix, PositionSource } from '#lib/features/trip/index.js';
+import { watchVisibility } from '#lib/page-visibility.js';
 
 export type LocationPermission = 'prompt' | 'granted' | 'denied';
 
@@ -18,7 +19,7 @@ export class PositionWatch implements PositionSource {
   courseDeg = $state<number | null>(null);
   permission = $state<LocationPermission>('prompt');
   #watchId: number | null = null;
-  #wanted = false;
+  #unwatch: (() => void) | null = null;
   #listeners: (() => void)[] = [];
 
   readonly latest = () => this.fix;
@@ -33,28 +34,24 @@ export class PositionWatch implements PositionSource {
   };
 
   start() {
-    if (this.#wanted) return;
-    this.#wanted = true;
-    document.addEventListener('visibilitychange', this.#sync);
-    this.#sync();
+    this.#unwatch ??= watchVisibility(this.#sync);
   }
 
   stop() {
-    this.#wanted = false;
-    document.removeEventListener('visibilitychange', this.#sync);
-    this.#sync();
+    this.#unwatch?.();
+    this.#unwatch = null;
+    this.#sync(false);
   }
 
-  readonly #sync = () => {
-    const visible = document.visibilityState === 'visible';
-    if (this.#wanted && visible && this.#watchId === null) {
+  readonly #sync = (watching: boolean) => {
+    if (watching && this.#watchId === null) {
       this.#watchId = navigator.geolocation.watchPosition(
         this.#onPosition,
         this.#onError,
         { enableHighAccuracy: true, maximumAge: 0 }
       );
     }
-    if ((!this.#wanted || !visible) && this.#watchId !== null) {
+    if (!watching && this.#watchId !== null) {
       navigator.geolocation.clearWatch(this.#watchId);
       this.#watchId = null;
     }

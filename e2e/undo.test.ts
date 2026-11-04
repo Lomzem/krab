@@ -166,6 +166,45 @@ test('a Collect toast lasts 8 seconds and Undo within it puts only that gear bac
   await expect(inWater('Pot 1')).toHaveCount(0);
 });
 
+test('a toast never hides the end of the Gear list: its last row scrolls clear when focused and opens while the toast shows', async ({
+  page
+}) => {
+  await openWithPausedClock(page);
+  for (let number = 1; number <= 8; number += 1) {
+    await dropPot(page, `Pot ${String(number)}`);
+  }
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const list = page.getByRole('main');
+  const lastRow = list.getByRole('button').last();
+  const edgesOf = async (target: Locator) => {
+    const box = await target.boundingBox();
+    expect(box).not.toBeNull();
+    return { top: box?.y ?? 0, bottom: (box?.y ?? 0) + (box?.height ?? 0) };
+  };
+
+  await list.evaluate((main) => {
+    main.scrollTop = main.scrollHeight;
+  });
+  const under =
+    (await edgesOf(lastRow)).bottom - (await edgesOf(toastOf(page))).bottom;
+  await list.evaluate((main, by) => {
+    main.scrollBy(0, by);
+  }, under);
+  expect(
+    (await edgesOf(lastRow)).bottom,
+    'the last row starts under the toast'
+  ).toBeGreaterThan((await edgesOf(toastOf(page))).top);
+  await lastRow.focus();
+  expect(
+    (await edgesOf(lastRow)).bottom,
+    'focus scrolls the row clear of the toast'
+  ).toBeLessThanOrEqual((await edgesOf(toastOf(page))).top);
+
+  await lastRow.click({ timeout: 5000 });
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(toastOf(page)).toContainText('Pot 8 dropped');
+});
+
 const openNewerStorageVersion = (page: Page) =>
   page.evaluate(
     () =>

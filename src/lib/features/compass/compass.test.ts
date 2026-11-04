@@ -28,9 +28,15 @@ const phone = ({
 }: PhoneOptions = {}) => {
   const world = { access, remembered, position, now, asked: 0, at: 0 };
   let listeners: SensorListener[] = [];
+  let answers: ((access: Access) => void)[] = [];
   const sensor: HeadingSensor = {
     request: () => {
       world.asked += 1;
+      if (subject.holding) {
+        return new Promise((resolve) => {
+          answers = [...answers, resolve];
+        });
+      }
       return subject.refuse
         ? Promise.reject(new DOMException('needs a tap', 'NotAllowedError'))
         : Promise.resolve(world.access);
@@ -79,7 +85,20 @@ const phone = ({
   const hide = () => {
     for (const listener of listeners) listener.paused();
   };
-  const subject = { compass, world, read, hide, refuse: false };
+  const answer = async (access: Access) => {
+    for (const resolve of answers) resolve(access);
+    answers = [];
+    await settle();
+  };
+  const subject = {
+    compass,
+    world,
+    read,
+    hide,
+    answer,
+    refuse: false,
+    holding: false
+  };
   return subject;
 };
 
@@ -271,12 +290,48 @@ test('remembered on but needing access again, it waits north-up until a tap', as
   expectHeading(read(90), 90 + NOAA_ARCTIC_D_2025);
 });
 
-test('hiding the page waits, and readings after it come back point again', async () => {
+test('a sensor pause waits north-up, and the next readings point again', async () => {
   const { read, hide, compass } = await turnedOn();
   read(90);
   hide();
   expect(compass.state.kind).toBe('waiting');
   expectHeading(read(180), 180 + NOAA_ARCTIC_D_2025);
+});
+
+test.each([
+  { access: 'granted', remembered: false, after: 'off' },
+  { access: 'denied', remembered: true, after: 'waiting' }
+] as const)(
+  'a $access answer that arrives after the compass stopped changes nothing (remembered on: $remembered)',
+  async ({ access, remembered, after }) => {
+    const subject = phone({ remembered });
+    const { compass, world, read } = subject;
+    subject.holding = true;
+    compass.toggle();
+    compass.stop();
+    compass.start();
+    await subject.answer(access);
+    expect(compass.state.kind).toBe(after);
+    expect(world.remembered).toBe(remembered);
+    if (remembered) expectHeading(read(90), 90 + NOAA_ARCTIC_D_2025);
+    else expect(read(90).kind).toBe('off');
+  }
+);
+
+test('tapping again while the phone is asking asks once, and its answer turns the compass on', async () => {
+  const subject = phone();
+  const { compass, world, read } = subject;
+  subject.holding = true;
+  compass.start();
+  compass.toggle();
+  compass.toggle();
+  compass.toggle();
+  expect(world.asked).toBe(1);
+  await subject.answer('granted');
+  expect(world.remembered).toBe(true);
+  expectHeading(read(90), 90 + NOAA_ARCTIC_D_2025);
+  compass.toggle();
+  expect(compass.state.kind).toBe('off');
 });
 
 test('tapping a working compass turns it off and forgets it', async () => {

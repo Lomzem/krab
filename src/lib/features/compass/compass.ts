@@ -45,6 +45,7 @@ export class Compass {
   #state: CompassState = OFF;
   #runs: ((state: CompassState) => void)[] = [];
   #detach: (() => void) | null = null;
+  #asking: Promise<Access> | null = null;
   #smoothing: Smoothing = NO_SMOOTHING;
   #declination: Declination | null = null;
   #shown = shownKey(OFF);
@@ -73,6 +74,7 @@ export class Compass {
   }
 
   stop() {
+    this.#asking = null;
     this.#release();
     this.#set(OFF);
   }
@@ -80,16 +82,28 @@ export class Compass {
   toggle() {
     const { kind } = this.#state;
     if (kind === 'off' || kind === 'waiting') {
-      void this.#needs.sensor.request().then(this.#answered, () => {
-        this.#answered('denied');
-      });
+      this.#ask();
       return;
     }
     this.#needs.choice.remember(false);
     this.stop();
   }
 
-  readonly #answered = (access: Access) => {
+  #ask() {
+    if (this.#asking) return;
+    const asking = this.#needs.sensor.request();
+    this.#asking = asking;
+    const answered = (access: Access) => {
+      if (this.#asking !== asking) return;
+      this.#asking = null;
+      this.#answered(access);
+    };
+    void asking.then(answered, () => {
+      answered('denied');
+    });
+  }
+
+  #answered(access: Access) {
     if (access !== 'granted') {
       this.#needs.choice.remember(false);
       this.#release();
@@ -100,7 +114,7 @@ export class Compass {
     this.#attach();
     const { kind } = this.#state;
     if (kind === 'off' || kind === 'waiting') this.#set(STARTING);
-  };
+  }
 
   #attach() {
     this.#detach ??= this.#needs.sensor.watch({

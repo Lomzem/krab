@@ -363,3 +363,77 @@ test('while moving with a rough fix, my position reads as rough with my heading'
     'Your position, rough, within about 390 feet, heading east'
   );
 });
+
+const WORLD_PX_AT_SHOW_ZOOM = 512 * 2 ** 15;
+const MIN_PIN_PX = 44;
+
+const shiftedOnScreen = (
+  from: { latitude: number; longitude: number },
+  dx: number,
+  dy: number
+) => {
+  const x = ((from.longitude + 180) / 360) * WORLD_PX_AT_SHOW_ZOOM + dx;
+  const phi = (from.latitude * Math.PI) / 180;
+  const y =
+    ((1 - Math.log(Math.tan(Math.PI / 4 + phi / 2)) / Math.PI) / 2) *
+      WORLD_PX_AT_SHOW_ZOOM +
+    dy;
+  return {
+    longitude: (x / WORLD_PX_AT_SHOW_ZOOM) * 360 - 180,
+    latitude:
+      ((2 *
+        Math.atan(Math.exp(Math.PI * (1 - (2 * y) / WORLD_PX_AT_SHOW_ZOOM))) -
+        Math.PI / 2) *
+        180) /
+      Math.PI
+  };
+};
+
+const centreOf = async (target: Locator) => {
+  const box = await target.boundingBox();
+  expect(box).not.toBeNull();
+  return {
+    x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+    y: (box?.y ?? 0) + (box?.height ?? 0) / 2
+  };
+};
+
+test('a pin under the Filter control never takes its tap: Filter still opens the Map filter', async ({
+  context,
+  page
+}) => {
+  await dropPotAndOpenMap(page);
+  const filterButton = mapArea(page).getByRole('button', { name: /^Filter/ });
+  await expect(potOnMap(page)).toBeVisible();
+  await expect
+    .poll(() => offCentre(page, potOnMap(page)))
+    .toBeLessThan(CENTRED_PX);
+
+  const pot1 = await centreOf(potOnMap(page));
+  const filter = await centreOf(filterButton);
+  await context.setGeolocation({
+    ...shiftedOnScreen(MADE_UP_SEA, filter.x - pot1.x, filter.y - pot1.y),
+    accuracy: 8
+  });
+  await expect
+    .poll(async () => {
+      const me = await centreOf(myPosition(page));
+      return Math.hypot(me.x - filter.x, me.y - filter.y);
+    })
+    .toBeLessThan(CENTRED_PX);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+
+  const pot2 = mapArea(page).getByRole('button', { name: /^Pot 2,/ });
+  const pin = await centreOf(pot2);
+  const tap = await centreOf(filterButton);
+  expect(
+    Math.max(Math.abs(pin.x - tap.x), Math.abs(pin.y - tap.y)),
+    'Pot 2 sits under the centre of Filter'
+  ).toBeLessThan(MIN_PIN_PX / 2);
+
+  await filterButton.click({ timeout: 5000 });
+  await expect(
+    page.getByRole('dialog').getByRole('heading', { name: 'Map filter' })
+  ).toBeVisible();
+});

@@ -38,7 +38,8 @@
     headingDeg = null,
     show,
     onshown,
-    pin
+    pin,
+    controls
   }: {
     base?: Base;
     camera?: Camera | null;
@@ -48,6 +49,7 @@
     show: string | null;
     onshown: () => void;
     pin: Snippet<[string]>;
+    controls?: Snippet;
   } = $props();
 
   let container = $state<HTMLDivElement>();
@@ -268,8 +270,8 @@
   });
 </script>
 
-<div class="relative h-full min-h-64 overflow-hidden bg-[#d4e3ec]">
-  <div class="absolute inset-0">
+<div class="relative isolate h-full min-h-64 overflow-hidden bg-[#d4e3ec]">
+  <div class="absolute inset-0 z-0">
     <div bind:this={container} class="size-full"></div>
   </div>
 
@@ -284,7 +286,11 @@
   {#if ready}
     {#each places as place (place.id)}
       <div class="contents">
-        <div data-place={place.id} style:z-index="2" use:marker={place.at}>
+        <div
+          data-place={place.id}
+          style:z-index={place.layer === 'collected' ? 1 : 3}
+          use:marker={place.at}
+        >
           {@render pin(place.id)}
         </div>
       </div>
@@ -294,7 +300,7 @@
       <div class="contents">
         <div
           class="pointer-events-none size-11"
-          style:z-index="1"
+          style:z-index="2"
           role="img"
           aria-label={me.label}
           use:marker={me.at}
@@ -343,7 +349,7 @@
     {/if}
 
     <div
-      class="absolute inset-x-3 top-3 grid gap-2"
+      class="absolute inset-x-3 top-3 z-1 grid gap-2"
       style:pointer-events="none"
     >
       {#if availability === 'unavailable'}
@@ -356,15 +362,17 @@
         </p>
       {/if}
       <div class="flex items-start justify-between gap-2">
-        <button
-          type="button"
-          class="flex min-h-12 items-center justify-center rounded-control border border-border bg-card px-3 text-[16px] font-semibold text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-          style:pointer-events="auto"
-          aria-pressed={base === 'street'}
-          onclick={() => {
-            base = base === 'chart' ? 'street' : 'chart';
-          }}>Street map</button
-        >
+        <div class="flex flex-wrap gap-2" style:pointer-events="auto">
+          {@render controls?.()}
+          <button
+            type="button"
+            class="flex min-h-12 items-center justify-center rounded-control border border-border bg-card px-3 text-[16px] font-semibold text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+            aria-pressed={base === 'street'}
+            onclick={() => {
+              base = base === 'chart' ? 'street' : 'chart';
+            }}>Street map</button
+          >
+        </div>
         <div class="grid gap-2" style:pointer-events="auto">
           <button
             type="button"
