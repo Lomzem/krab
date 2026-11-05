@@ -55,7 +55,32 @@ export const recorder = (
     );
   },
   capture: async (name: string) => {
-    await page.screenshot({ path: info.outputPath(`${name}.png`) });
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    await page.screenshot({
+      path: info.outputPath(`${name}.png`),
+      animations: 'disabled'
+    });
+    writeFileSync(
+      info.outputPath(`${name}.state.json`),
+      JSON.stringify(
+        {
+          feature,
+          entry,
+          state: name,
+          project: info.project.name,
+          browser: page.context().browser()?.version(),
+          viewport: page.viewportSize(),
+          rendering: await page.evaluate(() => ({
+            dark: matchMedia('(prefers-color-scheme: dark)').matches,
+            pixelRatio: devicePixelRatio,
+            documentWidth: document.documentElement.scrollWidth,
+            viewportWidth: innerWidth
+          }))
+        },
+        null,
+        2
+      )
+    );
     writeFileSync(
       info.outputPath(`${name}.aria.txt`),
       await page.locator('body').ariaSnapshot()

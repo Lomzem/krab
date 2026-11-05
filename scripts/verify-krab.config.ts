@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { defineConfig } from '@playwright/test';
 import base from '../playwright.config';
+import { resolve } from 'node:path';
 
 export default defineConfig({
   ...base,
@@ -15,6 +16,14 @@ export default defineConfig({
     'end-and-past-trips.ts'
   ],
   outputDir: '../test-results/verify-krab-lock/artifacts',
+  reporter: [
+    ['list'],
+    [
+      'json',
+      { outputFile: resolve('test-results/verify-krab-lock/results.json') }
+    ]
+  ],
+  use: { ...base.use, screenshot: 'only-on-failure' },
   workers: 1,
   retries: 0,
   webServer: {

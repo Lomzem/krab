@@ -31,3 +31,7 @@ Use the five default triage labels. Before assigning or changing triage status, 
 ### Domain docs
 
 Use a single-context layout: root `GLOSSARY.md` and `docs/adr/`. Before exploring the codebase, read `docs/agents/domain.md`.
+
+### UI review
+
+Before preparing or reviewing a UI refactor, read `.agents/skills/review-krab-ui/SKILL.md`; its handoff defines shared evidence and independent visual review.
