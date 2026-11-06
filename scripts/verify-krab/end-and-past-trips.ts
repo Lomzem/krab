@@ -111,25 +111,21 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   const pastLayer = sheet
     .getByRole('group', { name: 'Also show' })
     .getByRole('checkbox', { name: 'Past trips' });
-  const pastPins = [
-    mapArea.getByRole('button', {
-      name: `Pot 1, past trip, ${TRIP_DATE}, 2 kept, 0 released`
-    }),
-    mapArea.getByRole('button', {
-      name: `Net 1, past trip, ${TRIP_DATE}, Uncollected`
-    })
-  ];
+  const pastGroup = mapArea.getByRole('button', {
+    name: 'Pot 1 +1 more. 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    exact: true
+  });
   const showPastLayer = async (on: boolean) => {
     await mapArea.getByRole('button', { name: /^Filter/ }).click();
     await pastLayer.setChecked(on);
     await sheet.getByRole('button', { name: 'Done' }).click();
     await expect(sheet).toBeHidden();
-    for (const pin of pastPins) await expect(pin).toHaveCount(on ? 1 : 0);
+    await expect(pastGroup).toHaveCount(on ? 1 : 0);
   };
   await expect(
     mapArea.getByRole('img', { name: /^Your position/ })
   ).toBeVisible();
-  for (const pin of pastPins) await expect(pin).toHaveCount(0);
+  await expect(pastGroup).toHaveCount(0);
   await mapArea.getByRole('button', { name: /^Filter/ }).click();
   await expect(pastLayer).not.toBeChecked();
   await sheet.getByRole('button', { name: 'Done' }).click();
@@ -137,10 +133,23 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   await showPastLayer(true);
   await showPastLayer(false);
   await showPastLayer(true);
-  for (const pin of pastPins) await expect(pin).toBeVisible();
+  await expect(pastGroup).toBeVisible();
+  await pastGroup.click();
+  for (const name of [
+    `Net 1, past trip, ${TRIP_DATE}, Uncollected`,
+    `Pot 1, past trip, ${TRIP_DATE}, 2 kept, 0 released`
+  ]) {
+    await expect(
+      sheet.getByRole('button', { name, exact: true })
+    ).toBeVisible();
+  }
+  await capture('04-past-group-list');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(pastGroup).toBeFocused();
   keep('indexeddb-after.json', await readTrips(page));
   log(
-    'with no trip running and own position drawn, the past pins are absent and Past trips is unticked; ticking it shows dotted Pot 1 and Net 1 pins named for the past trip, unticking hides them, ticking again shows them'
+    'with no trip running and own position drawn, the past pins are absent and Past trips is unticked; ticking it shows one dotted group of 2 at their shared position, unticking hides it, ticking again shows it; its list names Net 1 and Pot 1 for the past trip and Escape returns focus to the group'
   );
   await capture('04-past-layer');
 });
@@ -198,11 +207,13 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   ).toBeFocused();
   await expect(pot1).toBeVisible();
   await expect(net1).toBeVisible();
-  await expect(
-    detail.getByRole('button', { name: 'Pot 1, 2 kept, 0 released' })
-  ).toBeVisible();
+  const detailGroup = detail.getByRole('button', {
+    name: 'Pot 1 +1 more. 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    exact: true
+  });
+  await expect(detailGroup).toBeVisible();
   log(
-    'open the trip; its date heading takes focus; rows Pot 1 2 kept, 0 released and Net 1 Uncollected; Pot 1 pin on the trip map'
+    'open the trip; its date heading takes focus; rows Pot 1 2 kept, 0 released and Net 1 Uncollected; one group of 2 for Net 1 and Pot 1 on the trip map, since they share a position'
   );
   await capture('02-detail');
 
@@ -225,11 +236,9 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   );
   await sheet.getByRole('button', { name: 'Show on map' }).click();
   await expect(sheet).toBeHidden();
-  await expect(
-    detail.getByRole('button', { name: 'Pot 1, 2 kept, 0 released' })
-  ).toBeFocused();
+  await expect(detailGroup).toBeFocused();
   log(
-    'Net 1 sheet says Uncollected with no Collect; Escape refocuses its row; Pot 1 sheet shows Kept: 2 and no drop again; Show on map focuses its pin'
+    'Net 1 sheet says Uncollected with no Collect; Escape refocuses its row; Pot 1 sheet shows Kept: 2 and no drop again; Show on map focuses the group holding it'
   );
   await capture('04-show-on-map');
 

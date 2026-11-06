@@ -20,9 +20,9 @@ export type Accuracy = {
 export const ACCURACY_SOURCE = 'krab-accuracy';
 
 const STREET_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
-const SEA = '#d4e3ec';
-const STEADY = '#0f2a44';
-const ROUGH = '#b42318';
+const SEA = '#d5e2e0';
+const STEADY = '#1a2e2b';
+const ROUGH = '#b3261e';
 
 const background: LayerSpecification = {
   id: 'krab-sea',
@@ -67,7 +67,9 @@ const withOverlays = (
   layers: [...layers, ...overlayLayers]
 });
 
-export type Outage = 'no-signal' | 'not-answering';
+export type Outage = 'offline' | 'unexplained' | 'not-answering';
+
+const unreached = (): Outage => (navigator.onLine ? 'unexplained' : 'offline');
 
 export type BaseStyle = { style: StyleSpecification; outage: Outage | null };
 
@@ -91,11 +93,11 @@ const fetchStreetStyle = Effect.timeoutOrElse(
       const response = await fetch(STREET_STYLE, { signal });
       return response.ok ? await response.text() : null;
     },
-    catch: (): Outage => 'no-signal'
+    catch: unreached
   }),
   {
     duration: STREET_STYLE_DEADLINE,
-    orElse: () => Effect.fail<Outage>('no-signal')
+    orElse: () => Effect.fail(unreached())
   }
 );
 
@@ -130,7 +132,7 @@ const streetStyle = (
     }),
     { signal }
   ).then((exit) =>
-    Exit.isSuccess(exit) ? exit.value : unavailable(accuracy, 'no-signal')
+    Exit.isSuccess(exit) ? exit.value : unavailable(accuracy, unreached())
   );
 
 export const baseStyle = (
@@ -156,7 +158,7 @@ const BUSY = 429;
 export const tileOutage = (error: unknown): Outage | null => {
   if (typeof error !== 'object' || error === null) return null;
   if ('name' in error && error.name === 'AbortError') return null;
-  if (!('status' in error) || error.status === 0) return 'no-signal';
+  if (!('status' in error) || error.status === 0) return unreached();
   const { status } = error;
   return typeof status === 'number' &&
     (status === BUSY || (status >= 500 && status <= 599))

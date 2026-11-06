@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-export type StorageFault = 'reads' | 'open';
+export type StorageFault = 'reads' | 'writes' | 'open' | 'defect';
 
 const FAULT = 'krab-e2e-storage-fault';
 
@@ -45,9 +45,23 @@ export const injectStorageFaults = (page: Page) =>
         if (completed) handler?.call(tx, completed);
       };
     };
+    const refuseCompletion = (tx: IDBTransaction) => {
+      Object.defineProperty(tx, 'oncomplete', {
+        configurable: true,
+        get: () => null,
+        set: () => {
+          tx.objectStore('outside-this-transaction');
+        }
+      });
+      queueMicrotask(abort(tx));
+    };
     const faultyBegin: Begin = function (...args) {
       const tx = Reflect.apply(begin, this, args);
-      if (tx.mode !== 'readonly') return tx;
+      if (tx.mode !== 'readonly') {
+        if (failing('writes')) queueMicrotask(abort(tx));
+        if (failing('defect')) refuseCompletion(tx);
+        return tx;
+      }
       tx.addEventListener('complete', () => {
         held.readsDone = (held.readsDone ?? 0) + 1;
       });

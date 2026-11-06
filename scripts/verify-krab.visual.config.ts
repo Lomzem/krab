@@ -4,7 +4,7 @@ import base from './verify-krab.config';
 
 export default defineConfig({
   ...base,
-  testMatch: ['visual-states.ts'],
+  testMatch: ['visual-states.ts', 'ui-review.ts'],
   projects: ['light', 'dark'].flatMap((colorScheme) =>
     [
       { name: 'phone', width: 393, height: 852 },

@@ -171,7 +171,7 @@ test('a drop tapped while storage is still opening keeps the tap time and the fi
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.clock.fastForward(15_000);
   await tab(page, 'Gear').click();
-  await expect(pot).toContainText('10m');
+  await expect(pot).toContainText('10 min');
   await expect(pot).toContainText('0.7 mi');
 });
 

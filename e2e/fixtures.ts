@@ -25,24 +25,29 @@ const CORS = { 'access-control-allow-origin': '*' };
 export type Providers = {
   serve: (streetStyle?: unknown) => void;
   cutOff: () => void;
+  refuseCors: () => void;
   hold: () => void;
   held: () => number;
 };
 
-const fulfil = (route: Route, streetStyle: unknown) =>
+const fulfil = (
+  route: Route,
+  streetStyle: unknown,
+  headers: Record<string, string> = CORS
+) =>
   new URL(route.request().url()).pathname.endsWith('.png')
     ? route.fulfill({
         contentType: 'image/png',
-        headers: CORS,
+        headers,
         body: CLEAR_PNG
       })
-    : route.fulfill({ json: streetStyle, headers: CORS });
+    : route.fulfill({ json: streetStyle, headers });
 
 export const test = base.extend<{ providers: Providers }>({
   serviceWorkers: 'block',
   providers: [
     async ({ context }, use) => {
-      let mode: 'serve' | 'cutOff' | 'hold' = 'serve';
+      let mode: 'serve' | 'cutOff' | 'refuseCors' | 'hold' = 'serve';
       let served: unknown = STREET_STYLE;
       const waiting: Route[] = [];
       const answer = async (route: Route) => {
@@ -50,9 +55,12 @@ export const test = base.extend<{ providers: Providers }>({
           waiting.push(route);
           return;
         }
-        await (mode === 'serve'
-          ? fulfil(route, served)
-          : route.abort('internetdisconnected'));
+        if (mode === 'serve') await fulfil(route, served);
+        else if (mode === 'refuseCors')
+          await fulfil(route, served, {
+            'access-control-allow-origin': 'https://elsewhere.example'
+          });
+        else await route.abort('internetdisconnected');
       };
       await context.route(NOAA, answer);
       await context.route(OPEN_FREE_MAP, answer);
@@ -66,6 +74,9 @@ export const test = base.extend<{ providers: Providers }>({
         },
         cutOff: () => {
           mode = 'cutOff';
+        },
+        refuseCors: () => {
+          mode = 'refuseCors';
         },
         hold: () => {
           mode = 'hold';
@@ -106,3 +117,54 @@ export const releaseStorage = (page: Page) =>
   page.evaluate(() => {
     (window as HeldStorage).releaseStorage = true;
   });
+
+type StoredCatch = { kept: number; released: number } | null;
+
+type StoredTrip = {
+  drops: { collectedAt: number | null; catch: StoredCatch }[];
+};
+
+const storedTrips = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<StoredTrip[]>((read, failed) => {
+        const request = indexedDB.open('krab');
+        request.onsuccess = () => {
+          const db = request.result;
+          const fail = (reason: string) => {
+            db.close();
+            failed(new Error(reason));
+          };
+          if (!db.objectStoreNames.contains('trips')) {
+            fail('krab has no trips store');
+            return;
+          }
+          const tx = db.transaction('trips', 'readonly');
+          const all = tx.objectStore('trips').getAll();
+          all.onsuccess = () => {
+            db.close();
+            read(all.result as StoredTrip[]);
+          };
+          all.onerror = () => {
+            fail(`could not read trips: ${String(all.error?.name)}`);
+          };
+          tx.onabort = () => {
+            fail(`trips read aborted: ${String(tx.error?.name)}`);
+          };
+        };
+        request.onerror = () => {
+          failed(new Error('could not open krab'));
+        };
+      })
+  );
+
+export const storedDrops = async (page: Page) =>
+  (await storedTrips(page)).reduce((sum, trip) => sum + trip.drops.length, 0);
+
+export const storedCollections = async (page: Page) =>
+  (await storedTrips(page)).flatMap((trip) =>
+    trip.drops.map((drop) => ({
+      collected: drop.collectedAt !== null,
+      catch: drop.catch
+    }))
+  );

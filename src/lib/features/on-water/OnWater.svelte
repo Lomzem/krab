@@ -3,12 +3,11 @@
   import { keepScreenAwakeWhile } from '#lib/features/app-shell/index.js';
   import {
     Compass,
-    CompassArrow,
     compassChoice,
     deviceCompass
   } from '#lib/features/compass/index.js';
   import { PositionWatch } from '#lib/features/location/index.js';
-  import type { Base, Camera } from '#lib/features/map/index.js';
+  import type { Base, Camera, Lane } from '#lib/features/map/index.js';
   import {
     canUndoCollect,
     gearInWater,
@@ -17,6 +16,8 @@
     type DropEdit,
     type Kind
   } from '#lib/features/trip/index.js';
+  import { DESTRUCTIVE_TEXT_BUTTON, QUIET_BUTTON } from './controls';
+  import DirectionCue from './DirectionCue.svelte';
   import DropControl from './DropControl.svelte';
   import EndTripSheet from './EndTripSheet.svelte';
   import GearList from './GearList.svelte';
@@ -72,6 +73,8 @@
   let sheet = $state.raw<SheetOrigin | null>(null);
   let base = $state<Base>('chart');
   let camera = $state.raw<Camera | null>(null);
+  let lane = $state<Lane | null>(null);
+  let toastHeight = $state(0);
   let showOnMap = $state<string | null>(null);
   let mapFilter = $state({ ...DEFAULT_MAP_FILTER });
   let mapTabButton = $state<HTMLButtonElement>();
@@ -82,16 +85,12 @@
   let pastHeading = $state<HTMLHeadingElement>();
   let pastShow = $state<string | null>(null);
   let pastShowNext: string | null = null;
-  let toastCovers = $state(0);
   let slowAttempt = $state.raw<DropAttempt | null>(null);
   let dropReplaced = false;
   const savingAttempt = $derived(water.pending?.attempt ?? null);
   const savingShown = $derived(
     water.pending !== null &&
       (water.pending.waited || slowAttempt === water.pending.attempt)
-  );
-  const listClearance = $derived(
-    tab === 'map' ? undefined : `${String(toastCovers)}px`
   );
 
   let operation = $state.raw<SheetOperation | null>(null);
@@ -191,7 +190,8 @@
   };
 
   const undo = (target: Undo) => {
-    void water.undo(target).then(async () => {
+    void water.undo(target).then(async (undone) => {
+      if (!undone) return;
       await tick();
       restingFocus()?.focus();
     });
@@ -203,11 +203,20 @@
     };
 
   let returnTo: HTMLElement | null = null;
+  let returnDrop: string | null = null;
 
   const closeSheet = () => {
     returnTo = sheet?.opener ?? null;
+    returnDrop = sheet?.dropId ?? null;
     sheet = null;
   };
+
+  const shownDrop = (dropId: string | null) =>
+    dropId === null
+      ? null
+      : document.querySelector<HTMLElement>(
+          `main :is([data-drop="${CSS.escape(dropId)}"], [data-drops~="${CSS.escape(dropId)}"])`
+        );
 
   const sheetReturnFocus = () => {
     if (showOnMap !== null) return mapTabButton;
@@ -216,7 +225,8 @@
       pastShowNext = null;
       return null;
     }
-    return returnTo?.isConnected ? returnTo : restingFocus();
+    if (returnTo?.isConnected) return returnTo;
+    return shownDrop(returnDrop) ?? restingFocus();
   };
 
   const operate = async <A,>(
@@ -226,9 +236,12 @@
     const origin = sheet;
     if (!origin || busy) return;
     operation = { sheet: origin, pending: true, problem: null };
-    const result = await work();
+    const settled = await work().then(
+      (result) => () => settle(result),
+      () => (): SaveProblem => 'storage'
+    );
     if (operation.sheet !== origin) return;
-    const problem = sheet === origin ? settle(result) : null;
+    const problem = sheet === origin ? settled() : null;
     operation = { sheet: origin, pending: false, problem };
   };
 
@@ -307,11 +320,7 @@
 </script>
 
 <div class="flex h-dvh flex-col bg-background font-sans text-foreground">
-  <main
-    class="min-h-0 flex-1 overflow-y-auto"
-    style:padding-bottom={listClearance}
-    style:scroll-padding-bottom={listClearance}
-  >
+  <main class="min-h-0 flex-1 overflow-y-auto">
     {#if tab === 'map'}
       {#if water.load === 'failed'}
         <section aria-labelledby="map-title">
@@ -334,18 +343,25 @@
           {now}
           bind:base
           bind:camera
+          onlane={(next: Lane | null) => {
+            lane = next;
+          }}
           bind:filter={mapFilter}
           show={showOnMap}
           onshown={() => {
             showOnMap = null;
           }}
           onopen={opensFrom('map')}
+          newest={water.notice?.offer.action === 'undo-drop'
+            ? water.notice.offer.dropId
+            : null}
+          cover={toastHeight}
         />
       {/if}
     {:else if tab === 'gear'}
       {#if water.load === 'failed'}
         <header class="px-4 pt-5">
-          <h1 class="text-[34px] leading-tight font-bold">Gear</h1>
+          <h1 class="text-[22px] leading-tight font-semibold">Gear</h1>
         </header>
         <LoadFailed text={TRIP_LOAD_FAILED} onretry={reload} />
       {:else if water.load === 'ready'}
@@ -390,7 +406,7 @@
       {#if sheet?.from === 'list' && target.position}
         <button
           type="button"
-          class="min-h-13 w-full rounded-control border-2 border-primary px-4 text-[18px] font-bold text-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+          class="w-full {QUIET_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
             show(target);
@@ -400,25 +416,11 @@
     {/snippet}
     {#snippet direction()}
       {#if sheetDirection}
-        <div class="flex items-center gap-2">
-          <CompassArrow
-            bearingDeg={sheetDirection.bearingDeg}
-            point={sheetDirection.point}
-            compass={$compass}
-            ontoggle={toggleCompass}
-          />
-          <div class="text-right" aria-hidden="true">
-            <p class="text-[21px] leading-tight font-bold tabular-nums">
-              {sheetDirection.distance}
-            </p>
-            <p class="text-[14px] font-semibold text-muted-foreground">
-              {sheetDirection.pointShort}
-            </p>
-          </div>
-          <span class="sr-only"
-            >{sheetDirection.distanceSpoken} {sheetDirection.point}</span
-          >
-        </div>
+        <DirectionCue
+          direction={sheetDirection}
+          compass={$compass}
+          ontoggle={toggleCompass}
+        />
       {/if}
     {/snippet}
     {#snippet endAction(target: Drop)}
@@ -426,7 +428,7 @@
         {@const { name } = subject}
         <button
           type="button"
-          class="min-h-13 rounded-control border-2 border-primary px-4 text-[18px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+          class="grow {QUIET_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
             undoCollect(target.id, name);
@@ -435,7 +437,7 @@
       {:else}
         <button
           type="button"
-          class="min-h-13 rounded-control border-2 border-destructive px-4 text-[18px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+          class="grow {DESTRUCTIVE_TEXT_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
             deleteDrop(target.id);
@@ -459,11 +461,15 @@
   <UndoToast
     notice={water.notice}
     onundo={undo}
+    blocked={water.undoBlocked}
     onretry={retry}
     ondismiss={(key: number) => {
       water.dismiss(key);
     }}
-    bind:covers={toastCovers}
+    overlay={tab === 'map'
+      ? (lane ?? { bottom: 0, room: null, beside: null })
+      : null}
+    bind:cover={toastHeight}
   />
 
   {#if water.pending?.phase === 'acquiring'}
@@ -477,15 +483,19 @@
     <SavingDrop />
   {:else if tab !== 'trips'}
     {#if explained}
-      <LocationStatus permission={watch.permission} fix={watch.fix} />
-      <DropControl bind:kind bind:button={dropButton} ondrop={drop} />
+      <section aria-label="Drop gear">
+        {#key tab}
+          <LocationStatus permission={watch.permission} fix={watch.fix} />
+        {/key}
+        <DropControl bind:kind bind:button={dropButton} ondrop={drop} />
+      </section>
     {:else}
       <LocationIntro onallow={allowLocation} />
     {/if}
   {/if}
 
   <nav
-    class="bg-primary pb-[env(safe-area-inset-bottom)] text-primary-foreground"
+    class="border-t border-border bg-card pb-[env(safe-area-inset-bottom)] text-muted-foreground"
     aria-label="Screens"
   >
     <ul class="grid grid-cols-3">
@@ -496,7 +506,7 @@
             {@attach (node: HTMLButtonElement) => {
               if (item.tab === 'map') mapTabButton = node;
             }}
-            class="relative flex min-h-15 w-full flex-col items-center justify-center gap-0.5 text-[14px] font-medium opacity-85 before:absolute before:inset-x-4 before:top-0 before:h-1 before:rounded-b-sm before:bg-tab-mark before:opacity-0 focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-tab-mark aria-[current=page]:font-bold aria-[current=page]:opacity-100 aria-[current=page]:before:opacity-100"
+            class="relative flex min-h-13 w-full touch-manipulation flex-col items-center justify-center gap-0.5 text-[13px] font-medium before:absolute before:inset-x-6 before:top-0 before:h-0.75 before:rounded-b-sm before:bg-mark before:opacity-0 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-ring aria-[current=page]:font-semibold aria-[current=page]:text-foreground aria-[current=page]:before:opacity-100"
             aria-current={tab === item.tab ? 'page' : undefined}
             onclick={() => {
               tab = item.tab;

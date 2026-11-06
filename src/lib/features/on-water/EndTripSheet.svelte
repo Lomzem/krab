@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Trip } from '#lib/features/trip/index.js';
+  import { DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
   import Sheet from './Sheet.svelte';
 
   const TITLE_ID = 'end-trip-title';
@@ -36,26 +37,24 @@
 
 <Sheet {open} titleId={TITLE_ID} {onclose} {returnFocus}>
   {#snippet heading()}
-    <h2 id={TITLE_ID} class="text-[26px] leading-tight font-bold">
+    <h2 id={TITLE_ID} class="text-[22px] leading-tight font-semibold">
       End this trip?
     </h2>
   {/snippet}
 
-  <p class="text-[18px]">{outcome}</p>
+  <p class="text-[16px] leading-normal">{outcome}</p>
 
   {#snippet footer()}
     <button
       type="button"
-      class="min-h-13 flex-1 rounded-control border-2 border-destructive px-4 text-[18px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+      class="flex-1 {DESTRUCTIVE_BUTTON}"
       aria-disabled={busy}
       onclick={() => {
         if (!busy) onend();
       }}>End trip</button
     >
-    <button
-      type="button"
-      class="min-h-13 flex-1 rounded-control border-2 border-primary px-4 text-[18px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      onclick={onclose}>Keep fishing</button
+    <button type="button" class="flex-1 {PRIMARY_BUTTON}" onclick={onclose}
+      >Keep fishing</button
     >
   {/snippet}
 </Sheet>

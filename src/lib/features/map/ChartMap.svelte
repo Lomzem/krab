@@ -24,22 +24,36 @@
     type Outage
   } from './base-style';
   import { chartTileUrl } from './chart-tiles';
-  import type { Camera, MapPlace, MyPosition } from './types';
+  import { MAX_ZOOM, spotsAt, zoomToSeparate, type Spot } from './groups';
+  import type { Camera, Lane, MapPlace, MyPosition } from './types';
 
   const SHOW_ZOOM = 15;
+  const MY_EXTENT = { left: 30, right: 30, up: 30, down: 30 };
+  const OVERVIEW_MAX_ZOOM = 17;
+  const ME_ORDER = 1;
   const LAYER_ORDER: Record<MapPlace['layer'], number> = {
-    past: 0,
-    collected: 1,
-    'in-water': 3
+    past: 2,
+    collected: 3,
+    'in-water': 4
   };
-  const MAX_ZOOM = 19;
   const MIN_ZOOM = 0;
-  const FIT_PADDING = 64;
-  const OUTAGE_NOTICE: Record<Outage, string> = {
-    'no-signal':
-      "No signal, so the map can't load. Your gear and position still show.",
-    'not-answering':
-      "The map service isn't answering, so the map can't load. Your gear and position still show."
+  const MIN_FIT_SPAN = 48;
+  const CREDITS_RESERVE = 40;
+  const LANE_GAP = 8;
+  const SAFE_EDGE_SLACK = 1 + 1e-6;
+  const OUTAGE_NOTICE: Record<Outage, { shown: string; more: string }> = {
+    offline: {
+      shown: "Offline. The map can't load.",
+      more: 'Your gear and position still show.'
+    },
+    unexplained: {
+      shown: "The map can't load right now.",
+      more: 'Your gear and position still show.'
+    },
+    'not-answering': {
+      shown: "The map service isn't answering.",
+      more: "The map can't load. Your gear and position still show."
+    }
   };
 
   let {
@@ -51,7 +65,11 @@
     show,
     onshown,
     pin,
-    controls
+    group,
+    controls,
+    onlane,
+    keepClear = null,
+    cover = 0
   }: {
     base?: Base;
     camera?: Camera | null;
@@ -60,8 +78,14 @@
     headingDeg?: number | null;
     show: string | null;
     onshown: () => void;
-    pin: Snippet<[string]>;
+    pin: Snippet<[id: string, selected: boolean]>;
+    group: Snippet<
+      [lead: string, ids: string[], apart: boolean, selected: boolean]
+    >;
     controls?: Snippet;
+    onlane?: (lane: Lane | null) => void;
+    keepClear?: string | null;
+    cover?: number;
   } = $props();
 
   let container = $state<HTMLDivElement>();
@@ -74,12 +98,41 @@
   let awaitingStyle = false;
   let baseSources = new Set<string>();
   let zoom = $state(camera?.zoom ?? 2);
-  let followFix = false;
+  let overview = untrack(() => camera === null);
+  let framePending = false;
+  let creditsHeight = $state(0);
+  let viewHeight = $state(0);
+  let railWidth = $state(0);
+  let railReach = $state(0);
+  let selected = $state<string | null>(null);
+  const isSelected = (ids: string[]) =>
+    selected !== null && ids.includes(selected);
   let latest: Accuracy = accuracyArea(null, 0, false);
   const markers = new SvelteMap<string, Marker>();
 
   const accuracy = $derived(
     accuracyArea(me?.at ?? null, me?.accuracyM ?? 0, me?.rough ?? false)
+  );
+
+  const featured = $derived(
+    [keepClear, selected].filter((id): id is string => id !== null)
+  );
+  const spots = $derived(spotsAt(places, zoom, featured));
+  const reach = $derived(
+    [
+      ...places.map(({ leading }) => leading(places.length - 1)),
+      ...(me ? [MY_EXTENT] : [])
+    ].reduce(
+      (most, box) => ({
+        up: Math.max(most.up, box.up),
+        down: Math.max(most.down, box.down),
+        side: Math.max(most.side, box.left, box.right)
+      }),
+      { up: 0, down: 0, side: 0 }
+    )
+  );
+  const spotOf = $derived(
+    new Map(spots.flatMap((spot) => spot.ids.map((id) => [id, spot] as const)))
   );
 
   const lngLat = (at: LatLon): LngLatLike => [at.lon, at.lat];
@@ -99,29 +152,258 @@
     return { west, east: east < west ? east + 360 : east };
   };
 
-  const fitPlaces = () => {
-    if (!map || places.length === 0) return;
-    const { west, east } = lonSpan(places.map((place) => place.at.lon));
-    const lats = places.map((place) => place.at.lat);
-    map.fitBounds(
-      [
-        [west, Math.min(...lats)],
-        [east, Math.max(...lats)]
-      ],
-      { padding: FIT_PADDING, maxZoom: SHOW_ZOOM, duration: 0 }
-    );
+  const squeeze = (
+    near: { cover: number; reach: number },
+    far: { cover: number; reach: number },
+    size: number
+  ) => {
+    const room = Math.max(0, size - MIN_FIT_SPAN);
+    const cover = near.cover + far.cover;
+    const reach = near.reach + far.reach;
+    if (cover + reach <= room) {
+      return [near.cover + near.reach, far.cover + far.reach] as const;
+    }
+    if (cover <= room) {
+      const share = (room - cover) / reach;
+      return [
+        near.cover + near.reach * share,
+        far.cover + far.reach * share
+      ] as const;
+    }
+    const scale = room / cover;
+    return [near.cover * scale, far.cover * scale] as const;
   };
 
-  const centreOn = (at: LatLon) => {
-    map?.jumpTo({
-      center: lngLat(at),
-      zoom: Math.max(map.getZoom(), SHOW_ZOOM)
+  const safeArea = (band = cover) => {
+    const area = container?.getBoundingClientRect();
+    if (!area) return 0;
+    const credits = container
+      ?.querySelector('.maplibregl-ctrl-bottom-right')
+      ?.getBoundingClientRect();
+    const [up, down] = squeeze(
+      { cover: 0, reach: reach.up },
+      {
+        cover:
+          Math.max(credits ? area.bottom - credits.top : 0, CREDITS_RESERVE) +
+          band,
+        reach: reach.down
+      },
+      area.height
+    );
+    const [left, right] = squeeze(
+      { cover: 0, reach: reach.side },
+      { cover: 0, reach: reach.side },
+      area.width
+    );
+    return { top: up, bottom: down, left, right };
+  };
+
+  const frame = () => {
+    if (!map) return;
+    const targets = [
+      ...places.map((place) => place.at),
+      ...(me ? [me.at] : [])
+    ];
+    if (targets.length === 0) return;
+    const { west, east } = lonSpan(targets.map((at) => at.lon));
+    const lats = targets.map((at) => at.lat);
+    if (west === east && Math.min(...lats) === Math.max(...lats)) {
+      map.jumpTo({ center: lngLat(targets[0]), zoom: SHOW_ZOOM });
+    } else {
+      map.fitBounds(
+        [
+          [west, Math.min(...lats)],
+          [east, Math.max(...lats)]
+        ],
+        { padding: safeArea(), maxZoom: OVERVIEW_MAX_ZOOM, duration: 0 }
+      );
+    }
+    settle();
+    if (keepClear && !reveal(keepClear)) {
+      separate(keepClear);
+      reveal(keepClear);
+    }
+  };
+
+  const frameSoon = async () => {
+    await tick();
+    if (overview) frame();
+  };
+
+  const outsideSafeArea = (padding: ReturnType<typeof safeArea>) => {
+    const { clientWidth, clientHeight } = map?.getContainer() ?? {
+      clientWidth: 0,
+      clientHeight: 0
+    };
+    return ({ at }: MapPlace) => {
+      if (!map || padding === 0) return false;
+      const { lng } = map.getCenter();
+      const point = map.project([
+        at.lon + 360 * Math.round((lng - at.lon) / 360),
+        at.lat
+      ]);
+      return (
+        point.x < padding.left - SAFE_EDGE_SLACK ||
+        point.y < padding.top - SAFE_EDGE_SLACK ||
+        point.x > clientWidth - padding.right + SAFE_EDGE_SLACK ||
+        point.y > clientHeight - padding.bottom + SAFE_EDGE_SLACK
+      );
+    };
+  };
+
+  type Rect = { left: number; right: number; top: number; bottom: number };
+
+  const coversIn = (area: DOMRect, toast: number): Rect[] => {
+    const credits = container
+      ?.querySelector('.maplibregl-ctrl-bottom-right')
+      ?.getBoundingClientRect();
+    const band = (credits ? area.bottom - credits.top : 0) + toast;
+    return [
+      {
+        left: 0,
+        right: area.width,
+        top: area.height - band,
+        bottom: area.height
+      }
+    ];
+  };
+
+  const drawnOf = ({ at, box }: Pick<Spot, 'at' | 'box'>): Rect | null => {
+    if (!map) return null;
+    const { lng } = map.getCenter();
+    const point = map.project([
+      at.lon + 360 * Math.round((lng - at.lon) / 360),
+      at.lat
+    ]);
+    return {
+      left: point.x - box.left,
+      right: point.x + box.right,
+      top: point.y - box.up,
+      bottom: point.y + box.down
+    };
+  };
+
+  const overlapOf = (a: Rect, b: Rect) =>
+    Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+    Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+
+  const clearShift = (
+    drawn: Rect[],
+    area: DOMRect,
+    band: number,
+    across: boolean
+  ) => {
+    const view = { left: 0, right: area.width, top: 0, bottom: area.height };
+    const shown = drawn.filter((box) => overlapOf(box, view) > 0);
+    if (shown.length === 0) return null;
+    const covers = coversIn(area, band);
+    const hiddenAt = (dx: number, dy: number) =>
+      shown.reduce((sum, at) => {
+        const box = {
+          left: at.left + dx,
+          right: at.right + dx,
+          top: at.top + dy,
+          bottom: at.bottom + dy
+        };
+        return (
+          sum +
+          (box.right - box.left) * (box.bottom - box.top) -
+          overlapOf(box, view) +
+          covers.reduce((all, block) => all + overlapOf(box, block), 0)
+        );
+      }, 0);
+    const still = hiddenAt(0, 0);
+    if (still === 0) return { dx: 0, dy: 0, hidden: 0 };
+    const blocks = [...covers, view];
+    const xs = across
+      ? [
+          0,
+          ...shown.flatMap((box) =>
+            blocks.flatMap((block) => [
+              block.left - box.right,
+              block.right - box.left
+            ])
+          )
+        ]
+      : [0];
+    const ys = [
+      0,
+      ...shown.flatMap((box) =>
+        blocks.flatMap((block) => [
+          block.top - box.bottom,
+          block.bottom - box.top
+        ])
+      )
+    ];
+    const best = xs
+      .flatMap((dx) => ys.map((dy) => ({ dx, dy, hidden: hiddenAt(dx, dy) })))
+      .sort(
+        (a, b) =>
+          a.hidden - b.hidden || a.dx ** 2 + a.dy ** 2 - (b.dx ** 2 + b.dy ** 2)
+      )[0];
+    return best.hidden < still ? best : { dx: 0, dy: 0, hidden: still };
+  };
+
+  const separate = (id: string) => {
+    const place = places.find((candidate) => candidate.id === id);
+    if (!map || !place || (spotOf.get(id)?.ids.length ?? 0) < 2) return;
+    map.jumpTo({
+      center: lngLat(place.at),
+      zoom: zoomToSeparate(places, id, map.getZoom(), MAX_ZOOM)
     });
   };
 
-  const recentre = () => {
-    if (me) centreOn(me.at);
-    else fitPlaces();
+  const shiftBy = (shift: { dx: number; dy: number } | null) => {
+    if (!map || !shift || (shift.dx === 0 && shift.dy === 0)) return;
+    const middle = map.project(map.getCenter());
+    map.jumpTo({
+      center: map.unproject([middle.x - shift.dx, middle.y - shift.dy])
+    });
+  };
+
+  const settle = () => {
+    const area = container?.getBoundingClientRect();
+    if (!area) return;
+    const drawn = spots.map(drawnOf).filter((box) => box !== null);
+    shiftBy(clearShift(drawn, area, cover, false));
+  };
+
+  const revealDrawn = (drawn: Rect | null, band = cover) => {
+    const area = container?.getBoundingClientRect();
+    if (!area || !drawn) return false;
+    const shift = clearShift([drawn], area, band, true);
+    shiftBy(shift);
+    return shift?.hidden === 0;
+  };
+
+  const reveal = (id: string, band = cover) => {
+    const spot = spotOf.get(id);
+    return revealDrawn(spot ? drawnOf(spot) : null, band);
+  };
+
+  const revealSoon = async (id: string, band: number) => {
+    await tick();
+    reveal(id, band);
+  };
+
+  const leaveOverview = () => {
+    overview = false;
+    framePending = false;
+  };
+
+  const showAll = () => {
+    selected = null;
+    overview = true;
+    camera = null;
+    frame();
+  };
+
+  const centreOn = (at: LatLon, atZoom = SHOW_ZOOM) => {
+    leaveOverview();
+    map?.jumpTo({
+      center: lngLat(at),
+      zoom: Math.max(map.getZoom(), atZoom)
+    });
   };
 
   const startGeneration = () => {
@@ -177,9 +459,22 @@
 
   const showPlace = async (id: string) => {
     const place = places.find((candidate) => candidate.id === id);
-    if (place) centreOn(place.at);
+    if (place && map) {
+      const from = Math.max(map.getZoom(), SHOW_ZOOM);
+      selected = id;
+      centreOn(place.at, zoomToSeparate(places, id, from, MAX_ZOOM));
+    }
     await tick();
-    markers.get(id)?.getElement().querySelector<HTMLElement>('button')?.focus();
+    reveal(id);
+    await tick();
+    const spot = spotOf.get(id);
+    if (spot) {
+      markers
+        .get(spot.key)
+        ?.getElement()
+        .querySelector<HTMLElement>('button')
+        ?.focus();
+    }
     onshown();
   };
 
@@ -243,28 +538,68 @@
       awaitingStyle = false;
       void created.getSource<GeoJSONSource>(ACCURACY_SOURCE)?.setData(latest);
     });
+    created.on('movestart', (event) => {
+      if (!event.originalEvent) return;
+      selected = null;
+      leaveOverview();
+    });
+    created.on('resize', () => {
+      if (overview) void frameSoon();
+    });
     created.on('moveend', () => {
-      const center = created.getCenter();
       zoom = created.getZoom();
+      if (overview) return;
+      const center = created.getCenter();
       camera = { center: { lat: center.lat, lon: center.lng }, zoom };
     });
+    const credits = host.querySelector<HTMLElement>(
+      '.maplibregl-ctrl-bottom-right'
+    );
+    if (credits) {
+      credits.style.zIndex = String(
+        Math.max(...Object.values(LAYER_ORDER)) + 1
+      );
+    }
+    let measuring = 0;
+    const measureCredits = new ResizeObserver(() => {
+      cancelAnimationFrame(measuring);
+      measuring = requestAnimationFrame(() => {
+        creditsHeight = credits?.getBoundingClientRect().height ?? 0;
+      });
+    });
+    if (credits) measureCredits.observe(credits);
+    const refit = new ResizeObserver(() => {
+      if (overview) void frameSoon();
+    });
+    if (credits) refit.observe(credits);
     const reconnect = () => {
       void apply(base);
     };
     window.addEventListener('online', reconnect);
-    if (!camera) {
-      if (me) centreOn(me.at);
-      else if (places.length > 0) fitPlaces();
-      else followFix = true;
-    }
+    framePending = overview;
     ready = true;
     return () => {
       startGeneration();
+      cancelAnimationFrame(measuring);
+      measureCredits.disconnect();
+      refit.disconnect();
+      onlane?.(null);
       window.removeEventListener('online', reconnect);
       markers.clear();
       created.remove();
       map = null;
     };
+  });
+
+  $effect(() => {
+    if (!ready) return;
+    const below =
+      viewHeight > 0 ? viewHeight - creditsHeight - LANE_GAP : -Infinity;
+    onlane?.({
+      bottom: creditsHeight,
+      room: below - railReach,
+      beside: { room: below, right: railWidth + LANE_GAP }
+    });
   });
 
   $effect(() => {
@@ -280,10 +615,26 @@
   });
 
   $effect(() => {
-    if (!ready || !followFix || !me) return;
-    followFix = false;
+    const drawn = places;
+    const band = cover;
+    if (!ready || (!me && drawn.length === 0)) return;
     untrack(() => {
-      centreOn(me.at);
+      if (
+        framePending ||
+        (overview && drawn.some(outsideSafeArea(safeArea(band))))
+      ) {
+        framePending = false;
+        void frameSoon();
+      }
+    });
+  });
+
+  $effect(() => {
+    const id = keepClear;
+    const band = cover;
+    if (!ready || !id) return;
+    untrack(() => {
+      if (overview) void revealSoon(id, band);
     });
   });
 
@@ -295,171 +646,284 @@
   });
 </script>
 
-<div class="relative isolate h-full min-h-64 overflow-hidden bg-[#d4e3ec]">
-  <div class="absolute inset-0 z-0">
-    <div bind:this={container} class="size-full"></div>
-  </div>
-
-  {#if failed}
-    <p
-      class="absolute inset-x-3 top-3 rounded-control border border-border bg-card px-4 py-3 text-[17px]"
+<div class="chart-map flex h-full flex-col bg-card">
+  {#if !failed}
+    <div
+      class="flex flex-none flex-wrap items-center gap-1 border-b border-border px-1.5 py-0.5"
     >
-      The map can't show on this phone. Your gear is listed under Gear.
-    </p>
+      {@render controls?.()}
+      <button
+        type="button"
+        class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-[15px] font-medium text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+        aria-label="Street map"
+        aria-pressed={base === 'street'}
+        onclick={() => {
+          base = base === 'chart' ? 'street' : 'chart';
+        }}
+      >
+        <svg
+          class="size-5 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          ><rect
+            x="3.5"
+            y="3.5"
+            width="17"
+            height="17"
+            rx="3"
+          />{#if base === 'street'}<path d="m7.5 12.5 3 3 6-6.5" />{/if}</svg
+        >Street
+      </button>
+      {#if places.length > 0}
+        <button
+          type="button"
+          class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          aria-label="Show all gear"
+          onclick={showAll}
+        >
+          <svg
+            class="size-5.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            ><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><circle
+              cx="9"
+              cy="10"
+              r="1.75"
+              fill="currentColor"
+            /><circle cx="15" cy="9" r="1.75" fill="currentColor" /><circle
+              cx="12"
+              cy="15"
+              r="1.75"
+              fill="currentColor"
+            /></svg
+          >
+        </button>
+      {/if}
+      {#if me}
+        <button
+          type="button"
+          class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          aria-label="Centre on my position"
+          onclick={() => {
+            centreOn(me.at);
+            revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
+          }}
+        >
+          <svg
+            class="size-5.5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            aria-hidden="true"
+            ><circle cx="12" cy="12" r="4" /><path
+              d="M12 2v4M12 18v4M2 12h4M18 12h4"
+            /></svg
+          >
+        </button>
+      {/if}
+    </div>
+    {#if availability !== 'available'}
+      {@const outage = OUTAGE_NOTICE[availability]}
+      <p
+        class="flex-none border-b border-border bg-card px-3 py-1.5 text-[14px] leading-tight text-foreground"
+        role="status"
+      >
+        {outage.shown}<span class="sr-only"> {outage.more}</span>
+      </p>
+    {/if}
   {/if}
 
-  {#if ready}
-    {#each places as place (place.id)}
-      <div class="contents">
-        <div
-          data-place={place.id}
-          style:z-index={LAYER_ORDER[place.layer]}
-          use:marker={place.at}
-        >
-          {@render pin(place.id)}
-        </div>
-      </div>
-    {/each}
-
-    {#if me}
-      <div class="contents">
-        <div
-          class="pointer-events-none size-11"
-          style:z-index="2"
-          role="img"
-          aria-label={me.label}
-          use:marker={me.at}
-        >
-          <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
-            {#if headingDeg !== null}
-              <defs>
-                <radialGradient
-                  id="heading-cone"
-                  cx="22"
-                  cy="22"
-                  r="21"
-                  gradientUnits="userSpaceOnUse"
-                >
-                  <stop offset="0.3" stop-color="#1d4ed8" stop-opacity="0.4" />
-                  <stop offset="1" stop-color="#1d4ed8" stop-opacity="0" />
-                </radialGradient>
-              </defs>
-              <path
-                d="M22 22 11.5 3.8a21 21 0 0 1 21 0Z"
-                fill="url(#heading-cone)"
-                style:transform={`rotate(${String(headingDeg)}deg)`}
-                style:transform-origin="22px 22px"
-              />
-            {/if}
-            {#if me.courseDeg !== null}
-              <path
-                d="M22 22 13 2a20 20 0 0 1 18 0Z"
-                fill="#1d4ed8"
-                fill-opacity="0.35"
-                style:transform={`rotate(${String(Math.round(me.courseDeg))}deg)`}
-                style:transform-origin="22px 22px"
-              />
-            {/if}
-            <circle
-              cx="22"
-              cy="22"
-              r="8"
-              fill="#1d4ed8"
-              stroke="#ffffff"
-              stroke-width="3"
-            />
-          </svg>
-        </div>
-      </div>
-    {/if}
-
+  <div class="flex min-h-0 flex-1">
     <div
-      class="absolute inset-x-3 top-3 z-1 grid gap-2"
-      style:pointer-events="none"
+      class="relative isolate min-w-0 flex-1 overflow-hidden bg-[#d5e2e0]"
+      bind:clientHeight={viewHeight}
     >
-      {#if availability !== 'available'}
+      <div class="absolute inset-0">
+        <div bind:this={container} class="size-full"></div>
+      </div>
+
+      {#if failed}
         <p
-          class="w-full rounded-control border border-border bg-card px-4 py-3 text-[17px] text-foreground shadow"
-          role="status"
-          style:pointer-events="auto"
+          class="absolute inset-x-3 top-3 rounded-control border border-border bg-card px-4 py-3 text-[16px]"
         >
-          {OUTAGE_NOTICE[availability]}
+          The map can't show on this phone. Your gear is listed under Gear.
         </p>
       {/if}
-      <div class="flex items-start justify-between gap-2">
-        <div class="flex flex-wrap gap-2" style:pointer-events="auto">
-          {@render controls?.()}
+
+      {#if ready}
+        {#each spots as spot (spot.key)}
+          <div class="contents">
+            <div
+              data-place={spot.key}
+              style:z-index={LAYER_ORDER[spot.layer]}
+              use:marker={spot.at}
+            >
+              {#if spot.ids.length === 1}
+                {@render pin(spot.key, isSelected(spot.ids))}
+              {:else}
+                {@render group(
+                  spot.lead,
+                  spot.ids,
+                  spot.apart,
+                  isSelected(spot.ids)
+                )}
+              {/if}
+            </div>
+          </div>
+        {/each}
+
+        {#if me}
+          <div class="contents">
+            <div
+              class="pointer-events-none size-15"
+              style:z-index={ME_ORDER}
+              role="img"
+              aria-label={me.label}
+              use:marker={me.at}
+            >
+              <svg
+                width="60"
+                height="60"
+                viewBox="-8 -8 60 60"
+                aria-hidden="true"
+              >
+                {#if headingDeg !== null}
+                  <defs>
+                    <radialGradient
+                      id="heading-cone"
+                      cx="22"
+                      cy="22"
+                      r="21"
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <stop
+                        offset="0.3"
+                        stop-color="#1d4ed8"
+                        stop-opacity="0.4"
+                      />
+                      <stop offset="1" stop-color="#1d4ed8" stop-opacity="0" />
+                    </radialGradient>
+                  </defs>
+                  <path
+                    d="M22 22 11.5 3.8a21 21 0 0 1 21 0Z"
+                    fill="url(#heading-cone)"
+                    style:transform={`rotate(${String(headingDeg)}deg)`}
+                    style:transform-origin="22px 22px"
+                  />
+                {/if}
+                {#if me.courseDeg !== null}
+                  <path
+                    d="M22 22 13 2a20 20 0 0 1 18 0Z"
+                    fill="#1d4ed8"
+                    fill-opacity="0.35"
+                    style:transform={`rotate(${String(Math.round(me.courseDeg))}deg)`}
+                    style:transform-origin="22px 22px"
+                  />
+                {/if}
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="27"
+                  fill="none"
+                  stroke="#ffffff"
+                  stroke-width="5"
+                />
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="27"
+                  fill="none"
+                  stroke="#1d4ed8"
+                  stroke-width="2.5"
+                />
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="8"
+                  fill="#1d4ed8"
+                  stroke="#ffffff"
+                  stroke-width="3"
+                />
+              </svg>
+            </div>
+          </div>
+        {/if}
+      {/if}
+    </div>
+
+    {#if !failed}
+      <div
+        class="flex-none border-l border-border px-1"
+        bind:offsetWidth={railWidth}
+      >
+        <div class="flex flex-col pt-1" bind:offsetHeight={railReach}>
           <button
             type="button"
-            class="flex min-h-12 items-center justify-center rounded-control border border-border bg-card px-3 text-[16px] font-semibold text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-            aria-pressed={base === 'street'}
-            onclick={() => {
-              base = base === 'chart' ? 'street' : 'chart';
-            }}>Street map</button
-          >
-        </div>
-        <div class="grid gap-2" style:pointer-events="auto">
-          <button
-            type="button"
-            class="flex size-12 items-center justify-center rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            class="relative flex size-11 touch-manipulation items-center justify-center rounded-t-control border border-border bg-card text-foreground focus-visible:z-10 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
             aria-label="Zoom in"
             aria-disabled={zoom >= MAX_ZOOM}
             onclick={() => {
+              leaveOverview();
               if (zoom < MAX_ZOOM) map?.zoomIn();
             }}
           >
             <svg
-              class="size-6"
+              class="size-5"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="2.5"
+              stroke-width="2"
               stroke-linecap="round"
               aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
             >
           </button>
           <button
             type="button"
-            class="flex size-12 items-center justify-center rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            class="relative -mt-px flex size-11 touch-manipulation items-center justify-center rounded-b-control border border-border bg-card text-foreground focus-visible:z-10 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
             aria-label="Zoom out"
             aria-disabled={zoom <= MIN_ZOOM}
             onclick={() => {
+              leaveOverview();
               if (zoom > MIN_ZOOM) map?.zoomOut();
             }}
           >
             <svg
-              class="size-6"
+              class="size-5"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="2.5"
+              stroke-width="2"
               stroke-linecap="round"
               aria-hidden="true"><path d="M5 12h14" /></svg
             >
           </button>
-          {#if me || places.length > 0}
-            <button
-              type="button"
-              class="flex size-12 items-center justify-center rounded-control border border-border bg-card text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              aria-label={me ? 'Centre on my position' : 'Show all gear'}
-              onclick={recentre}
-            >
-              <svg
-                class="size-6"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.25"
-                stroke-linecap="round"
-                aria-hidden="true"
-                ><circle cx="12" cy="12" r="4" /><path
-                  d="M12 2v4M12 18v4M2 12h4M18 12h4"
-                /></svg
-              >
-            </button>
-          {/if}
         </div>
       </div>
-    </div>
-  {/if}
+    {/if}
+  </div>
 </div>
+
+<style>
+  .chart-map :global(.maplibregl-ctrl-attrib) {
+    line-height: 16px;
+    background-color: var(--card);
+    color: var(--foreground);
+  }
+
+  .chart-map :global(.maplibregl-ctrl-attrib a) {
+    color: inherit;
+    text-decoration: underline;
+  }
+</style>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { KIND_NAMES, KINDS, type Kind } from '#lib/features/trip/index.js';
   import GearIcon from './GearIcon.svelte';
+  import SelectedCheck from './SelectedCheck.svelte';
 
   let {
     kind = $bindable('pot'),
@@ -13,12 +14,16 @@
   } = $props();
 </script>
 
-<div class="grid gap-3 border-t border-border bg-card p-3">
-  <fieldset class="grid grid-cols-2 gap-2">
+<div
+  class="flex flex-wrap items-stretch gap-2 border-t border-border bg-card px-3 py-2"
+>
+  <fieldset
+    class="flex grow flex-wrap gap-0.5 rounded-control border border-input p-0.75"
+  >
     <legend class="sr-only">Gear to drop</legend>
     {#each KINDS as option (option)}
       <label
-        class="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-control border border-input text-[17px] font-semibold has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring"
+        class="flex min-h-11 min-w-16 grow cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-[0.3125rem] px-2 text-[16px] font-medium whitespace-nowrap text-muted-foreground has-checked:bg-accent has-checked:text-accent-foreground has-focus-visible:outline-3 has-focus-visible:outline-offset-1 has-focus-visible:outline-ring"
       >
         <input
           class="sr-only"
@@ -27,30 +32,18 @@
           value={option}
           bind:group={kind}
         />
-        <GearIcon kind={option} />
         {KIND_NAMES[option]}
-        {#if kind === option}
-          <svg
-            class="size-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg
-          >
-        {/if}
+        <SelectedCheck shown={kind === option} />
       </label>
     {/each}
   </fieldset>
   <button
     bind:this={button}
     type="button"
-    class="flex min-h-18 w-full items-center justify-center gap-3 rounded-control bg-signal text-[24px] font-bold text-signal-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary active:brightness-95"
+    class="flex min-h-13 grow-999 touch-manipulation items-center justify-center gap-2 rounded-control bg-action px-3 text-[18px] font-semibold whitespace-nowrap text-action-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring active:brightness-95"
     onclick={ondrop}
   >
-    <GearIcon {kind} size={30} />
+    <GearIcon {kind} size={22} />
     Drop {KIND_NAMES[kind].toLowerCase()}
   </button>
 </div>

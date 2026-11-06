@@ -4,7 +4,7 @@ Turn gear arrows from north-up into "which way from where I face" by tapping the
 
 ## Sub-features
 
-- The arrow in the nearest-gear card and in a gear sheet is the toggle: a 44 px round button whose name says the state and the direction, for example "Compass off, gear to the north-east", "Compass on, gear at 2 o'clock", "Compass on, gear straight ahead".
+- The arrow in the nearest-gear card and in a gear sheet is the toggle: a 44 px round button whose name says the state and the direction, for example "Compass off, gear to the north-east", "Compass on, gear at 2 o'clock", "Compass on, gear straight ahead". The caption under it is decorative and, while off, reads `Turn on compass` so the tap is discoverable; other captions state the compass state.
 - States: off, paused (waiting for a tap or for the page to show again), starting, needs calibrating, unavailable, on. Only needs calibrating shows the visible "Compass needs calibrating" note.
 - While on: the card, Gear list and sheet arrows show the gear's bearing minus the phone's true heading. The map stays north-up and shows a soft heading cone at my position instead of the course wedge.
 - Off, unavailable (iOS denied, no compass, a date outside WMM2025's 2025–2029 or no position fix), paused or needing calibration: every arrow is north-up.

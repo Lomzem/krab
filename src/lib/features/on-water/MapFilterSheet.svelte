@@ -1,7 +1,10 @@
 <script lang="ts">
   import type { DaySelection } from '#lib/features/trip/index.js';
+  import { DAY_CHOICE, PRIMARY_BUTTON } from './controls';
   import GearIcon from './GearIcon.svelte';
+  import UncollectedMark from './UncollectedMark.svelte';
   import { DEFAULT_MAP_FILTER, type MapFilter } from './map-filter';
+  import SelectedCheck from './SelectedCheck.svelte';
   import Sheet from './Sheet.svelte';
 
   const TITLE_ID = 'map-filter-title';
@@ -28,38 +31,41 @@
   } = $props();
 
   const choiceClass =
-    'relative flex min-h-13 items-center gap-3 rounded-control border-2 border-border bg-card px-3 text-[18px] font-semibold has-checked:border-primary';
+    'relative flex min-h-12 touch-manipulation items-center gap-3 rounded-control border border-input bg-card px-3 text-[16px] font-medium has-checked:border-primary';
   const inputClass =
     'peer absolute inset-0 size-full cursor-pointer appearance-none rounded-control focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring';
 </script>
 
 <Sheet {open} titleId={TITLE_ID} {onclose} {returnFocus}>
   {#snippet heading()}
-    <h2 id={TITLE_ID} class="text-[26px] leading-tight font-bold">
+    <h2 id={TITLE_ID} class="text-[22px] leading-tight font-semibold">
       Map filter
     </h2>
   {/snippet}
 
-  <p class="text-[17px] text-muted-foreground">
+  <p class="text-[15px] text-muted-foreground">
     {multiDay
       ? 'Gear in the water always shows for the days you pick.'
       : 'Gear in the water always shows.'}
   </p>
 
   <fieldset class="mt-4">
-    <legend class="mb-2 text-[20px] font-bold">Also show</legend>
+    <legend class="mb-2 text-[17px] font-semibold">Also show</legend>
     <div class="grid gap-2">
       <label class={choiceClass}>
         <input
           type="checkbox"
           class={inputClass}
           bind:checked={filter.collected}
+          aria-labelledby="{TITLE_ID}-collected"
         />
         <span
-          class="pointer-events-none inline-flex items-center gap-0.5 rounded-md border-2 border-dashed border-[#4b5b6c] bg-white py-0.5 pr-1 pl-0.5 text-[13px] leading-none font-bold text-[#4b5b6c]"
+          class="pointer-events-none inline-flex items-center gap-0.5 rounded-md border-2 border-dashed border-[#55655f] bg-white py-0.5 pr-1 pl-0.5 text-[13px] leading-none font-semibold text-[#55655f]"
           aria-hidden="true"><GearIcon kind="pot" size={14} />1</span
         >
-        <span class="pointer-events-none flex-1">Collected gear</span>
+        <span id="{TITLE_ID}-collected" class="pointer-events-none flex-1"
+          >Collected gear</span
+        >
         {@render check()}
       </label>
       {#if hasPast}
@@ -68,12 +74,18 @@
             type="checkbox"
             class={inputClass}
             bind:checked={filter.past}
+            aria-labelledby="{TITLE_ID}-past"
           />
           <span
-            class="pointer-events-none inline-flex items-center rounded-md border-2 border-dotted border-[#4b5b6c] bg-white p-0.5 text-[#4b5b6c]"
+            class="pointer-events-none inline-flex items-center rounded-md border-2 border-dotted border-[#55655f] bg-white p-0.5 text-[#55655f]"
             aria-hidden="true"><GearIcon kind="pot" size={14} /></span
           >
-          <span class="pointer-events-none flex-1">Past trips</span>
+          <span class="pointer-events-none flex-1"
+            ><span id="{TITLE_ID}-past">Past trips</span><span
+              class="flex items-center gap-1.5 text-[15px] font-normal text-muted-foreground"
+              aria-hidden="true"><UncollectedMark size={14} />Uncollected</span
+            ></span
+          >
           {@render check()}
         </label>
       {/if}
@@ -82,12 +94,15 @@
           type="checkbox"
           class={inputClass}
           bind:checked={filter.timeInWater}
+          aria-labelledby="{TITLE_ID}-time"
         />
         <span
-          class="pointer-events-none rounded border border-border bg-white px-1 text-[12px] leading-tight font-bold text-[#0f2a44] tabular-nums"
-          aria-hidden="true">2h 5m</span
+          class="pointer-events-none rounded border border-border bg-white px-1 text-[12px] leading-tight font-semibold text-[#1a2e2b] tabular-nums"
+          aria-hidden="true">2 h 5 min</span
         >
-        <span class="pointer-events-none flex-1">Time in the water</span>
+        <span id="{TITLE_ID}-time" class="pointer-events-none flex-1"
+          >Time in the water</span
+        >
         {@render check()}
       </label>
     </div>
@@ -95,12 +110,10 @@
 
   {#if multiDay}
     <fieldset class="mt-6">
-      <legend class="mb-2 text-[20px] font-bold">Days on this trip</legend>
+      <legend class="mb-2 text-[17px] font-semibold">Days on this trip</legend>
       <div class="grid grid-cols-3 gap-2">
         {#each DAY_CHOICES as choice (choice.days)}
-          <label
-            class="{choiceClass} justify-center text-center has-checked:bg-primary has-checked:text-primary-foreground"
-          >
+          <label class={DAY_CHOICE}>
             <input
               type="radio"
               name="map-filter-days"
@@ -109,6 +122,7 @@
               bind:group={filter.days}
             />
             <span class="pointer-events-none">{choice.name}</span>
+            <SelectedCheck shown={filter.days === choice.days} />
           </label>
         {/each}
       </div>
@@ -116,10 +130,8 @@
   {/if}
 
   {#snippet footer()}
-    <button
-      type="button"
-      class="min-h-13 flex-1 rounded-control bg-primary px-4 text-[18px] font-bold text-primary-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      onclick={onclose}>Done</button
+    <button type="button" class="flex-1 {PRIMARY_BUTTON}" onclick={onclose}
+      >Done</button
     >
   {/snippet}
 </Sheet>

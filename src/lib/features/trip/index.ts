@@ -86,7 +86,7 @@ export {
   type DropTarget,
   type FoundDrop
 } from './rules';
-export { compassPoint } from './format';
+export { compassPoint, shortDateRange } from './format';
 export { availability, type Availability } from './availability';
 export {
   catchText,
@@ -104,6 +104,7 @@ export {
   timeInWater,
   tripDates,
   tripDays,
+  tripSpan,
   type CollectedRow,
   type Day,
   type DaySelection,

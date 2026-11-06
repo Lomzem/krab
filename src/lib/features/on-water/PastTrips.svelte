@@ -6,15 +6,25 @@
     isMultiDay,
     pastDrops,
     pastTripCounts,
+    shortDateRange,
     tripDates,
+    tripSpan,
     type PastDaySelection,
     type PastDropRow,
     type Trip
   } from '#lib/features/trip/index.js';
   import DayMarker from './DayMarker.svelte';
+  import GearHere from './GearHere.svelte';
+  import { inListOrder, type HereItem } from './gear-here';
+  import { DAY_CHOICE, DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
   import GearIcon from './GearIcon.svelte';
+  import GroupPin from './GroupPin.svelte';
   import LoadFailed from './LoadFailed.svelte';
+  import PinChip from './PinChip.svelte';
+  import { chipBoxes } from './pin-chip';
+  import SelectedCheck from './SelectedCheck.svelte';
   import Sheet from './Sheet.svelte';
+  import UncollectedMark from './UncollectedMark.svelte';
 
   const DELETE_TITLE_ID = 'delete-trip-title';
   const DAY_CHOICES: readonly { days: PastDaySelection; name: string }[] = [
@@ -58,11 +68,6 @@
   );
   const rowsById = $derived(new Map(rows.map((row) => [row.drop.id, row])));
   const byDay = $derived(dayGroups(rows));
-  const places = $derived(
-    rows.flatMap(({ drop }): MapPlace[] =>
-      drop.position ? [{ id: drop.id, at: drop.position, layer: 'past' }] : []
-    )
-  );
   const mapShow = $derived(show !== null && rowsById.has(show) ? show : null);
 
   $effect(() => {
@@ -111,13 +116,58 @@
     if (deleted) deleteOpen = false;
   };
 
-  const pinLabel = (row: PastDropRow) =>
-    [row.name, row.day?.text, row.status].filter(Boolean).join(', ');
+  const shortDates = (shown: Trip) => {
+    const { first, last } = tripSpan(shown);
+    return shortDateRange(first, last);
+  };
+
+  const pinDetails = (row: PastDropRow) =>
+    [row.day?.text, row.status].filter((part): part is string => Boolean(part));
+
+  const itemOf = (id: string): HereItem[] => {
+    const row = rowsById.get(id);
+    return row
+      ? [
+          {
+            id,
+            kind: row.gear.kind,
+            layer: 'past',
+            number: row.gear.number,
+            day: row.day,
+            uncollected: row.drop.collectedAt === null,
+            name: row.name,
+            details: pinDetails(row),
+            summary: pinDetails(row).join(', ')
+          }
+        ]
+      : [];
+  };
+
+  const places = $derived(
+    rows.flatMap(({ drop }): MapPlace[] =>
+      itemOf(drop.id).flatMap((item) =>
+        drop.position
+          ? [
+              {
+                id: drop.id,
+                at: drop.position,
+                layer: 'past',
+                ...chipBoxes(item, null)
+              }
+            ]
+          : []
+      )
+    )
+  );
+
+  let here = $state<string[]>([]);
+  let hereOpener: HTMLElement | null = null;
+  let hereApart = $state(false);
+  let picked = false;
+  const hereItems = $derived(inListOrder(here.flatMap(itemOf)));
 
   const rowClass =
-    'flex min-h-16 w-full items-center gap-3 px-4 py-2 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted';
-  const choiceClass =
-    'relative flex min-h-13 items-center justify-center gap-3 rounded-control border-2 border-border bg-card px-3 text-center text-[17px] font-semibold has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground';
+    'flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted';
   const inputClass =
     'peer absolute inset-0 size-full cursor-pointer appearance-none rounded-control focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring';
 </script>
@@ -129,14 +179,29 @@
         <button
           type="button"
           class={rowClass}
+          data-drop={row.drop.id}
           onclick={(event) => {
             onopen(row.drop.id, event.currentTarget, 'list');
           }}
         >
-          <GearIcon kind={row.gear.kind} size={28} />
+          <GearIcon kind={row.gear.kind} size={24} />
           <div class="min-w-0 flex-1">
-            <p class="text-[19px] leading-snug font-semibold">{row.name}</p>
-            <p class="text-[15px] text-muted-foreground">{row.status}</p>
+            <p class="text-[17px] leading-snug font-medium">{row.name}</p>
+            {#if row.drop.label}
+              <p
+                class="line-clamp-2 text-[16px] leading-snug [overflow-wrap:anywhere]"
+              >
+                {row.drop.label}
+              </p>
+            {/if}
+            <p
+              class="flex items-center gap-1.5 text-[15px] text-muted-foreground"
+            >
+              {#if row.drop.collectedAt === null}
+                <UncollectedMark size={16} />
+              {/if}
+              {row.status}
+            </p>
           </div>
         </button>
       </li>
@@ -149,7 +214,7 @@
     <div class="px-4 pt-3">
       <button
         type="button"
-        class="-ml-2 flex min-h-12 items-center gap-1 rounded-control px-2 text-[17px] font-semibold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        class="-ml-2 flex min-h-11 touch-manipulation items-center gap-1 rounded-control px-2 text-[16px] font-medium text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
         onclick={() => void backToList()}
       >
         <svg
@@ -167,45 +232,54 @@
         id="past-trip-title"
         bind:this={titleHeading}
         tabindex="-1"
-        class="mt-1 text-[28px] leading-tight font-bold focus:outline-none"
+        class="mt-1 text-[22px] leading-tight font-semibold focus:outline-none"
       >
-        {tripDates(trip)}
+        <span aria-hidden="true">{shortDates(trip)}</span><span class="sr-only"
+          >{tripDates(trip)}</span
+        >
       </h1>
-      <p class="pb-3 text-[17px] text-muted-foreground">
+      <p class="pb-3 text-[15px] text-muted-foreground">
         {pastTripCounts(trip)}
       </p>
     </div>
 
     <div class="h-[45dvh]">
       {#await import('#lib/features/map/ChartMap.svelte')}
-        <p class="px-4 pt-4 text-[17px] text-muted-foreground">Loading map</p>
+        <p class="px-4 pt-4 text-[16px] text-muted-foreground">Loading map</p>
       {:then { default: ChartMap }}
         <ChartMap {places} me={null} show={mapShow} {onshown}>
           {#snippet pin(id: string)}
-            {@const row = rowsById.get(id)}
-            {#if row}
+            {#each itemOf(id) as item (item.id)}
               <button
                 type="button"
                 class="group grid size-11 place-items-center focus-visible:outline-none"
-                aria-label={pinLabel(row)}
+                aria-label={[item.name, ...item.details].join(', ')}
+                data-drop={id}
                 onclick={(event) => {
                   onopen(id, event.currentTarget, 'map');
                 }}
               >
-                <span
-                  class="inline-flex items-center gap-0.5 rounded-md border-2 border-dotted border-[#4b5b6c] bg-white/85 py-0.5 pr-1 pl-0.5 text-[13px] leading-none font-bold whitespace-nowrap text-[#4b5b6c] tabular-nums group-focus-visible:outline-3 group-focus-visible:outline-offset-3 group-focus-visible:outline-[#c2410c]"
-                >
-                  <GearIcon kind={row.gear.kind} size={15} />{row.gear.number}
-                  {#if row.day}
-                    <DayMarker day={row.day} size={14} class="ml-1 gap-0.5" />
-                  {/if}
-                </span>
+                <PinChip face={item} />
               </button>
-            {/if}
+            {/each}
+          {/snippet}
+          {#snippet group(lead: string, ids: string[], apart: boolean)}
+            {#each itemOf(lead) as first (first.id)}
+              <GroupPin
+                lead={first}
+                items={inListOrder(ids.flatMap(itemOf))}
+                {apart}
+                onopen={(opener: HTMLElement) => {
+                  hereOpener = opener;
+                  hereApart = apart;
+                  here = ids;
+                }}
+              />
+            {/each}
           {/snippet}
         </ChartMap>
       {:catch}
-        <p class="px-4 pt-4 text-[17px]">
+        <p class="px-4 pt-4 text-[16px]">
           The map can't show on this phone. The trip's gear is listed below.
         </p>
       {/await}
@@ -213,10 +287,11 @@
 
     {#if multiDay}
       <fieldset class="px-4 pt-4">
-        <legend class="mb-2 text-[20px] font-bold">Days on this trip</legend>
+        <legend class="mb-2 text-[17px] font-semibold">Days on this trip</legend
+        >
         <div class="grid grid-cols-3 gap-2">
           {#each DAY_CHOICES as choice (choice.days)}
-            <label class={choiceClass}>
+            <label class={DAY_CHOICE}>
               <input
                 type="radio"
                 name="past-trip-days"
@@ -225,13 +300,14 @@
                 bind:group={selection}
               />
               <span class="pointer-events-none">{choice.name}</span>
+              <SelectedCheck shown={selection === choice.days} />
             </label>
           {/each}
         </div>
       </fieldset>
     {/if}
 
-    <h2 id="past-gear-title" class="px-4 pt-6 pb-2 text-[22px] font-bold">
+    <h2 id="past-gear-title" class="px-4 pt-6 pb-2 text-[18px] font-semibold">
       Gear
     </h2>
     {#if byDay.length > 0}
@@ -241,7 +317,7 @@
         >
           <h3
             id="past-day-{group.day.number}-title"
-            class="px-4 pt-3 pb-2 text-[19px] font-bold"
+            class="px-4 pt-3 pb-1 text-[16px] font-semibold"
           >
             <DayMarker day={group.day} size={20} />
           </h3>
@@ -256,7 +332,7 @@
       <button
         bind:this={deleteButton}
         type="button"
-        class="min-h-13 w-full rounded-control border-2 border-destructive px-4 text-[18px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        class="w-full {DESTRUCTIVE_BUTTON}"
         aria-haspopup="dialog"
         onclick={() => {
           deleteOpen = true;
@@ -270,7 +346,7 @@
       id="past-trips-title"
       bind:this={titleHeading}
       tabindex="-1"
-      class="px-4 pt-5 pb-3 text-[34px] leading-tight font-bold focus:outline-none"
+      class="px-4 pt-3 pb-2 text-[22px] leading-tight font-semibold focus:outline-none"
     >
       Past trips
     </h1>
@@ -279,7 +355,7 @@
     {/if}
     {#if past.length === 0}
       {#if !failed}
-        <p class="px-4 text-[17px]">No past trips yet.</p>
+        <p class="px-4 text-[16px]">No past trips yet.</p>
       {/if}
     {:else}
       <ul bind:this={list} class="border-t border-border bg-card">
@@ -294,8 +370,10 @@
               }}
             >
               <div class="min-w-0 flex-1">
-                <p class="text-[19px] leading-snug font-semibold">
-                  {tripDates(item)}
+                <p class="text-[17px] leading-snug font-medium">
+                  <span aria-hidden="true">{shortDates(item)}</span><span
+                    class="sr-only">{tripDates(item)}</span
+                  >
                 </p>
                 <p class="text-[15px] text-muted-foreground">
                   {pastTripCounts(item)}
@@ -319,6 +397,26 @@
   </section>
 {/if}
 
+<GearHere
+  items={hereItems}
+  apart={hereApart}
+  onpick={(id: string) => {
+    picked = true;
+    here = [];
+    if (hereOpener) onopen(id, hereOpener, 'map');
+  }}
+  onclose={() => {
+    here = [];
+  }}
+  returnFocus={() => {
+    if (picked) {
+      picked = false;
+      return null;
+    }
+    return hereOpener?.isConnected ? hereOpener : null;
+  }}
+/>
+
 <Sheet
   open={deleteOpen && trip !== null}
   titleId={DELETE_TITLE_ID}
@@ -326,25 +424,25 @@
   returnFocus={() => (deleteButton?.isConnected ? deleteButton : titleHeading)}
 >
   {#snippet heading()}
-    <h2 id={DELETE_TITLE_ID} class="text-[26px] leading-tight font-bold">
+    <h2 id={DELETE_TITLE_ID} class="text-[22px] leading-tight font-semibold">
       Delete this trip?
     </h2>
   {/snippet}
 
-  <p class="text-[18px]">
+  <p class="text-[16px] leading-normal">
     Its drops and catches are removed from this phone. This can't be undone.
   </p>
 
   {#snippet footer()}
     <button
       type="button"
-      class="min-h-13 flex-1 rounded-control border-2 border-destructive px-4 text-[18px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+      class="flex-1 {DESTRUCTIVE_BUTTON}"
       aria-disabled={deleting}
       onclick={() => void confirmDelete()}>Delete trip</button
     >
     <button
       type="button"
-      class="min-h-13 flex-1 rounded-control border-2 border-primary px-4 text-[18px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+      class="flex-1 {PRIMARY_BUTTON}"
       aria-disabled={deleting}
       onclick={keepTrip}>Keep it</button
     >

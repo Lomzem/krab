@@ -26,9 +26,34 @@ const depthOf = (text: string) => {
   return trimmed === '' ? null : Number(trimmed);
 };
 
+export const depthAccepted = (text: string) => {
+  const depthFt = depthOf(text);
+  return depthFt === null || (Number.isFinite(depthFt) && depthFt >= 0);
+};
+
+export type CatchDraft = Record<keyof Catch, string>;
+
+export const catchDraftOf = (recorded: Catch | null): CatchDraft | null =>
+  recorded && {
+    kept: String(recorded.kept),
+    released: String(recorded.released)
+  };
+
+export const countOf = (text: string) => {
+  const trimmed = text.trim();
+  const count = Number(trimmed);
+  return /^\d+$/.test(trimmed) && Number.isSafeInteger(count) ? count : null;
+};
+
+const catchOf = (draft: CatchDraft | null): Catch | null =>
+  draft && {
+    kept: countOf(draft.kept) ?? Number.NaN,
+    released: countOf(draft.released) ?? Number.NaN
+  };
+
 export const editOf = (
   draft: DetailsDraft,
-  recorded: Catch | null
+  recorded: CatchDraft | null
 ): DropEdit => ({
   details: {
     label: draft.label,
@@ -36,5 +61,5 @@ export const editOf = (
     depthFt: depthOf(draft.depth),
     notes: draft.notes
   },
-  catch: recorded
+  catch: catchOf(recorded)
 });

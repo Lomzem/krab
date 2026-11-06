@@ -193,7 +193,12 @@ const latestDrop = (trip: Trip) =>
   Math.max(trip.startedAt, ...trip.drops.map((drop) => drop.placedAt));
 
 const earliestDrop = (trip: Trip) =>
-  Math.min(...trip.drops.map((drop) => drop.placedAt));
+  Math.min(latestDrop(trip), ...trip.drops.map((drop) => drop.placedAt));
+
+export const tripSpan = (trip: Trip) => ({
+  first: earliestDrop(trip),
+  last: latestDrop(trip)
+});
 
 const FULL_DATE: Intl.DateTimeFormatOptions = {
   weekday: 'long',
@@ -209,8 +214,9 @@ const DATE_IN_YEAR: Intl.DateTimeFormatOptions = {
 };
 
 export const tripDates = (trip: Trip) => {
-  const first = new Date(earliestDrop(trip));
-  const last = new Date(latestDrop(trip));
+  const span = tripSpan(trip);
+  const first = new Date(span.first);
+  const last = new Date(span.last);
   if (localDate(first.getTime()) === localDate(last.getTime())) {
     return first.toLocaleDateString('en-US', FULL_DATE);
   }

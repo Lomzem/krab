@@ -47,18 +47,27 @@ export const durationText = (ms: number) => {
   const days = Math.floor(hours / 24);
   if (hours < 1) {
     return {
-      short: `${String(minutes)}m`,
+      short: `${String(minutes)} min`,
       spoken: count(minutes, 'minute', 'minutes')
     };
   }
   if (days < 1) {
     return {
-      short: `${String(hours)}h ${String(minutes % 60)}m`,
+      short: `${String(hours)} h ${String(minutes % 60)} min`,
       spoken: `${count(hours, 'hour', 'hours')} ${count(minutes % 60, 'minute', 'minutes')}`
     };
   }
   return {
-    short: `${String(days)}d ${String(hours % 24)}h`,
+    short: `${String(days)} d ${String(hours % 24)} h`,
     spoken: `${count(days, 'day', 'days')} ${count(hours % 24, 'hour', 'hours')}`
   };
 };
+
+const SHORT_DATE = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric'
+});
+
+export const shortDateRange = (first: number, last: number) =>
+  SHORT_DATE.formatRange(first, last);

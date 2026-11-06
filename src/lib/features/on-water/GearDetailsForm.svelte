@@ -5,26 +5,22 @@
     canDropAgain,
     KIND_NAMES,
     timeInWater,
-    type Catch,
     type Drop,
     type DropEdit,
     type Kind
   } from '#lib/features/trip/index.js';
   import CatchField from './CatchField.svelte';
+  import { ACTION_BUTTON, PRIMARY_BUTTON } from './controls';
   import DetailsFields from './DetailsFields.svelte';
-  import { draftOf, editOf } from './details-draft';
+  import {
+    catchDraftOf,
+    countOf,
+    draftOf,
+    editOf,
+    type CatchDraft
+  } from './details-draft';
   import type { SheetOperation, SheetSubject } from './gear-sheet';
   import KindField from './KindField.svelte';
-  import type { SaveProblem } from './on-water.svelte';
-
-  const DEPTH_PROBLEM = 'Enter the depth in feet as a number, 0 or more.';
-  const PROBLEMS: Record<Exclude<SaveProblem, 'depth'>, string> = {
-    catch:
-      "Couldn't save the catch. It needs collected gear and whole numbers from 0.",
-    kind: 'This gear has been dropped again, so it keeps its kind. Nothing was saved.',
-    gone: "Couldn't save. That drop is gone.",
-    storage: "Couldn't save. Try again."
-  };
 
   let {
     subject,
@@ -61,7 +57,7 @@
   let draft = $state(initial().draft);
   let kind = $state(initial().kind);
   let catchDraft = $derived(
-    collectedAt === null ? null : untrack(() => drop.catch)
+    collectedAt === null ? null : untrack(() => catchDraftOf(drop.catch))
   );
   const busy = $derived(operation?.pending ?? false);
   const problem = $derived(operation?.problem ?? null);
@@ -81,7 +77,30 @@
   $effect(() => {
     if (operation?.problem !== 'depth') return;
     void tick().then(() => {
-      document.getElementById(`${idPrefix}-depth`)?.focus();
+      document
+        .getElementById(`${idPrefix}-depth`)
+        ?.focus({ preventScroll: true });
+      document
+        .getElementById(`${idPrefix}-depth-field`)
+        ?.scrollIntoView({ block: 'nearest' });
+    });
+  });
+
+  $effect(() => {
+    if (operation?.problem !== 'catch') return;
+    const typed = untrack(() => catchDraft);
+    const refused = (['kept', 'released'] as const).find(
+      (side) => typed && countOf(typed[side]) === null
+    );
+    if (!refused) return;
+    void tick().then(() => {
+      document
+        .getElementById(`${idPrefix}-${refused}-count`)
+        ?.focus({ preventScroll: true });
+      document
+        .getElementById(`${idPrefix}-catch-title`)
+        ?.closest('section')
+        ?.scrollIntoView({ block: 'nearest' });
     });
   });
 
@@ -97,15 +116,17 @@
   };
 </script>
 
-<form id={formId} class="grid gap-6" onsubmit={submit} novalidate>
+<form id={formId} class="grid gap-5" onsubmit={submit} novalidate>
   {#if collectedAt === null && subject.trip.endedAt !== null}
-    <p class="text-[17px] font-semibold">
+    <p class="text-[16px] font-medium">
       Uncollected. The trip ended with this gear in the water.
     </p>
   {:else if collectedAt === null}
     <div class="grid gap-3">
-      <div class="flex min-h-11 items-center justify-between gap-3">
-        <p class="text-[17px] text-muted-foreground">
+      <div
+        class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2"
+      >
+        <p class="text-[15px] text-muted-foreground">
           <span aria-hidden="true">{inWater.short} in the water</span>
           <span class="sr-only">In the water for {inWater.spoken}</span>
         </p>
@@ -115,7 +136,7 @@
         <button
           bind:this={collectButton}
           type="button"
-          class="min-h-16 w-full rounded-control bg-signal text-[22px] font-bold text-signal-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary active:brightness-95 aria-disabled:opacity-60"
+          class="w-full {ACTION_BUTTON} active:brightness-95"
           aria-disabled={busy}
           onclick={() => {
             oncollect(drop.id);
@@ -127,15 +148,16 @@
     <CatchField
       value={catchDraft}
       {idPrefix}
+      invalid={problem === 'catch'}
       bind:heading={catchHeading}
-      onchange={(next: Catch | null) => {
+      onchange={(next: CatchDraft | null) => {
         catchDraft = next;
       }}
     />
     {#if ondropagain && canDropAgain(subject.trip, drop)}
       <button
         type="button"
-        class="min-h-14 w-full rounded-control border-2 border-primary text-[19px] font-bold text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted aria-disabled:opacity-60"
+        class="w-full {PRIMARY_BUTTON} active:bg-muted"
         aria-disabled={busy}
         onclick={() => {
           save(ondropagain);
@@ -151,14 +173,5 @@
     locked={!canChangeKind(subject.trip, drop.gearId)}
     {idPrefix}
   />
-  <DetailsFields
-    bind:draft
-    {idPrefix}
-    depthError={problem === 'depth' ? DEPTH_PROBLEM : null}
-  />
-  {#if problem && problem !== 'depth'}
-    <p role="alert" class="border-l-4 border-destructive pl-3 text-[15px]">
-      {PROBLEMS[problem]}
-    </p>
-  {/if}
+  <DetailsFields bind:draft {idPrefix} refused={problem === 'depth'} />
 </form>

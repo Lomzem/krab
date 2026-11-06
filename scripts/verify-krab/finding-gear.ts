@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { expect, test, type Page } from '@playwright/test';
-import { writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
@@ -54,7 +55,23 @@ const sampleTile = (page: Page, url: string, px: number, py: number) =>
   page.evaluate(
     async ({ url, px, py }) => {
       const response = await fetch(url, { mode: 'cors' });
-      const bitmap = await createImageBitmap(await response.blob());
+      const blob = await response.blob();
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const digest = Array.from(
+        new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+        (byte) => byte.toString(16).padStart(2, '0')
+      ).join('');
+      const base = {
+        status: response.status,
+        mode: response.type,
+        mime: response.headers.get('content-type') ?? blob.type,
+        digest,
+        base64: btoa(
+          Array.from(bytes, (byte) => String.fromCharCode(byte)).join('')
+        )
+      };
+      const bitmap = await createImageBitmap(blob).catch(() => null);
+      if (!bitmap) return { ...base, width: 0, height: 0, rgba: null };
       const canvas = document.createElement('canvas');
       canvas.width = bitmap.width;
       canvas.height = bitmap.height;
@@ -74,13 +91,42 @@ const sampleTile = (page: Page, url: string, px: number, py: number) =>
           .sort((a, b) => a - b)
           .at(12) ?? 0;
       return {
-        status: response.status,
-        mode: response.type,
+        ...base,
+        width: bitmap.width,
+        height: bitmap.height,
         rgba: data ? [0, 1, 2, 3].map((offset) => channel(data, offset)) : null
       };
     },
     { url, px, py }
   );
+
+const IMAGE_SIGNATURES = [
+  {
+    mime: 'image/png',
+    extension: 'png',
+    head: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+  },
+  { mime: 'image/jpeg', extension: 'jpg', head: [0xff, 0xd8, 0xff] }
+];
+
+const imageKindOf = (bytes: Buffer) =>
+  IMAGE_SIGNATURES.find(({ head }) =>
+    head.every((byte, index) => bytes[index] === byte)
+  ) ?? { mime: 'not an image', extension: 'not-image.bin' };
+
+const keepSampledTile = (
+  pathFor: (file: string) => string,
+  stem: string,
+  base64: string
+) => {
+  const bytes = Buffer.from(base64, 'base64');
+  const { mime, extension } = imageKindOf(bytes);
+  const file = `${stem}.${extension}`;
+  const path = pathFor(file);
+  writeFileSync(path, bytes);
+  const saved = createHash('sha256').update(readFileSync(path)).digest('hex');
+  return { file, saved, kind: mime, size: bytes.length };
+};
 
 const surfaceOf = (rgba: number[] | null) => {
   const [red = 0, , blue = 0, alpha = 0] = rgba ?? [];
@@ -169,15 +215,16 @@ test('NOAA chart tiles line up with a public coastline at two zooms', async ({
     for (const place of PUBLIC_COASTLINE) {
       const { tileX, tileY, px, py } = slippyPixel(place.lat, place.lon, zoom);
       const url = chartTile(zoom, tileX, tileY);
-      const sample = await sampleTile(page, url, px, py);
-      const tile = await page.request.get(url);
-      writeFileSync(
-        info.outputPath(`tile-z${String(zoom)}-${place.surface}.png`),
-        await tile.body()
+      const { base64, ...sample } = await sampleTile(page, url, px, py);
+      const kept = keepSampledTile(
+        (file) => info.outputPath(file),
+        `tile-z${String(zoom)}-${place.surface}`,
+        base64
       );
-      samples.push({ zoom, ...place, url, px, py, ...sample });
+      const { file } = kept;
+      samples.push({ zoom, ...place, url, px, py, ...sample, file, kept });
       log(
-        `z${String(zoom)} ${place.name}: rgba ${String(sample.rgba)} reads as ${surfaceOf(sample.rgba)}`
+        `z${String(zoom)} ${place.name}: ${String(sample.status)} ${sample.mode} ${sample.mime} ${String(sample.width)}x${String(sample.height)} sha256 ${sample.digest} saved as ${file} (${kept.kind}, ${String(kept.size)} bytes, sha256 ${kept.saved}); rgba ${String(sample.rgba)} reads as ${surfaceOf(sample.rgba)}`
       );
     }
   }
@@ -198,6 +245,16 @@ test('NOAA chart tiles line up with a public coastline at two zooms', async ({
   for (const sample of samples) {
     expect(sample.status).toBe(200);
     expect(sample.mode).toBe('cors');
+    expect(sample.mime, `${sample.file} content type`).toMatch(
+      /^image\/(png|jpeg)/
+    );
+    expect(sample.kept.kind, `${sample.file} bytes`).toBe(
+      sample.mime.split(';')[0]?.trim()
+    );
+    expect(sample.kept.saved, `${sample.file} is the sampled response`).toBe(
+      sample.digest
+    );
+    expect([sample.width, sample.height]).toEqual([TILE_PX, TILE_PX]);
     expect(
       surfaceOf(sample.rgba),
       `${sample.name} at z${String(sample.zoom)}`

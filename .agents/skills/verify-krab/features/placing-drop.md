@@ -26,7 +26,7 @@ Save a pot's location during a trip and find the same pot in the Gear list after
 
 Preconditions: fresh context, empty site data, granted emulated location, made-up position and a healthy preview owned by this run. Execute all three journeys (Map, Gear, Denied) with `bun scripts/verify-krab/run.ts`.
 
-- **Read before start (Map journey):** open `/licenses/barlow-OFL.txt` so the origin exists before Krab runs. `readTrips` must reject with `Cannot read Krab IndexedDB`, and `indexedDB.databases()` must stay empty: reading evidence never creates Krab's database.
+- **Read before start (Map journey):** open `/licenses/atkinson-hyperlegible-next-OFL.txt` so the origin exists before Krab runs. `readTrips` must reject with `Cannot read Krab IndexedDB`, and `indexedDB.databases()` must stay empty: reading evidence never creates Krab's database.
 - **Explain:** `await page.goto('/')`; require heading `Krab needs your location` and capture it. Grant via `await context.grantPermissions(['geolocation'])`, set `MADE_UP_SEA` with accuracy 8, then click `page.getByRole('button', { name: 'Turn on location' })`. Require `page.getByText('Position ready')` before any tap on Drop.
 - **Choose entry:** stay on Map, or click `page.getByRole('button', { name: 'Gear', exact: true })` in the fresh Gear journey. Capture the pre-drop screen.
 - **Drop:** click `page.getByRole('button', { name: 'Drop pot', exact: true })`; require `toastOf(page)` from `e2e/fixtures.ts` (the group inside the status region named `Messages`) to contain `Pot 1 dropped`. Capture the action/result and log it.
