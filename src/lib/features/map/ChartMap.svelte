@@ -120,11 +120,14 @@
   );
   const spots = $derived(spotsAt(places, zoom, featured));
   const reach = $derived(
-    places.reduce(
-      (most, { leading }) => ({
-        up: Math.max(most.up, leading.up),
-        down: Math.max(most.down, leading.down),
-        side: Math.max(most.side, leading.left, leading.right)
+    [
+      ...places.map(({ leading }) => leading(places.length - 1)),
+      ...(me ? [MY_EXTENT] : [])
+    ].reduce(
+      (most, box) => ({
+        up: Math.max(most.up, box.up),
+        down: Math.max(most.down, box.down),
+        side: Math.max(most.side, box.left, box.right)
       }),
       { up: 0, down: 0, side: 0 }
     )

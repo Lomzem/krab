@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test, toastOf } from './fixtures';
+import { expect, storedCollections, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 
 const gearTab = (page: Page) =>
@@ -352,6 +352,51 @@ test('Kept and Released take typed whole counts beside the steppers; a blank or 
   await expect(collectedRow(page, 'Pot 1')).toContainText(
     '1400 kept, 0 released'
   );
+
+  await collectedRow(page, 'Pot 1').click();
+  const largest = '9007199254740991';
+  await kept.fill(largest);
+  const oneMore = sheet.getByRole('button', { name: 'One more kept' });
+  await expect(oneMore).toHaveAttribute('aria-disabled', 'true');
+  await oneMore.click({ force: true });
+  await expect(kept, 'One more never leaves the counts Save takes').toHaveValue(
+    largest
+  );
+  await expect(kept).not.toHaveAttribute('aria-invalid');
+  await sheet.getByRole('button', { name: 'One fewer kept' }).click();
+  await expect(kept).toHaveValue('9007199254740990');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+});
+
+test('a whole-number catch refused because another tab put its gear back in the water says so in the sheet and stores nothing', async ({
+  page,
+  context
+}) => {
+  const sheet = page.getByRole('dialog');
+  await collectPot(page);
+  await sheet.getByRole('textbox', { name: 'Kept' }).fill('4');
+  await sheet.getByRole('textbox', { name: 'Released' }).fill('2');
+
+  const other = await context.newPage();
+  await other.goto('/');
+  await gearTab(other).click();
+  await collectedRow(other, 'Pot 1').click();
+  await other
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Undo collect' })
+    .click();
+  await expect(toastOf(other)).toContainText('Pot 1 back in the water');
+  await other.close();
+
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet.getByRole('alert')).toHaveText(
+    "Couldn't save the catch. This gear is back in the water, so nothing was saved."
+  );
+  await expect(sheet).toBeVisible();
+  expect(await storedCollections(page)).toEqual([
+    { collected: false, catch: null }
+  ]);
 });
 
 test('leaving a fractional or one-sided count names the fix at once without storing anything, and emptying both counts saves the catch as not recorded, unlike Nothing caught', async ({

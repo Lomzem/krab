@@ -59,7 +59,8 @@ export type PendingDrop = {
 
 export type Load = 'opening' | 'ready' | 'failed';
 
-export type SaveProblem = 'depth' | 'catch' | 'kind' | 'gone' | 'storage';
+export type SaveProblem =
+  'depth' | 'catch' | 'uncollected' | 'kind' | 'gone' | 'storage';
 
 type SaveFailure =
   | DropNotFound
@@ -72,7 +73,7 @@ type SaveFailure =
 const PROBLEMS: Record<SaveFailure['_tag'], SaveProblem> = {
   InvalidDepth: 'depth',
   InvalidCatch: 'catch',
-  NotCollected: 'catch',
+  NotCollected: 'uncollected',
   KindLocked: 'kind',
   DropNotFound: 'gone',
   StorageFailed: 'storage'
@@ -134,6 +135,7 @@ export class OnWater {
   load = $state<Load>('opening');
   notice = $state.raw<Notice | null>(null);
   pending = $state.raw<PendingDrop | null>(null);
+  #saving = $state.raw<readonly string[]>([]);
   readonly #book: TripBook;
   #loads = 0;
   #reloading = false;
@@ -207,10 +209,18 @@ export class OnWater {
     }
   }
 
+  get undoBlocked() {
+    const offer = this.notice?.offer;
+    return (
+      offer?.action === 'undo-collect' && this.#saving.includes(offer.dropId)
+    );
+  }
+
   async undo(undo: Undo) {
     if (undo.action === 'undo-collect') {
+      if (this.#saving.includes(undo.dropId)) return false;
       await this.undoCollect(undo.dropId, undo.name);
-      return;
+      return true;
     }
     if (undo.action === 'undo-drop') {
       const exit = await Effect.runPromiseExit(
@@ -218,20 +228,21 @@ export class OnWater {
       );
       if (Exit.isFailure(exit)) {
         this.#say("Couldn't undo. Try again.", undo);
-        return;
+        return true;
       }
       this.trip = exit.value;
       this.#reconcile();
       this.#say(`${undo.name} removed`);
-      return;
+      return true;
     }
     const restored = await resultOf(this.#book.restoreDrop(undo.deletion));
     if (Result.isFailure(restored)) {
       this.#say(...restoreFailure(restored.failure._tag, undo));
-      return;
+      return true;
     }
     this.#publish(restored.success.trip.id, restored.success.trip);
     this.#say(`${undo.name} restored`);
+    return true;
   }
 
   async save(
@@ -239,7 +250,10 @@ export class OnWater {
     edit: DropEdit,
     kind: Kind | null
   ): Promise<SaveProblem | null> {
+    this.#saving = [...this.#saving, dropId];
     const saved = await resultOf(this.#book.saveDrop(dropId, edit, kind));
+    const at = this.#saving.indexOf(dropId);
+    this.#saving = this.#saving.filter((_, index) => index !== at);
     if (Result.isFailure(saved)) return PROBLEMS[saved.failure._tag];
     const { trip } = saved.success;
     this.#publish(trip.id, trip);

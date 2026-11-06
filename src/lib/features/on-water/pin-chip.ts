@@ -35,7 +35,7 @@ const DIGIT_EM = 0.63;
 const DAY_EM = 2;
 const PLUS_EM = 0.62;
 const SEGMENT_PAD = 4;
-const SEGMENT_DIGITS = 2;
+const MIN_SEGMENT_DIGITS = 2;
 const SLACK = 1;
 const TAP_HALF = 22;
 
@@ -64,15 +64,16 @@ const faceSize = (face: ChipFace) => {
   };
 };
 
-export const segmentWidth = (layer: MapPlace['layer']) =>
+const segmentWidth = (layer: MapPlace['layer'], more: number) =>
   2 * BORDER +
   2 * SEGMENT_PAD +
-  (PLUS_EM + SEGMENT_DIGITS * DIGIT_EM) * CHIP_METRICS[layer].text;
+  (PLUS_EM + Math.max(MIN_SEGMENT_DIGITS, digits(more)) * DIGIT_EM) *
+    CHIP_METRICS[layer].text;
 
 export const chipBoxes = (
   face: ChipFace,
   timeLabel: string | null
-): { alone: Box; leading: Box } => {
+): Pick<MapPlace, 'alone' | 'leading'> => {
   const { width, height } = faceSize(face);
   const half = width / 2 + SLACK;
   const labelHalf = timeLabel
@@ -94,14 +95,14 @@ export const chipBoxes = (
   };
   return {
     alone,
-    leading: {
+    leading: (more) => ({
       ...alone,
       right: Math.max(
         alone.right,
-        half + segmentWidth(face.layer) + MARK_REACH
+        half + segmentWidth(face.layer, more) + MARK_REACH
       ),
       up: Math.max(height / 2 + SLACK + MARK_REACH, TAP_HALF),
       down: Math.max(height / 2 + SLACK, TAP_HALF)
-    }
+    })
   };
 };

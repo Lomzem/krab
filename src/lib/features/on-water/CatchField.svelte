@@ -50,7 +50,10 @@
 
   const step = (side: Side, by: number) => {
     const from = countOf(value?.[side] ?? '') ?? 0;
-    set(side, String(Math.max(0, from + by)));
+    set(
+      side,
+      String(Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, from + by)))
+    );
   };
 
   const spoken = (text: string | undefined) => {
@@ -167,8 +170,9 @@
         type="button"
         class={stepper}
         aria-label="One more {side}"
+        aria-disabled={count === Number.MAX_SAFE_INTEGER ? 'true' : undefined}
         onclick={() => {
-          step(side, 1);
+          if (count !== Number.MAX_SAFE_INTEGER) step(side, 1);
         }}
       >
         <svg

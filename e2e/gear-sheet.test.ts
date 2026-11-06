@@ -434,7 +434,7 @@ test.describe('with the clock paused', () => {
     [320, 640]
   ] as const)
     for (const colorScheme of ['light', 'dark'] as const)
-      test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, the second press of a double press that closes a sheet reaches nothing beneath it: Delete removes only its drop with Undo and leaves the tab and focus, Close and Save leave the sheet shut, while Enter, a tap elsewhere, a single click there at once and a tap there after a double tap's time all work`, async ({
+      test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, the second press of a double press that closes a sheet reaches nothing beneath it: Delete removes only its drop with Undo and leaves the tab and focus, Close and Save leave the sheet shut, while Enter, a tap elsewhere, a single click there at once, a tap there after a double tap's time and a repeated click there after a double click's time all work`, async ({
         page
       }) => {
         const sheet = page.getByRole('dialog');
@@ -508,6 +508,13 @@ test.describe('with the clock paused', () => {
         await gearRow(page, 'Pot 2').click();
         await pressToClose(page, 'mouse', saved.x, saved.y);
         await press(page, 'mouse', saved.x, saved.y, 1);
+        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+
+        await tab('Gear').click();
+        await gearRow(page, 'Pot 2').click();
+        await pressToClose(page, 'mouse', saved.x, saved.y);
+        await page.clock.runFor(500);
+        await press(page, 'mouse', saved.x, saved.y, 2);
         await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
       });
 });

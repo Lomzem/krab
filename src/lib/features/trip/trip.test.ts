@@ -15,7 +15,9 @@ import {
   nearestGear,
   pastDrops,
   pastTripCounts,
+  shortDateRange,
   tripDates,
+  tripSpan,
   tripBook,
   tripDays,
   type DaySelection,
@@ -1805,6 +1807,22 @@ it.each<{ selection: PastDaySelection; names: string[] }>([
     ]);
   }
 );
+
+it('dates a stored past trip with no drops by the day it started', async () => {
+  const { state, open } = withoutLocation();
+  const book = await open();
+  const placed = await placeAt(book, state, '2031-06-11T08:00:00-04:00');
+  const ended = await run(book.endTrip(placed.trip.id));
+  const empty = {
+    ...ended,
+    startedAt: Date.parse('2031-06-09T07:00:00-04:00'),
+    gear: [],
+    drops: []
+  };
+  expect(tripDates(empty)).toBe('Monday, June 9, 2031');
+  const { first, last } = tripSpan(empty);
+  expect(shortDateRange(first, last)).toBe('Jun 9, 2031');
+});
 
 it('dates and groups a past trip in the phone’s current time zone after the zone changes', async () => {
   const { state, open } = withoutLocation();

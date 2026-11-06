@@ -16,7 +16,7 @@ const at = (
   at: where,
   layer,
   alone,
-  leading: { ...alone, right: alone.right + 30 }
+  leading: () => ({ ...alone, right: alone.right + 30 })
 });
 
 const eightPots: MapPlace[] = Array.from({ length: 8 }, (_, index) =>
@@ -58,7 +58,7 @@ it('draws every drop in a line once, alone or in a group of several, even where 
       at: { lat: SEA.lat + index * 0.0012, lon: SEA.lon + index * 0.0004 },
       layer: layers[index % layers.length] ?? 'in-water',
       alone: labelled,
-      leading: chip
+      leading: () => chip
     }));
   const ids = ['pot-1', 'pot-2', 'pot-3', 'pot-4', 'pot-5', 'net-1'];
   const lines = [
@@ -172,6 +172,35 @@ it('keeps drops that share a spot together even when a nearby drop leads, and sa
   );
 });
 
+it('joins two groups whose markers would touch into one, from either side, with every drop once', () => {
+  const alone: Box = { left: 22, right: 22, up: 22, down: 22 };
+  const leading: Box = { ...alone, right: 63.035 };
+  const pxPerDegreeLon = 46_603 * 2 ** 4;
+  const pair = (side: string, px: number): MapPlace[] =>
+    [1, 2].map((index) => ({
+      id: `${side}-${String(index)}`,
+      at: { ...SEA, lon: SEA.lon + px / pxPerDegreeLon },
+      layer: 'collected',
+      alone,
+      leading: () => leading
+    }));
+  const east = pair('east', 49);
+  const west = pair('west', 0);
+  for (const places of [
+    [...east, ...west],
+    [...west, ...east]
+  ]) {
+    const spots = spotsAt(places, 19);
+    expect(spots.map(({ ids, key, apart }) => ({ ids, key, apart }))).toEqual([
+      {
+        ids: places.map(({ id }) => id),
+        key: `group:${places[0]?.id ?? ''}`,
+        apart: false
+      }
+    ]);
+  }
+});
+
 it('groups drops either side of the 180th meridian', () => {
   const places: MapPlace[] = [
     at('east', { lat: 0, lon: 179.9999 }, 'past'),
@@ -186,4 +215,42 @@ it('finds the first zoom at or above the start that separates a drop, and keeps 
   expect(zoomToSeparate(eightPots, 'pot-3', 13, 19)).toBe(14);
   const twins: MapPlace[] = [at('a', SEA), at('b', SEA)];
   expect(zoomToSeparate(twins, 'a', 15, 19)).toBe(15);
+});
+
+it('keeps a nearby drop clear of a group whose count gains a digit, by joining it into the group', () => {
+  const alone: Box = { left: 22, right: 22, up: 22, down: 22 };
+  const leading = (more: number): Box => ({
+    ...alone,
+    right: 40 + 8 * Math.max(2, String(more).length)
+  });
+  const pxPerDegreeLon = 46_603 * 2 ** 4;
+  const stack = (count: number): MapPlace[] =>
+    Array.from({ length: count }, (_, index) => ({
+      id: `pot-${String(index + 1)}`,
+      at: SEA,
+      layer: 'past',
+      alone,
+      leading
+    }));
+  const nearby: MapPlace = {
+    id: 'net-1',
+    at: { ...SEA, lon: SEA.lon + 86 / pxPerDegreeLon },
+    layer: 'past',
+    alone,
+    leading
+  };
+
+  expect(
+    spotsAt([...stack(100), nearby], 19).map(({ ids, box }) => ({
+      size: ids.length,
+      box
+    }))
+  ).toEqual([
+    { size: 100, box: leading(99) },
+    { size: 1, box: alone }
+  ]);
+  const [group, ...rest] = spotsAt([...stack(101), nearby], 19);
+  expect(rest).toEqual([]);
+  expect(group.ids).toEqual([...stack(101), nearby].map(({ id }) => id));
+  expect(group.box).toEqual(leading(101));
 });

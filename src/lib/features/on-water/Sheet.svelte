@@ -88,6 +88,7 @@
   };
 
   const DOUBLE_TAP_MS = 350;
+  const DOUBLE_CLICK_MS = 500;
   const DOUBLE_TAP_REACH_PX = 44;
   const PRESS_EVENTS = [
     'pointerdown',
@@ -136,6 +137,7 @@
     };
     const stop = () => {
       clearTimeout(timer);
+      clearTimeout(ending);
       for (const type of PRESS_EVENTS)
         window.removeEventListener(type, absorb, true);
     };
@@ -144,6 +146,7 @@
     const timer = setTimeout(() => {
       tapping = false;
     }, DOUBLE_TAP_MS);
+    const ending = setTimeout(stop, DOUBLE_CLICK_MS);
     return stop;
   };
 

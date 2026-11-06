@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-export type StorageFault = 'reads' | 'open';
+export type StorageFault = 'reads' | 'writes' | 'open';
 
 const FAULT = 'krab-e2e-storage-fault';
 
@@ -47,7 +47,10 @@ export const injectStorageFaults = (page: Page) =>
     };
     const faultyBegin: Begin = function (...args) {
       const tx = Reflect.apply(begin, this, args);
-      if (tx.mode !== 'readonly') return tx;
+      if (tx.mode !== 'readonly') {
+        if (failing('writes')) queueMicrotask(abort(tx));
+        return tx;
+      }
       tx.addEventListener('complete', () => {
         held.readsDone = (held.readsDone ?? 0) + 1;
       });

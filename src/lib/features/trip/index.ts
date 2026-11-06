@@ -104,6 +104,7 @@ export {
   timeInWater,
   tripDates,
   tripDays,
+  tripSpan,
   type CollectedRow,
   type Day,
   type DaySelection,

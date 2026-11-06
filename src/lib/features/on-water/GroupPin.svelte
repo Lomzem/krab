@@ -34,6 +34,7 @@
   aria-label={chip.label}
   aria-haspopup="dialog"
   aria-current={selected || undefined}
+  data-drops={items.map(({ id }) => id).join(' ')}
   onclick={(event) => {
     onopen(event.currentTarget);
   }}

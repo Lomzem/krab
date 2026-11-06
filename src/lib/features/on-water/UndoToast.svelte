@@ -23,6 +23,7 @@
     onretry,
     ondismiss,
     overlay,
+    blocked = false,
     cover = $bindable(0)
   }: {
     notice: Notice | null;
@@ -30,6 +31,7 @@
     onretry: (retry: Retry) => void;
     ondismiss: (key: number) => void;
     overlay: Lane | null;
+    blocked?: boolean;
     cover?: number;
   } = $props();
 
@@ -135,7 +137,8 @@
           {@const undo = notice.offer}
           <button
             type="button"
-            class="min-h-11 min-w-11 touch-manipulation rounded-control px-3 text-[16px] font-semibold text-inverse-action underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-inverse-action"
+            class="min-h-11 min-w-11 touch-manipulation rounded-control px-3 text-[16px] font-semibold text-inverse-action underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-inverse-action aria-disabled:text-inverse-foreground/70 aria-disabled:no-underline"
+            aria-disabled={blocked ? 'true' : undefined}
             onclick={() => {
               onundo(undo);
             }}>Undo</button

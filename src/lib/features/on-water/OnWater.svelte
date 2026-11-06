@@ -190,7 +190,8 @@
   };
 
   const undo = (target: Undo) => {
-    void water.undo(target).then(async () => {
+    void water.undo(target).then(async (undone) => {
+      if (!undone) return;
       await tick();
       restingFocus()?.focus();
     });
@@ -214,7 +215,7 @@
     dropId === null
       ? null
       : document.querySelector<HTMLElement>(
-          `main [data-drop="${CSS.escape(dropId)}"]`
+          `main :is([data-drop="${CSS.escape(dropId)}"], [data-drops~="${CSS.escape(dropId)}"])`
         );
 
   const sheetReturnFocus = () => {
@@ -457,6 +458,7 @@
   <UndoToast
     notice={water.notice}
     onundo={undo}
+    blocked={water.undoBlocked}
     onretry={retry}
     ondismiss={(key: number) => {
       water.dismiss(key);

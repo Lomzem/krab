@@ -56,6 +56,12 @@ const reachedFrom =
   (from: MapPlace, boxes: readonly Box[], zoom: number) => (place: MapPlace) =>
     boxes.some((box) => overlap({ at: from.at, box }, alone(place), zoom));
 
+const boxOf = (
+  seed: MapPlace,
+  crowded: boolean,
+  members: readonly MapPlace[]
+) => (crowded ? seed.leading(members.length - 1) : seed.alone);
+
 const greedy = (
   ordered: readonly MapPlace[],
   zoom: number,
@@ -71,11 +77,10 @@ const greedy = (
     const crowded =
       stackOf(seed).length > 1 ||
       others.some((place) => overlap(alone(seed), alone(place), zoom));
-    const box = crowded ? seed.leading : seed.alone;
     const near = new Set(
       crowded
         ? [seed, ...others]
-            .filter(reachedFrom(seed, [seed.alone, box], zoom))
+            .filter(reachedFrom(seed, [seed.alone, seed.leading(1)], zoom))
             .flatMap(stackIds)
         : [seed.id]
     );
@@ -83,8 +88,41 @@ const greedy = (
       (place) => !taken.has(place.id) && near.has(place.id)
     );
     for (const member of members) taken.add(member.id);
-    return [{ seed, crowded, box, members }];
+    return [{ seed, crowded, box: boxOf(seed, crowded, members), members }];
   });
+};
+
+type Grouped = ReturnType<typeof greedy>[number];
+
+const footprint = ({ seed, box }: Grouped) => ({ at: seed.at, box });
+
+const clear = (
+  grouped: readonly Grouped[],
+  ordered: readonly MapPlace[],
+  zoom: number
+): Grouped[] => {
+  for (const [later, spot] of grouped.entries()) {
+    const earlier = grouped
+      .slice(0, later)
+      .find((other) => overlap(footprint(other), footprint(spot), zoom));
+    if (!earlier) continue;
+    const joining = new Set([...earlier.members, ...spot.members]);
+    const members = ordered.filter((place) => joining.has(place));
+    const joined: Grouped = {
+      seed: earlier.seed,
+      crowded: true,
+      box: boxOf(earlier.seed, true, members),
+      members
+    };
+    return clear(
+      grouped
+        .filter((other) => other !== spot)
+        .map((other) => (other === earlier ? joined : other)),
+      ordered,
+      zoom
+    );
+  }
+  return [...grouped];
 };
 
 export const spotsAt = (
@@ -98,11 +136,15 @@ export const spotsAt = (
   };
   const ordered = [...places].sort((a, b) => rank(a) - rank(b));
   const stacks = new Map<string, readonly MapPlace[]>();
-  for (const { members } of greedy(ordered, MAX_ZOOM, (place) => [place])) {
+  for (const { members } of clear(
+    greedy(ordered, MAX_ZOOM, (place) => [place]),
+    ordered,
+    MAX_ZOOM
+  )) {
     for (const member of members) stacks.set(member.id, members);
   }
   const stackOf = (place: MapPlace) => stacks.get(place.id) ?? [place];
-  return greedy(ordered, zoom, stackOf).map(
+  return clear(greedy(ordered, zoom, stackOf), ordered, zoom).map(
     ({ seed, crowded, box, members }) => ({
       key: crowded ? `group:${seed.id}` : seed.id,
       at: seed.at,

@@ -8,6 +8,7 @@
     pastTripCounts,
     shortDateRange,
     tripDates,
+    tripSpan,
     type PastDaySelection,
     type PastDropRow,
     type Trip
@@ -116,11 +117,8 @@
   };
 
   const shortDates = (shown: Trip) => {
-    const placed = shown.drops.map((drop) => drop.placedAt);
-    return shortDateRange(
-      Math.min(...placed),
-      Math.max(shown.startedAt, ...placed)
-    );
+    const { first, last } = tripSpan(shown);
+    return shortDateRange(first, last);
   };
 
   const pinDetails = (row: PastDropRow) =>

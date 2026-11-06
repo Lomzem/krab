@@ -130,13 +130,26 @@ const storedTrips = (page: Page) =>
       new Promise<StoredTrip[]>((read, failed) => {
         const request = indexedDB.open('krab');
         request.onsuccess = () => {
-          const all = request.result
-            .transaction('trips', 'readonly')
-            .objectStore('trips')
-            .getAll();
+          const db = request.result;
+          const fail = (reason: string) => {
+            db.close();
+            failed(new Error(reason));
+          };
+          if (!db.objectStoreNames.contains('trips')) {
+            fail('krab has no trips store');
+            return;
+          }
+          const tx = db.transaction('trips', 'readonly');
+          const all = tx.objectStore('trips').getAll();
           all.onsuccess = () => {
-            request.result.close();
+            db.close();
             read(all.result as StoredTrip[]);
+          };
+          all.onerror = () => {
+            fail(`could not read trips: ${String(all.error?.name)}`);
+          };
+          tx.onabort = () => {
+            fail(`trips read aborted: ${String(tx.error?.name)}`);
           };
         };
         request.onerror = () => {

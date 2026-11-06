@@ -9,7 +9,7 @@ export type MapPlace = {
   at: LatLon;
   layer: 'in-water' | 'collected' | 'past';
   alone: Box;
-  leading: Box;
+  leading: (more: number) => Box;
 };
 
 export type MyPosition = {
