@@ -198,6 +198,44 @@ const collectInSheet = async (page: Page, name: string) => {
     .toBe(1);
 };
 
+const expectFailureInSight = async (page: Page) => {
+  const sheet = page.getByRole('dialog');
+  const alert = sheet.getByRole('alert');
+  const save = sheet.getByRole('button', { name: 'Save', exact: true });
+  const shown = await alert.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const points = [
+      [box.left + 2, box.top + 2],
+      [box.right - 2, box.top + 2],
+      [box.left + box.width / 2, box.top + box.height / 2],
+      [box.left + 2, box.bottom - 2],
+      [box.right - 2, box.bottom - 2]
+    ] as const;
+    return {
+      inViewport:
+        box.top >= 0 &&
+        box.left >= 0 &&
+        box.bottom <= innerHeight &&
+        box.right <= innerWidth,
+      uncovered: points.every(([x, y]) => {
+        const hit = document.elementFromPoint(x, y);
+        return hit !== null && node.contains(hit);
+      }),
+      bottom: box.bottom
+    };
+  });
+  expect(
+    shown,
+    'A failed Save shows its whole message without scrolling, unclipped and uncovered.'
+  ).toMatchObject({ inViewport: true, uncovered: true });
+  const saveBox = await save.boundingBox();
+  expect(
+    shown.bottom,
+    'The message sits above the Save that retries it.'
+  ).toBeLessThanOrEqual(saveBox?.y ?? 0);
+  await expect(save).not.toHaveAttribute('aria-disabled', 'true');
+};
+
 const closeSheet = async (page: Page, how: 'Escape' | 'Save') => {
   const sheet = page.getByRole('dialog');
   if (how === 'Escape') await page.keyboard.press('Escape');
@@ -395,6 +433,24 @@ test('a catch Save that fails to store keeps its Collect Undo for the remaining 
       return sheet.getByRole('alert').textContent();
     })
     .toContain("Couldn't save. Try again.");
+  await expectFailureInSight(page);
+
+  await page.setViewportSize({ width: 320, height: 640 });
+  await sheet.evaluate((dialog) => {
+    for (const box of dialog.querySelectorAll('*')) box.scrollTop = 0;
+  });
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(0);
+      return sheet.getByRole('alert').textContent();
+    }, 'Saving again while storage still fails says so again.')
+    .toContain("Couldn't save. Try again.");
+  await expectFailureInSight(page);
+  await expect(sheet.getByRole('textbox', { name: 'Kept' })).toHaveValue('4');
+  await expect(sheet.getByRole('textbox', { name: 'Released' })).toHaveValue(
+    '2'
+  );
   await failStorage(page, null);
   expect(await storedCollections(page)).toEqual([
     { collected: true, catch: null }
@@ -405,6 +461,106 @@ test('a catch Save that fails to store keeps its Collect Undo for the remaining 
   expect(await storedCollections(page)).toEqual([
     { collected: true, catch: null }
   ]);
+});
+
+test('a catch Save that stops on an unexpected storage error leaves its Collect Undo live, and Undo puts that gear back in the water', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+
+  await injectStorageFaults(page);
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await collectInSheet(page, 'Pot 1');
+  await sheet.getByRole('textbox', { name: 'Kept' }).fill('4');
+  await failStorage(page, 'defect');
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await failStorage(page, null);
+  await closeSheet(page, 'Escape');
+  await expect(toastOf(page)).toContainText('Pot 1 collected');
+  await expect(
+    undoOf(page),
+    'A Save that ended without storing must not keep blocking Undo.'
+  ).not.toHaveAttribute('aria-disabled', 'true');
+  await undoOf(page).click();
+  await expect(toastOf(page)).toContainText('Pot 1 back in the water');
+  expect(await storedCollections(page)).toEqual([
+    { collected: false, catch: null }
+  ]);
+});
+
+test('a catch Save that stops on an unexpected storage error says so in the sheet and stores nothing, and Save again stores that catch, which retires its Collect Undo', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const save = sheet.getByRole('button', { name: 'Save', exact: true });
+  const errors: Error[] = [];
+  page.on('pageerror', (error) => errors.push(error));
+
+  await injectStorageFaults(page);
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await collectInSheet(page, 'Pot 1');
+  await sheet.getByRole('textbox', { name: 'Kept' }).fill('4');
+  await sheet.getByRole('textbox', { name: 'Released' }).fill('2');
+  await failStorage(page, 'defect');
+  await save.click();
+  await expect
+    .poll(
+      async () => {
+        await page.clock.runFor(0);
+        return sheet.getByRole('alert').textContent();
+      },
+      {
+        message: 'A Save that ended without storing must say so in the sheet.'
+      }
+    )
+    .toBe("Couldn't save. Try again.");
+  await expectFailureInSight(page);
+  await expect(
+    save,
+    'A Save that ended without storing must leave Save usable.'
+  ).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(sheet.getByRole('textbox', { name: 'Kept' })).toHaveValue('4');
+  await expect(sheet.getByRole('textbox', { name: 'Released' })).toHaveValue(
+    '2'
+  );
+  await expect(toastOf(page)).toContainText('Pot 1 collected');
+  expect(await storedCollections(page)).toEqual([
+    { collected: true, catch: null }
+  ]);
+  expect(
+    errors,
+    'The handled storage error must not reach the page as an unhandled error.'
+  ).toEqual([]);
+
+  await failStorage(page, null);
+  await save.click();
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(0);
+      return sheet.count();
+    })
+    .toBe(0);
+  await expect(
+    toastOf(page),
+    'The saved catch retires its Collect Undo.'
+  ).toHaveCount(0);
+  expect(await storedCollections(page)).toEqual([
+    { collected: true, catch: { kept: 4, released: 2 } }
+  ]);
+  await page.reload();
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await collectedRow(page, 'Pot 1').click();
+  await expect(sheet.getByRole('textbox', { name: 'Kept' })).toHaveValue('4');
+  await expect(sheet.getByRole('textbox', { name: 'Released' })).toHaveValue(
+    '2'
+  );
+  expect(errors).toEqual([]);
 });
 
 test('a toast never hides the end of the Gear list: its last row scrolls clear when focused and opens while the toast shows', async ({

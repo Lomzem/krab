@@ -96,7 +96,8 @@
     'pointerup',
     'mouseup',
     'click',
-    'dblclick'
+    'dblclick',
+    'pointercancel'
   ] as const;
 
   let lastPress: { x: number; y: number } | null = null;
@@ -113,6 +114,8 @@
   const absorbDoublePress = (press: { x: number; y: number }) => {
     let pressing = false;
     let tapping = true;
+    let held = false;
+    let expired = false;
     const absorb = (event: Event) => {
       const { type, detail, clientX, clientY } = event as MouseEvent;
       const touch =
@@ -134,6 +137,14 @@
       }
       event.preventDefault();
       event.stopImmediatePropagation();
+      if (type.endsWith('down')) held = true;
+      else if (type.endsWith('up') || type === 'pointercancel') release();
+    };
+    const release = () => {
+      held = false;
+      if (!expired) return;
+      clearTimeout(ending);
+      ending = setTimeout(stop, DOUBLE_CLICK_MS);
     };
     const stop = () => {
       clearTimeout(timer);
@@ -146,7 +157,10 @@
     const timer = setTimeout(() => {
       tapping = false;
     }, DOUBLE_TAP_MS);
-    const ending = setTimeout(stop, DOUBLE_CLICK_MS);
+    let ending = setTimeout(() => {
+      expired = true;
+      if (!held) stop();
+    }, DOUBLE_CLICK_MS);
     return stop;
   };
 

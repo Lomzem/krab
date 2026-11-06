@@ -104,7 +104,6 @@
   let viewHeight = $state(0);
   let railWidth = $state(0);
   let railReach = $state(0);
-  let shown = $state<string | null>(null);
   let selected = $state<string | null>(null);
   const isSelected = (ids: string[]) =>
     selected !== null && ids.includes(selected);
@@ -116,7 +115,7 @@
   );
 
   const featured = $derived(
-    [keepClear, shown].filter((id): id is string => id !== null)
+    [keepClear, selected].filter((id): id is string => id !== null)
   );
   const spots = $derived(spotsAt(places, zoom, featured));
   const reach = $derived(
@@ -462,7 +461,6 @@
     const place = places.find((candidate) => candidate.id === id);
     if (place && map) {
       const from = Math.max(map.getZoom(), SHOW_ZOOM);
-      shown = id;
       selected = id;
       centreOn(place.at, zoomToSeparate(places, id, from, MAX_ZOOM));
     }

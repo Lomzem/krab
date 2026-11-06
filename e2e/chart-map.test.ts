@@ -1607,7 +1607,7 @@ test('drops that share a spot stay in one group at every zoom, and a group that 
   await expect.poll(sharedSpot).toMatch(SHARED);
 });
 
-test('Show on map rings the gear it shows, alone or in its group, after focus moves on and after its sheet closes, until I move the map myself', async ({
+test('Show on map rings and leads the gear it shows, alone or in its group, after focus moves on and after its sheet closes, until I move the map myself or show all gear, when the gear groups and sits as it did before', async ({
   page
 }) => {
   const map = mapArea(page);
@@ -1615,7 +1615,24 @@ test('Show on map rings the gear it shows, alone or in its group, after focus mo
   const shownOnMap = map.locator('[aria-current="true"]');
   const pot3 = map.getByRole('button', { name: /^Pot 3,/ });
   const ledByPot2 = map.getByRole('button', { name: /^Pot 2 \+/ });
+  const pair = map.getByRole('button', { name: /^Pot [12] \+1 more/ });
   const ringed = (target: Locator) => target.evaluate(ringedInMagenta);
+  const fromMe = async (target: Locator) => {
+    const [box, me] = await Promise.all([
+      target.boundingBox(),
+      myPosition(page).boundingBox()
+    ]);
+    expect(box).not.toBeNull();
+    expect(me).not.toBeNull();
+    const centre = (at: typeof box) => ({
+      x: (at?.x ?? 0) + (at?.width ?? 0) / 2,
+      y: (at?.y ?? 0) + (at?.height ?? 0) / 2
+    });
+    return {
+      x: centre(box).x - centre(me).x,
+      y: centre(box).y - centre(me).y
+    };
+  };
   const showFromGear = async (name: string) => {
     await page.getByRole('button', { name: 'Gear', exact: true }).click();
     await gearRow(page, name).click();
@@ -1632,6 +1649,7 @@ test('Show on map rings the gear it shows, alone or in its group, after focus mo
   await expect(pot3).toBeVisible();
   await expect(shownOnMap).toHaveCount(0);
   expect(await ringed(pot3)).toBe(false);
+  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more\. 2 gear here: /);
 
   await showFromGear('Pot 3');
   await expect(pot3).toBeFocused();
@@ -1665,9 +1683,36 @@ test('Show on map rings the gear it shows, alone or in its group, after focus mo
   await expect(ledByPot2).toHaveAttribute('aria-current', 'true');
   await expect(shownOnMap).toHaveCount(1);
 
-  await panAway(page, ledByPot2);
+  await panAway(page, pair);
   await expect(shownOnMap).toHaveCount(0);
-  expect(await ringed(ledByPot2)).toBe(false);
+  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more\. 2 gear here: /);
+  expect(await ringed(pair)).toBe(false);
+
+  await showFromGear('Pot 2');
+  await expect(ledByPot2).toHaveAttribute('aria-current', 'true');
+  await map.getByRole('button', { name: 'Show all gear' }).click();
+  await expect(shownOnMap).toHaveCount(0);
+  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more\. 2 gear here: /);
+  expect(await ringed(pair)).toBe(false);
+
+  await showFromGear('Pot 2');
+  const all = map.getByRole('button', { name: /^Pot \d \+2 more/ });
+  const zoomOut = map.getByRole('button', { name: 'Zoom out' });
+  for (let step = 0; step < 30 && (await all.count()) === 0; step += 1) {
+    await zoomOut.click();
+    await settled(myPosition(page));
+  }
+  await expect(all).toHaveAccessibleName(/^Pot 2 \+2 more/);
+  await expect(all).toHaveAttribute('aria-current', 'true');
+  await settled(all);
+  const shownAt = await fromMe(all);
+  await panAway(page, myPosition(page));
+  await expect(shownOnMap).toHaveCount(0);
+  await expect(all).toHaveAccessibleName(/^Pot 3 \+2 more/);
+  await settled(all);
+  const naturalAt = await fromMe(all);
+  expect(naturalAt.x).toBeGreaterThan(shownAt.x);
+  expect(naturalAt.y).toBeLessThan(shownAt.y);
 });
 
 test('on a 320 by 640 screen, opening the Map tab and Show on map from the Gear list keep the map credits whole in every frame while the Undo toast shows', async ({

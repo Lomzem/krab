@@ -251,9 +251,12 @@ export class OnWater {
     kind: Kind | null
   ): Promise<SaveProblem | null> {
     this.#saving = [...this.#saving, dropId];
-    const saved = await resultOf(this.#book.saveDrop(dropId, edit, kind));
-    const at = this.#saving.indexOf(dropId);
-    this.#saving = this.#saving.filter((_, index) => index !== at);
+    const saved = await resultOf(
+      this.#book.saveDrop(dropId, edit, kind)
+    ).finally(() => {
+      const at = this.#saving.indexOf(dropId);
+      this.#saving = this.#saving.filter((_, index) => index !== at);
+    });
     if (Result.isFailure(saved)) return PROBLEMS[saved.failure._tag];
     const { trip } = saved.success;
     this.#publish(trip.id, trip);

@@ -236,9 +236,12 @@
     const origin = sheet;
     if (!origin || busy) return;
     operation = { sheet: origin, pending: true, problem: null };
-    const result = await work();
+    const settled = await work().then(
+      (result) => () => settle(result),
+      () => (): SaveProblem => 'storage'
+    );
     if (operation.sheet !== origin) return;
-    const problem = sheet === origin ? settle(result) : null;
+    const problem = sheet === origin ? settled() : null;
     operation = { sheet: origin, pending: false, problem };
   };
 

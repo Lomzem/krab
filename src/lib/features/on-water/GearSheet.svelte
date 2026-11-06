@@ -7,6 +7,16 @@
   import GearDetailsForm from './GearDetailsForm.svelte';
   import GearIcon from './GearIcon.svelte';
   import Sheet from './Sheet.svelte';
+  import type { SaveProblem } from './on-water.svelte';
+
+  const PROBLEMS: Record<Exclude<SaveProblem, 'depth'>, string> = {
+    catch: "Couldn't save the catch. It needs whole numbers from 0.",
+    uncollected:
+      "Couldn't save the catch. This gear is back in the water, so nothing was saved.",
+    kind: 'This gear has been dropped again, so it keeps its kind. Nothing was saved.',
+    gone: "Couldn't save. That drop is gone.",
+    storage: "Couldn't save. Try again."
+  };
 
   const TITLE_ID = 'gear-sheet-title';
   const FORM_ID = 'gear-sheet-form';
@@ -36,6 +46,13 @@
     direction?: Snippet<[Drop]>;
     endAction?: Snippet<[Drop]>;
   } = $props();
+
+  const failure = $derived.by(() => {
+    const problem = operation?.problem ?? null;
+    if (problem === null || problem === 'depth') return null;
+    if (problem === 'catch' && subject?.drop.collectedAt !== null) return null;
+    return PROBLEMS[problem];
+  });
 
   const collectLeads = $derived(
     oncollect !== undefined &&
@@ -81,6 +98,14 @@
   {/if}
 
   {#snippet footer()}
+    {#if failure}
+      <p
+        role="alert"
+        class="mb-1 basis-full border-l-3 border-destructive pl-3 text-[15px]"
+      >
+        {failure}
+      </p>
+    {/if}
     <button
       type="submit"
       form={FORM_ID}

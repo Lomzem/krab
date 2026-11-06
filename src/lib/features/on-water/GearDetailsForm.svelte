@@ -21,16 +21,6 @@
   } from './details-draft';
   import type { SheetOperation, SheetSubject } from './gear-sheet';
   import KindField from './KindField.svelte';
-  import type { SaveProblem } from './on-water.svelte';
-
-  const PROBLEMS: Record<Exclude<SaveProblem, 'depth'>, string> = {
-    catch: "Couldn't save the catch. It needs whole numbers from 0.",
-    uncollected:
-      "Couldn't save the catch. This gear is back in the water, so nothing was saved.",
-    kind: 'This gear has been dropped again, so it keeps its kind. Nothing was saved.',
-    gone: "Couldn't save. That drop is gone.",
-    storage: "Couldn't save. Try again."
-  };
 
   let {
     subject,
@@ -184,9 +174,4 @@
     {idPrefix}
   />
   <DetailsFields bind:draft {idPrefix} refused={problem === 'depth'} />
-  {#if problem && problem !== 'depth' && !(problem === 'catch' && collectedAt !== null)}
-    <p role="alert" class="border-l-3 border-destructive pl-3 text-[15px]">
-      {PROBLEMS[problem]}
-    </p>
-  {/if}
 </form>
