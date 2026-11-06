@@ -215,13 +215,13 @@ const cases: PolicyCase[] = [
     risk: 'Configuration parser is absent or confuses strings with comments'
   })),
   {
-    name: 'explicit any in maintained UI',
-    file: 'src/lib/components/ui/probe.ts',
+    name: 'explicit any in an application feature',
+    file: 'src/lib/features/on-water/probe.ts',
     valid: 'export type Value = unknown;',
     invalid: 'export type Value = any;',
     command: 'lint',
     diagnostic: '@typescript-eslint/no-explicit-any',
-    risk: 'Component overrides disable general policies'
+    risk: 'Application features escape the explicit-any policy'
   },
   {
     name: 'implicit any',
