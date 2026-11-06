@@ -404,6 +404,23 @@ const pressToClose = async (page: Page, input: Input, x: number, y: number) => {
   await expect.poll(() => sheetShownAfterTimers(page)).toBe(false);
 };
 
+const pressToCloseLate = async (
+  page: Page,
+  input: Input,
+  x: number,
+  y: number,
+  ms: number
+) => {
+  await holdStorage(page);
+  await press(page, input, x, y, 1);
+  await expect(
+    page.getByRole('dialog').getByRole('button', { name: 'Save' })
+  ).toHaveAttribute('aria-disabled', 'true');
+  await page.clock.runFor(ms);
+  await releaseStorage(page);
+  await expect.poll(() => sheetShownAfterTimers(page)).toBe(false);
+};
+
 const pressTwice = async (page: Page, target: Locator, input: Input) => {
   const box = await target.boundingBox();
   expect(box, 'the control has a box').not.toBeNull();
@@ -434,7 +451,7 @@ test.describe('with the clock paused', () => {
     [320, 640]
   ] as const)
     for (const colorScheme of ['light', 'dark'] as const)
-      test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, the second press of a double press that closes a sheet reaches nothing beneath it: Delete removes only its drop with Undo and leaves the tab and focus, Close and Save leave the sheet shut, while Enter, a tap elsewhere, a single click there at once, a tap there after a double tap's time and a repeated click there after a double click's time all work, and a second click held past a double click's time still reaches nothing beneath it`, async ({
+      test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, the second press of a double press that closes a sheet reaches nothing beneath it: Delete removes only its drop with Undo and leaves the tab and focus, Close and Save leave the sheet shut, while Enter, a tap elsewhere, a single click there at once, a tap there after a double tap's time and a repeated click there after a double click's time all work, and a second click held past a double click's time still reaches nothing beneath it, and when a Save's storage finishes late a press there is held back only for what is left of that time since the Save press, so it works at once after a long wait`, async ({
         page
       }) => {
         const sheet = page.getByRole('dialog');
@@ -527,6 +544,38 @@ test.describe('with the clock paused', () => {
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(500);
+        await press(page, 'mouse', saved.x, saved.y, 2);
+        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+
+        const saveLate = async (input: Input, label: string, ms: number) => {
+          await tab('Gear').click();
+          await gearRow(page, 'Pot 2').click();
+          await sheet.getByLabel('Label').fill(label);
+          await pressToCloseLate(page, input, saved.x, saved.y, ms);
+          await expect(gearRow(page, 'Pot 2')).toContainText(label);
+          await expect(gearRow(page, 'Pot 2')).toBeFocused();
+          expect(await storedDrops(page)).toBe(2);
+        };
+
+        await saveLate('touch', 'late float', 1000);
+        await press(page, 'touch', saved.x, saved.y, 1);
+        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+
+        await saveLate('touch', 'slow float', 200);
+        await press(page, 'touch', saved.x, saved.y, 1);
+        await page.clock.runFor(0);
+        await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        await expect(gearRow(page, 'Pot 2')).toBeFocused();
+        await page.clock.runFor(150);
+        await press(page, 'touch', saved.x, saved.y, 1);
+        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+
+        await saveLate('mouse', 'slow buoy', 300);
+        await press(page, 'mouse', saved.x, saved.y, 2);
+        await page.clock.runFor(0);
+        await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        await expect(gearRow(page, 'Pot 2')).toBeFocused();
+        await page.clock.runFor(200);
         await press(page, 'mouse', saved.x, saved.y, 2);
         await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
       });

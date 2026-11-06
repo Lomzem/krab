@@ -100,20 +100,24 @@
     'pointercancel'
   ] as const;
 
-  let lastPress: { x: number; y: number } | null = null;
+  type Press = { x: number; y: number; at: number };
+
+  let lastPress: Press | null = null;
   let endDoublePress = () => {};
 
   const notePress = (event: PointerEvent) => {
-    lastPress = { x: event.clientX, y: event.clientY };
+    lastPress = { x: event.clientX, y: event.clientY, at: performance.now() };
   };
 
   const noteKey = () => {
     lastPress = null;
   };
 
-  const absorbDoublePress = (press: { x: number; y: number }) => {
+  const absorbDoublePress = (press: Press) => {
+    const age = performance.now() - press.at;
+    if (age >= DOUBLE_CLICK_MS) return () => {};
     let pressing = false;
-    let tapping = true;
+    let tapping = age < DOUBLE_TAP_MS;
     let held = false;
     let expired = false;
     const absorb = (event: Event) => {
@@ -156,11 +160,11 @@
       window.addEventListener(type, absorb, true);
     const timer = setTimeout(() => {
       tapping = false;
-    }, DOUBLE_TAP_MS);
+    }, DOUBLE_TAP_MS - age);
     let ending = setTimeout(() => {
       expired = true;
       if (!held) stop();
-    }, DOUBLE_CLICK_MS);
+    }, DOUBLE_CLICK_MS - age);
     return stop;
   };
 
