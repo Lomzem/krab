@@ -7,7 +7,7 @@ Open a dropped pot or net in its gear sheet to add a label, bait, depth and note
 - `details-draft`: edits stay a draft; Escape or Close leaves the stored drop unchanged.
 - `details-save`: Save in the footer stores label, bait, depth (ft) and notes, closes the sheet and survives reload.
 - `details-depth`: a negative or non-numeric depth keeps the sheet open, marks Depth invalid and focuses it.
-- `details-kind`: switching kind gives the next number of the new kind (Net 1 becomes Pot 2 after Pot 1) and is refused once the gear has been dropped again.
+- `details-kind`: the selected kind shows a check like the Drop control's, with its space reserved so nothing shifts. Switching kind gives the next number of the new kind (Net 1 becomes Pot 2 after Pot 1) and is refused once the gear has been dropped again.
 - `details-delete`: Delete drop removes the row at once, shows `{name} deleted`, and Undo restores the same record in its original position. Deleting a trip's only drop removes the trip; Undo brings back the same trip. Deleting a drop that is already gone, for example deleted in another tab, closes the sheet without an error.
 - `details-restore-order`: a restored drop goes back among its gear's drops by drop time, and restored gear goes back among the other gear by when it was first dropped. Undo is refused with `Couldn't undo. {name} has been dropped again since.` when that gear has a drop in the water by then, so a gear is never in the water twice.
 - `details-focus`: the sheet is a modal dialog: focus moves in, stays in while open, and returns to the opening row (or to the Drop button after a delete).
@@ -30,7 +30,7 @@ Preconditions: launch and doctor from the parent skill; fresh context; complete 
 
 ## Gotchas
 
-- Check toasts with `toastOf(page)` from `e2e/fixtures.ts` (the group inside the status region named `Messages`). Other status regions (No signal, catch counts) can be present at the same time.
+- Check toasts with `toastOf(page)` from `e2e/fixtures.ts` (the group inside the status region named `Messages`). On the Map tab the map's outage notice (for example `Offline. The map can't load.`) is a second status region that can show at the same time.
 - The kind radios are visually hidden; click their visible label text instead of calling `check()`.
 - A row may carry a second line, `Rough position, within about …`, when the fix was rough; it is part of the row button's name, so filter rows by gear name rather than matching the whole name.
 - Every list row is now a button inside its list item. Scope rows to `main`, because the navigation buttons are also buttons.

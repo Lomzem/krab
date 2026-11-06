@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expect, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
+import { chooseDays } from './day-choices';
 import { deliverFix, holdFixes } from './held-geolocation';
 
 const MIN_TARGET_PX = 44;
@@ -26,7 +27,7 @@ const expectTouchTarget = async (target: Locator) => {
 
 test.use({ timezoneId: 'America/New_York' });
 
-test('a drop after local midnight starts Day 2: the Gear list groups by day, Today hides the earlier pin, and Show on map brings back a collected Day 1 drop', async ({
+test('a drop after local midnight starts Day 2: the Gear list groups by day, Today hides the earlier pin and is marked with a check that moves no choice, and Show on map brings back a collected Day 1 drop', async ({
   page
 }) => {
   const tab = (name: string) => page.getByRole('button', { name, exact: true });
@@ -52,6 +53,11 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await dropPotAt(page, 0, 'Pot 1');
 
+  await expect(
+    mapArea.getByRole('button', { name: /^Filter/ })
+  ).toHaveAccessibleName(
+    'Filter, showing gear in the water, collected gear, time in the water'
+  );
   await openFilter();
   await expect(filter).toBeVisible();
   await expect(days).toHaveCount(0);
@@ -78,15 +84,15 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
   await openFilter();
   await expectAccessibleInBothThemes(page);
   for (const toggle of [
-    filter.getByRole('checkbox', { name: 'Collected gear' }),
-    filter.getByRole('checkbox', { name: 'Time in the water' }),
-    days.getByRole('radio', { name: 'Today' }),
-    days.getByRole('radio', { name: 'Earlier days' }),
-    days.getByRole('radio', { name: 'All' })
+    filter.getByRole('checkbox', { name: 'Collected gear', exact: true }),
+    filter.getByRole('checkbox', { name: 'Time in the water', exact: true }),
+    days.getByRole('radio', { name: 'Today', exact: true }),
+    days.getByRole('radio', { name: 'Earlier days', exact: true }),
+    days.getByRole('radio', { name: 'All', exact: true })
   ]) {
     await expectTouchTarget(toggle);
   }
-  await days.getByRole('radio', { name: 'Today' }).check();
+  await chooseDays(days, 'Today');
   await closeFilter();
   await expect(pin(/^Pot 1,/)).toHaveCount(0);
   await expect(pin(/^Pot 2,/)).toBeVisible();
@@ -130,7 +136,7 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
 
   await page.clock.pauseAt(POT_2_IN_FOR_58_MINUTES);
   await page.clock.runFor('00:59');
-  const timeLabel = mapArea.getByText('59m', { exact: true });
+  const timeLabel = mapArea.getByText('59 min', { exact: true });
   await expect(timeLabel).toBeVisible();
   for (const shown of [false, true]) {
     await openFilter();

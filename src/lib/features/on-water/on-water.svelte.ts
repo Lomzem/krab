@@ -241,7 +241,9 @@ export class OnWater {
   ): Promise<SaveProblem | null> {
     const saved = await resultOf(this.#book.saveDrop(dropId, edit, kind));
     if (Result.isFailure(saved)) return PROBLEMS[saved.failure._tag];
-    this.#publish(saved.success.trip.id, saved.success.trip);
+    const { trip } = saved.success;
+    this.#publish(trip.id, trip);
+    if (findDrop([trip], dropId)?.drop.catch) this.#retireCollectUndo(dropId);
     return null;
   }
 
@@ -262,6 +264,7 @@ export class OnWater {
   }
 
   async undoCollect(dropId: string, name: string) {
+    const recorded = this.trip && findDrop([this.trip], dropId)?.drop.catch;
     const undone = await resultOf(this.#book.undoCollect(dropId));
     if (Result.isFailure(undone)) {
       this.#say(
@@ -275,14 +278,19 @@ export class OnWater {
     }
     this.#publish(undone.success.trip.id, undone.success.trip);
     if (undone.success.changed) {
-      this.#say(`${name} back in the water`);
+      this.#say(
+        recorded
+          ? `${name} back in the water. Its recorded catch was cleared.`
+          : `${name} back in the water`
+      );
       return;
     }
-    const { notice } = this;
-    if (
-      notice?.offer.action === 'undo-collect' &&
-      notice.offer.dropId === dropId
-    ) {
+    this.#retireCollectUndo(dropId);
+  }
+
+  #retireCollectUndo(dropId: string) {
+    const offer = this.notice?.offer;
+    if (offer?.action === 'undo-collect' && offer.dropId === dropId) {
       this.notice = null;
     }
   }

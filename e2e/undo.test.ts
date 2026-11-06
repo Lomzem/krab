@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test, toastOf } from './fixtures';
+import { expect, storedCollections, test, toastOf } from './fixtures';
 
 const START = new Date('2031-03-04T05:00:00Z');
 const PAUSED = new Date('2031-03-04T06:00:00Z');
@@ -161,46 +161,141 @@ test('a touch held on the Undo toast also holds the notice that replaces it, and
   ).toBeHidden();
 });
 
+const inWaterRow = (page: Page, name: string) =>
+  page
+    .getByRole('main')
+    .getByRole('button')
+    .filter({ hasText: name })
+    .filter({ hasText: 'in the water' });
+
+const collectedRow = (page: Page, name: string) =>
+  page
+    .getByRole('region', { name: 'Collected' })
+    .getByRole('button')
+    .filter({ hasText: name });
+
+const collectInSheet = async (page: Page, name: string) => {
+  await inWaterRow(page, name).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Collect', exact: true })
+    .click();
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(0);
+      return toastOf(page)
+        .filter({ hasText: `${name} collected` })
+        .count();
+    })
+    .toBe(1);
+};
+
+const closeSheet = async (page: Page, how: 'Escape' | 'Save') => {
+  const sheet = page.getByRole('dialog');
+  if (how === 'Escape') await page.keyboard.press('Escape');
+  else await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(sheet).toBeHidden();
+  await page.mouse.move(0, 0);
+};
+
 test('a Collect toast lasts 8 seconds and Undo within it puts only that gear back in the water', async ({
   page
 }) => {
-  const sheet = page.getByRole('dialog');
-  const inWater = (name: string) =>
-    page
-      .getByRole('main')
-      .getByRole('button')
-      .filter({ hasText: name })
-      .filter({ hasText: 'in the water' });
-  const collect = async (name: string) => {
-    await inWater(name).click();
-    await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
-    await expect
-      .poll(async () => {
-        await page.clock.runFor(0);
-        return toastOf(page)
-          .filter({ hasText: `${name} collected` })
-          .count();
-      })
-      .toBe(1);
-    await page.keyboard.press('Escape');
-    await expect(sheet).toBeHidden();
-    await page.mouse.move(0, 0);
-  };
-
   await openWithPausedClock(page);
   await dropPot(page, 'Pot 1');
   await dropPot(page, 'Pot 2');
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
 
-  await collect('Pot 1');
+  await collectInSheet(page, 'Pot 1');
+  await closeSheet(page, 'Escape');
   await expectExpiresAfter(page, 8000);
 
-  await collect('Pot 2');
+  await collectInSheet(page, 'Pot 2');
+  await closeSheet(page, 'Escape');
   await page.clock.runFor(7999);
   await undoOf(page).click();
   await expect(toastOf(page)).toContainText('Pot 2 back in the water');
-  await expect(inWater('Pot 2')).toBeVisible();
-  await expect(inWater('Pot 1')).toHaveCount(0);
+  await expect(inWaterRow(page, 'Pot 2')).toBeVisible();
+  await expect(inWaterRow(page, 'Pot 1')).toHaveCount(0);
+});
+
+test("saving a recorded catch retires that gear's Collect Undo so it cannot clear the catch, while a save without a catch and another gear's Collect toast keep their Undo and time", async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const notCollected = { collected: false, catch: null };
+
+  await openWithPausedClock(page);
+  for (const name of ['Pot 1', 'Pot 2', 'Pot 3', 'Pot 4']) {
+    await dropPot(page, name);
+  }
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await collectInSheet(page, 'Pot 1');
+  await page.clock.runFor(2000);
+  await closeSheet(page, 'Save');
+  await expect(
+    toastOf(page),
+    'A save that records no catch commits nothing Undo would clear; keep its offer.'
+  ).toContainText('Pot 1 collected');
+  await expectExpiresAfter(page, 6000);
+
+  await collectInSheet(page, 'Pot 2');
+  await sheet.getByRole('textbox', { name: 'Kept' }).fill('4');
+  await sheet.getByRole('textbox', { name: 'Released' }).fill('-1');
+  await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(sheet.getByRole('textbox', { name: 'Released' })).toBeFocused();
+  await expect(
+    toastOf(page),
+    'A refused Save commits nothing; keep the Collect Undo.'
+  ).toContainText('Pot 2 collected');
+  await sheet.getByRole('textbox', { name: 'Released' }).fill('2');
+  await page.clock.runFor(1000);
+  await closeSheet(page, 'Save');
+  await expect(
+    toastOf(page),
+    'The Collect Undo outlived the catch it would clear.'
+  ).toBeHidden();
+  await expect(collectedRow(page, 'Pot 2')).toContainText('4 kept, 2 released');
+
+  await collectInSheet(page, 'Pot 3');
+  await closeSheet(page, 'Escape');
+  await collectedRow(page, 'Pot 2').click();
+  await sheet.getByLabel('Label').fill('red float');
+  await page.clock.runFor(3000);
+  await closeSheet(page, 'Save');
+  await page.clock.runFor(4999);
+  await expect(toastOf(page)).toContainText('Pot 3 collected');
+  await undoOf(page).click();
+  await expect(toastOf(page)).toContainText('Pot 3 back in the water');
+  await expect(toastOf(page)).not.toContainText('catch');
+
+  await collectInSheet(page, 'Pot 4');
+  await sheet.getByRole('button', { name: 'Nothing caught' }).click();
+  await closeSheet(page, 'Save');
+  await expect(
+    toastOf(page),
+    'Nothing caught is a recorded catch; its Collect Undo must retire too.'
+  ).toBeHidden();
+  await collectedRow(page, 'Pot 4').click();
+  await sheet.getByRole('button', { name: 'Undo collect' }).click();
+  await expect(toastOf(page)).toContainText(
+    'Pot 4 back in the water. Its recorded catch was cleared.'
+  );
+  await closeSheet(page, 'Escape');
+
+  const expected = [
+    { collected: true, catch: null },
+    { collected: true, catch: { kept: 4, released: 2 } },
+    notCollected,
+    notCollected
+  ];
+  expect(await storedCollections(page)).toEqual(expected);
+  await page.reload();
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await expect(collectedRow(page, 'Pot 2')).toContainText('4 kept, 2 released');
+  await expect(collectedRow(page, 'Pot 1')).toContainText('Catch not recorded');
+  expect(await storedCollections(page)).toEqual(expected);
 });
 
 test('a toast never hides the end of the Gear list: its last row scrolls clear when focused and opens while the toast shows', async ({

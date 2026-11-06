@@ -1,2 +1,2 @@
 export type { Base } from './base-style';
-export type { Camera, MapPlace, MyPosition } from './types';
+export type { Box, Camera, Lane, MapPlace, MyPosition } from './types';

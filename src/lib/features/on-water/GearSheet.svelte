@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
+  import { ACTION_BUTTON, PRIMARY_BUTTON } from './controls';
   import type { SheetOperation, SheetSubject } from './gear-sheet';
   import DayMarker from './DayMarker.svelte';
   import GearDetailsForm from './GearDetailsForm.svelte';
@@ -35,6 +36,13 @@
     direction?: Snippet<[Drop]>;
     endAction?: Snippet<[Drop]>;
   } = $props();
+
+  const collectLeads = $derived(
+    oncollect !== undefined &&
+      subject !== null &&
+      subject.drop.collectedAt === null &&
+      subject.trip.endedAt === null
+  );
 </script>
 
 <Sheet open={subject !== null} titleId={TITLE_ID} {onclose} {returnFocus}>
@@ -42,13 +50,13 @@
     {#if subject}
       <h2
         id={TITLE_ID}
-        class="flex items-center gap-2.5 text-[26px] leading-tight font-bold"
+        class="flex items-center gap-2 text-[22px] leading-tight font-semibold"
       >
-        <GearIcon kind={subject.gear.kind} size={28} />
+        <GearIcon kind={subject.gear.kind} size={24} />
         {subject.name}
       </h2>
       {#if subject.day}
-        <p class="mt-0.5 text-[17px] font-semibold">
+        <p class="mt-0.5 text-[15px] font-medium text-muted-foreground">
           <DayMarker day={subject.day} />
         </p>
       {/if}
@@ -77,7 +85,7 @@
       type="submit"
       form={FORM_ID}
       aria-disabled={operation?.pending ?? false}
-      class="min-h-13 flex-1 rounded-control bg-primary px-4 text-[18px] font-bold text-primary-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60"
+      class="flex-[1_1_7rem] {collectLeads ? PRIMARY_BUTTON : ACTION_BUTTON}"
       >Save</button
     >
     {#if subject}

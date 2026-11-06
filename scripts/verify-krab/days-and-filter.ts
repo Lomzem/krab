@@ -150,7 +150,7 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
 
   await page.clock.pauseAt(POT_2_IN_FOR_58_MINUTES);
   await page.clock.runFor('00:59');
-  const timeLabel = mapArea.getByText('59m', { exact: true });
+  const timeLabel = mapArea.getByText('59 min', { exact: true });
   await expect(timeLabel).toBeVisible();
   await openFilter();
   await alsoShow.getByRole('checkbox', { name: 'Time in the water' }).uncheck();

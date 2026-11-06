@@ -1,9 +1,11 @@
 <script lang="ts">
-  import {
-    CompassArrow,
-    type CompassState
-  } from '#lib/features/compass/index.js';
-  import type { Base, Camera, MapPlace } from '#lib/features/map/index.js';
+  import type { CompassState } from '#lib/features/compass/index.js';
+  import type {
+    Base,
+    Camera,
+    Lane,
+    MapPlace
+  } from '#lib/features/map/index.js';
   import {
     collectedGear,
     compassPoint,
@@ -21,10 +23,15 @@
     type PastDropRow,
     type Trip
   } from '#lib/features/trip/index.js';
-  import DayMarker from './DayMarker.svelte';
+  import DirectionCue from './DirectionCue.svelte';
+  import GearHere from './GearHere.svelte';
+  import { inListOrder, type HereItem } from './gear-here';
   import GearIcon from './GearIcon.svelte';
+  import GroupPin from './GroupPin.svelte';
   import { DEFAULT_MAP_FILTER, type MapFilter } from './map-filter';
   import MapFilterSheet from './MapFilterSheet.svelte';
+  import PinChip from './PinChip.svelte';
+  import { chipBoxes } from './pin-chip';
 
   let {
     trip,
@@ -42,7 +49,10 @@
     filter = $bindable({ ...DEFAULT_MAP_FILTER }),
     show,
     onshown,
-    onopen
+    onopen,
+    onlane,
+    newest,
+    cover
   }: {
     trip: Trip | null;
     past: readonly Trip[];
@@ -60,6 +70,9 @@
     show: string | null;
     onshown: () => void;
     onopen: (dropId: string, opener: HTMLElement) => void;
+    onlane: (lane: Lane | null) => void;
+    newest: string | null;
+    cover: number;
   } = $props();
 
   const rows = $derived(trip ? gearInWater(trip, fix, now) : []);
@@ -88,22 +101,6 @@
       : []
   );
   const pastById = $derived(new Map(pastPins.map((row) => [row.drop.id, row])));
-  const placesOf = (
-    shown: (GearRow | CollectedRow)[],
-    layer: MapPlace['layer']
-  ) =>
-    shown.flatMap(({ drop }): MapPlace[] =>
-      drop.position && inDays.has(drop.id)
-        ? [{ id: drop.id, at: drop.position, layer }]
-        : []
-    );
-  const places = $derived([
-    ...pastPins.flatMap(({ drop }): MapPlace[] =>
-      drop.position ? [{ id: drop.id, at: drop.position, layer: 'past' }] : []
-    ),
-    ...placesOf(collected, 'collected'),
-    ...placesOf(rows, 'in-water')
-  ]);
   const DAY_NAMES = {
     today: 'today only',
     earlier: 'earlier days only',
@@ -144,84 +141,174 @@
     }
   );
 
-  const pinLabel = (row: GearRow) =>
-    [
-      row.name,
+  const present = (parts: (string | false | null | undefined)[]) =>
+    parts.filter((part): part is string => Boolean(part));
+
+  const pinDetails = (row: GearRow) =>
+    present([
       row.day?.text,
       row.direction && `${row.direction.distanceSpoken} ${row.direction.point}`,
       `in the water for ${row.timeInWater.spoken}`,
       row.rough && `rough position, within about ${row.rough.spoken}`
-    ]
-      .filter(Boolean)
-      .join(', ');
+    ]);
 
-  const pastLabel = (row: PastPin) =>
-    [row.name, 'past trip', row.dates, row.status].join(', ');
+  const pinSummary = (row: GearRow) =>
+    present([
+      row.day?.text,
+      row.direction && `${row.direction.distance} ${row.direction.pointShort}`,
+      `${row.timeInWater.short} in the water`,
+      row.rough && `rough, within ${row.rough.short}`
+    ]).join(', ');
 
-  const collectedLabel = (row: CollectedRow) =>
-    [row.name, row.day?.text, 'collected', row.catchText]
-      .filter(Boolean)
-      .join(', ');
+  const pastDetails = (row: PastPin) => ['past trip', row.dates, row.status];
+
+  const collectedDetails = (row: CollectedRow) =>
+    present([row.day?.text, 'collected', row.catchText]);
+
+  const label = (name: string, details: string[]) =>
+    [name, ...details].join(', ');
+
+  const itemOf = (id: string): HereItem[] => {
+    const row = rowsById.get(id);
+    if (row) {
+      return [
+        {
+          id,
+          kind: row.gear.kind,
+          layer: 'in-water',
+          number: row.gear.number,
+          day: row.day,
+          uncollected: false,
+          name: row.name,
+          details: pinDetails(row),
+          summary: pinSummary(row)
+        }
+      ];
+    }
+    const done = collectedById.get(id);
+    if (done) {
+      return [
+        {
+          id,
+          kind: done.gear.kind,
+          layer: 'collected',
+          number: done.gear.number,
+          day: done.day,
+          uncollected: false,
+          name: done.name,
+          details: collectedDetails(done),
+          summary: collectedDetails(done).join(', ')
+        }
+      ];
+    }
+    const ended = pastById.get(id);
+    if (ended) {
+      return [
+        {
+          id,
+          kind: ended.gear.kind,
+          layer: 'past',
+          number: null,
+          day: null,
+          uncollected: ended.drop.collectedAt === null,
+          name: ended.name,
+          details: pastDetails(ended),
+          summary: pastDetails(ended).join(', ')
+        }
+      ];
+    }
+    return [];
+  };
+
+  const timeLabel = (id: string) => {
+    const row = rowsById.get(id);
+    return row && filter.timeInWater ? row.timeInWater.short : null;
+  };
+
+  const placeOf = (
+    id: string,
+    at: MapPlace['at'] | null,
+    shown: boolean
+  ): MapPlace[] =>
+    itemOf(id).flatMap((item) =>
+      at && shown
+        ? [{ id, at, layer: item.layer, ...chipBoxes(item, timeLabel(id)) }]
+        : []
+    );
+  const places = $derived([
+    ...pastPins.flatMap(({ drop }) => placeOf(drop.id, drop.position, true)),
+    ...collected.flatMap(({ drop }) =>
+      placeOf(drop.id, drop.position, inDays.has(drop.id))
+    ),
+    ...rows.flatMap(({ drop }) =>
+      placeOf(drop.id, drop.position, inDays.has(drop.id))
+    )
+  ]);
+
+  let here = $state<string[]>([]);
+  let hereOpener: HTMLElement | null = null;
+  let hereApart = $state(false);
+  let picked = false;
+  const hereItems = $derived(inListOrder(here.flatMap(itemOf)));
+
+  const pick = (id: string) => {
+    picked = true;
+    here = [];
+    if (hereOpener) onopen(id, hereOpener);
+  };
 </script>
 
 <section class="flex h-full flex-col" aria-labelledby="map-title">
   <h1 id="map-title" class="sr-only">Map</h1>
-  {#if trip && canEnd}
+  {#if trip}
     <div
-      class="flex min-h-15 items-center gap-3 border-b border-border bg-card px-4 py-1.5"
+      class="flex min-h-12 items-center gap-3 border-b border-border bg-card py-0.5 pr-2 pl-4"
     >
-      <p class="min-w-0 flex-1 text-[16px] text-muted-foreground">
+      <p class="min-w-0 flex-1 text-[15px] text-muted-foreground">
         Trip running. {gearCounts(trip).inWater}.
       </p>
       <button
         bind:this={endButton}
         type="button"
-        class="min-h-12 rounded-control border-2 border-destructive px-4 text-[17px] font-bold text-destructive focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        class="min-h-11 touch-manipulation rounded-control px-3 text-[16px] font-semibold text-destructive underline-offset-3 transition-opacity duration-0 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60 aria-disabled:delay-500"
         aria-haspopup="dialog"
-        onclick={onend}>End trip</button
+        aria-disabled={!canEnd}
+        onclick={() => {
+          if (canEnd) onend();
+        }}>End trip</button
       >
     </div>
   {/if}
   {#if !trip}
-    <p class="border-b border-border bg-card px-4 py-3 text-[17px]">
+    <p
+      class="border-b border-border bg-card px-4 py-3 text-[16px] text-muted-foreground"
+    >
       No trip running. Drop a pot or a net to start one.
     </p>
   {:else if nearest?.direction}
     {@const direction = nearest.direction}
     <section
-      class="flex min-h-18 items-center gap-3 border-b border-l-4 border-border border-l-signal bg-card px-4 py-2"
+      class="flex min-h-14 items-center gap-3 border-b border-border bg-card px-4 py-1"
       aria-labelledby="nearest-title"
     >
-      <GearIcon kind={nearest.gear.kind} size={30} />
+      <span class="text-primary"
+        ><GearIcon kind={nearest.gear.kind} size={24} /></span
+      >
       <div class="min-w-0 flex-1">
-        <h2 id="nearest-title" class="text-[19px] leading-snug font-bold">
+        <h2 id="nearest-title" class="text-[17px] leading-snug font-semibold">
           <span class="sr-only">Nearest gear: </span>{nearest.name}
         </h2>
-        <p class="text-[15px] text-muted-foreground" aria-hidden="true">
+        <p class="text-[14px] text-muted-foreground" aria-hidden="true">
           Nearest to you
         </p>
       </div>
-      <CompassArrow
-        bearingDeg={direction.bearingDeg}
-        point={direction.point}
-        {compass}
-        ontoggle={oncompass}
-      />
-      <div class="text-right" aria-hidden="true">
-        <p class="text-[21px] leading-tight font-bold tabular-nums">
-          {direction.distance}
-        </p>
-        <p class="text-[14px] font-semibold text-muted-foreground">
-          {direction.pointShort}
-        </p>
-      </div>
-      <p class="sr-only">{direction.distanceSpoken} {direction.point}</p>
+      <DirectionCue {direction} {compass} ontoggle={oncompass} />
     </section>
   {/if}
 
   <div class="min-h-0 flex-1">
     {#await import('#lib/features/map/ChartMap.svelte')}
-      <p class="px-4 pt-4 text-[17px] text-muted-foreground">Loading map</p>
+      <p class="px-4 pt-4 text-[16px] text-muted-foreground">Loading map</p>
     {:then { default: ChartMap }}
       <ChartMap
         bind:base
@@ -231,14 +318,18 @@
         {headingDeg}
         {show}
         {onshown}
+        {onlane}
+        keepClear={newest}
+        {cover}
       >
         {#snippet controls()}
           {#if trip || past.length > 0}
             <button
               bind:this={filterButton}
               type="button"
-              class="flex min-h-12 items-center justify-center gap-1.5 rounded-control border border-border bg-card px-3 text-[16px] font-semibold text-foreground shadow focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-[15px] font-medium text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
               aria-haspopup="dialog"
+              aria-label="Filter, showing {filterSummary}"
               onclick={() => {
                 filterOpen = true;
               }}
@@ -248,79 +339,59 @@
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                stroke-width="2.25"
+                stroke-width="1.75"
                 stroke-linecap="round"
                 aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg
-              >Filter<span class="sr-only">, showing {filterSummary}</span>
+              >Filter
             </button>
           {/if}
         {/snippet}
-        {#snippet pin(id: string)}
-          {@const row = rowsById.get(id)}
-          {@const done = collectedById.get(id)}
-          {@const ended = pastById.get(id)}
-          {#if row}
+        {#snippet pin(id: string, selected: boolean)}
+          {#each itemOf(id) as item (item.id)}
+            {@const time = timeLabel(id)}
             <button
               type="button"
               class="group grid size-11 place-items-center focus-visible:outline-none"
-              aria-label={pinLabel(row)}
+              aria-label={label(item.name, item.details)}
+              aria-current={selected || undefined}
+              data-drop={id}
               onclick={(event) => {
                 onopen(id, event.currentTarget);
               }}
             >
-              <span
-                class="inline-flex items-center gap-0.5 rounded-md border-2 border-[#0f2a44] bg-[#0f2a44] py-1 pr-1 pl-1 text-[14px] leading-none font-bold whitespace-nowrap text-white tabular-nums shadow group-focus-visible:outline-3 group-focus-visible:outline-offset-3 group-focus-visible:outline-[#c2410c]"
-              >
-                <GearIcon kind={row.gear.kind} size={17} />{row.gear.number}
-                {#if row.day}
-                  <DayMarker day={row.day} size={15} class="ml-1 gap-0.5" />
-                {/if}
-              </span>
+              <PinChip face={item} {selected} />
             </button>
-            {#if filter.timeInWater}
+            {#if time}
               <span
-                class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-white/90 px-1 text-[12px] leading-tight font-bold whitespace-nowrap text-[#0f2a44] tabular-nums"
-                aria-hidden="true">{row.timeInWater.short}</span
+                class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-white/90 px-1 text-[12px] leading-tight font-semibold whitespace-nowrap text-[#1a2e2b] tabular-nums"
+                aria-hidden="true">{time}</span
               >
             {/if}
-          {:else if done}
-            <button
-              type="button"
-              class="group grid size-11 place-items-center focus-visible:outline-none"
-              aria-label={collectedLabel(done)}
-              onclick={(event) => {
-                onopen(id, event.currentTarget);
+          {/each}
+        {/snippet}
+        {#snippet group(
+          lead: string,
+          ids: string[],
+          apart: boolean,
+          selected: boolean
+        )}
+          {#each itemOf(lead) as first (first.id)}
+            <GroupPin
+              lead={first}
+              items={inListOrder(ids.flatMap(itemOf))}
+              {apart}
+              {selected}
+              onopen={(opener: HTMLElement) => {
+                hereOpener = opener;
+                hereApart = apart;
+                here = ids;
               }}
-            >
-              <span
-                class="inline-flex items-center gap-0.5 rounded-md border-2 border-dashed border-[#4b5b6c] bg-white/85 py-0.5 pr-1 pl-0.5 text-[13px] leading-none font-bold whitespace-nowrap text-[#4b5b6c] tabular-nums group-focus-visible:outline-3 group-focus-visible:outline-offset-3 group-focus-visible:outline-[#c2410c]"
-              >
-                <GearIcon kind={done.gear.kind} size={15} />{done.gear.number}
-                {#if done.day}
-                  <DayMarker day={done.day} size={14} class="ml-1 gap-0.5" />
-                {/if}
-              </span>
-            </button>
-          {:else if ended}
-            <button
-              type="button"
-              class="group grid size-11 place-items-center focus-visible:outline-none"
-              aria-label={pastLabel(ended)}
-              onclick={(event) => {
-                onopen(id, event.currentTarget);
-              }}
-            >
-              <span
-                class="inline-flex items-center rounded-md border-2 border-dotted border-[#4b5b6c] bg-white/85 p-0.5 text-[#4b5b6c] group-focus-visible:outline-3 group-focus-visible:outline-offset-3 group-focus-visible:outline-[#c2410c]"
-              >
-                <GearIcon kind={ended.gear.kind} size={15} />
-              </span>
-            </button>
-          {/if}
+            />
+          {/each}
         {/snippet}
       </ChartMap>
     {:catch}
-      <p class="px-4 pt-4 text-[17px]">
+      <p class="px-4 pt-4 text-[16px]">
         The map can't show on this phone. Your gear is listed under Gear.
       </p>
     {/await}
@@ -336,4 +407,20 @@
     filterOpen = false;
   }}
   returnFocus={() => filterButton}
+/>
+
+<GearHere
+  items={hereItems}
+  apart={hereApart}
+  onpick={pick}
+  onclose={() => {
+    here = [];
+  }}
+  returnFocus={() => {
+    if (picked) {
+      picked = false;
+      return null;
+    }
+    return hereOpener?.isConnected ? hereOpener : null;
+  }}
 />

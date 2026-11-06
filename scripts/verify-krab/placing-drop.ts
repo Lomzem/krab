@@ -14,7 +14,7 @@ for (const entry of ['Map', 'Gear']) {
     keep('doctor.json', doctor());
     log('doctor passed: our preview process owns 4173');
     if (entry === 'Map') {
-      await page.goto('/licenses/barlow-OFL.txt');
+      await page.goto('/licenses/atkinson-hyperlegible-next-OFL.txt');
       await expect(readTrips(page)).rejects.toThrow(
         'Cannot read Krab IndexedDB'
       );

@@ -753,9 +753,9 @@ it('formats time in the water as minutes, hours and days', async () => {
   expect(
     rows.map((row) => [row.name, row.timeInWater.short, row.timeInWater.spoken])
   ).toEqual([
-    ['Pot 1', '1d 3h', '1 day 3 hours'],
-    ['Pot 2', '2h 20m', '2 hours 20 minutes'],
-    ['Pot 3', '45m', '45 minutes']
+    ['Pot 1', '1 d 3 h', '1 day 3 hours'],
+    ['Pot 2', '2 h 20 min', '2 hours 20 minutes'],
+    ['Pot 3', '45 min', '45 minutes']
   ]);
 });
 
