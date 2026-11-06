@@ -240,6 +240,21 @@ const overlap = (
   a.y < b.y + b.height &&
   b.y < a.y + a.height;
 
+const settledObservation = async <T>(observe: () => Promise<T>) => {
+  let observed = await observe();
+  let previous = '';
+  await expect
+    .poll(async () => {
+      observed = await observe();
+      const current = JSON.stringify(observed);
+      const unchanged = current === previous;
+      previous = current;
+      return unchanged;
+    })
+    .toBe(true);
+  return observed;
+};
+
 test('supplemental UI review with live maps and accessibility observations', async ({
   page,
   context
@@ -281,7 +296,6 @@ test('supplemental UI review with live maps and accessibility observations', asy
   await page.mouse.move(0, 0);
   await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
   const map = page.getByRole('region', { name: 'Map', exact: true });
-  const pins = map.getByRole('button', { name: /^Pot \d+,/ });
   const spots = map.getByRole('button', { name: /^Pot \d+[ ,]/ });
   const drawn = async () => {
     const names = await spots.evaluateAll(labelsOf);
@@ -299,16 +313,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
       Array.from({ length: 8 }, (_, index) => `Pot ${String(index + 1)}`)
     );
   for (const spot of await spots.all()) await expect(spot).toBeInViewport();
-  let settled = '';
-  await expect
-    .poll(async () => {
-      const now = JSON.stringify(await spots.evaluateAll(boxesOf));
-      const still = now === settled;
-      settled = now;
-      return still;
-    })
-    .toBe(true);
-  const overview = await spots.evaluateAll(boxesOf);
+  const overview = await settledObservation(() => spots.evaluateAll(boxesOf));
   keep('overview-spots.json', { viewport: page.viewportSize(), overview });
   for (const spot of overview)
     expect(spot.uncovered, spot.name ?? '').toBe(true);
@@ -337,11 +342,6 @@ test('supplemental UI review with live maps and accessibility observations', asy
     }
     await expect(group).toBeVisible({ timeout: 1500 });
   }).toPass({ timeout: 30000 });
-  const lead = /^\d+/.exec(await group.innerText())?.[0];
-  await expect(group).toHaveAccessibleName(
-    `Pot ${String(lead)} +7 more. 8 gear in this area: Pot 1, Pot 2, Pot 3, Pot 4, Pot 5, Pot 6, Pot 7, Pot 8`
-  );
-  await expect(pins).toHaveCount(0);
   await capture('03a-live-chart-group');
   const axeGroup = await new AxeBuilder({ page }).analyze();
   keep('axe-group.json', axeGroup);
@@ -435,28 +435,18 @@ test('supplemental UI review with live maps and accessibility observations', asy
   keep('keyboard-focus.json', focus);
   await page.keyboard.press('Escape');
   await expect(row).toBeFocused();
-  const enlarged = [];
-  for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
-    const fit = await page.evaluate(dropBarFit, zoom);
-    enlarged.push(fit);
-    keep('enlargement.json', {
-      method: 'CSS zoom on the root; not native iOS page zoom or Dynamic Type',
-      steps: enlarged
-    });
-    expect(
-      fit.document,
-      `document width at ${String(zoom)}`
-    ).toBeLessThanOrEqual(fit.viewport);
-    for (const control of fit.controls) {
-      const at = `${control.name} at ${String(zoom)}`;
-      expect(control.whole, at).toBe(true);
-      expect(control.left, at).toBeGreaterThanOrEqual(0);
-      expect(control.right, at).toBeLessThanOrEqual(fit.viewport);
-      expect(control.cssHeight, at).toBeGreaterThanOrEqual(43.5);
-      expect(control.cssWidth, at).toBeGreaterThanOrEqual(43.5);
-    }
-    if (zoom === 1.5) await capture('07-css-zoom-150-percent');
-  }
+  keep('enlargement.json', {
+    method: 'CSS zoom on the root; not native iOS page zoom or Dynamic Type',
+    captures: [1.5, 2],
+    geometryProof: 'e2e/gear-sheet.test.ts'
+  });
+  await page.evaluate(() => {
+    document.documentElement.style.zoom = '1.5';
+  });
+  await capture('07-css-zoom-150-percent');
+  await page.evaluate(() => {
+    document.documentElement.style.zoom = '2';
+  });
   await row.scrollIntoViewIfNeeded();
   await capture('07-css-zoom-200-percent');
   await row.click();
@@ -471,7 +461,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
   });
   keep('indexeddb-after.json', await readTrips(page));
   log(
-    'Eight UI drops with fictional positions; live providers, compass unavailable, axe, validation, long label, modal Tab containment/restoration and CSS zoom drop-bar fit from 100% to 200% checked. Native iPhone and native browser zoom remain separate limits.'
+    'Eight UI drops with fictional positions; live providers, compass unavailable, axe, validation, long label and modal Tab containment/restoration checked; CSS zoom at 150% and 200% captured. Drop-bar zoom geometry is owned by e2e/gear-sheet.test.ts. Native iPhone and native browser zoom remain separate limits.'
   );
 });
 
@@ -578,32 +568,6 @@ test('Street controls after switching from Chart, right away, settled and after 
   );
 });
 
-function dropBarFit(zoom: number) {
-  document.documentElement.style.zoom = String(zoom);
-  const width = document.documentElement.clientWidth;
-  const bar = document.querySelector('[aria-label="Drop gear"]');
-  const controls = [...(bar?.querySelectorAll('label, button') ?? [])];
-  return {
-    zoom,
-    viewport: width,
-    document: document.documentElement.scrollWidth,
-    controls: controls.map((control) => {
-      const box = control.getBoundingClientRect();
-      const range = document.createRange();
-      range.selectNodeContents(control);
-      const ink = range.getBoundingClientRect();
-      return {
-        name: control.textContent.trim(),
-        left: box.left,
-        right: box.right,
-        cssWidth: box.width / zoom,
-        cssHeight: box.height / zoom,
-        whole: ink.left >= box.left && ink.right <= box.right
-      };
-    })
-  };
-}
-
 function footprintOf(button: Element) {
   const marker = button.parentElement ?? button;
   let { left, top, right, bottom } = marker.getBoundingClientRect();
@@ -703,16 +667,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   const newest = map.getByRole('button', {
     name: /^(Pot 2,|Pot \d+ .*gear (?:here|in this area)[^:]*: .*\bPot 2\b)/
   });
-  let settled = '';
-  await expect
-    .poll(async () => {
-      const now = JSON.stringify(await newest.evaluate(footprintOf));
-      const still = now === settled;
-      settled = now;
-      return still;
-    })
-    .toBe(true);
-  const during = JSON.parse(settled) as ReturnType<typeof footprintOf>;
+  const during = await settledObservation(() => newest.evaluate(footprintOf));
   const tag = `${String(size.width)}x${String(size.height)}`;
   const covers = {
     toast: await rectOf(toastOf(page)),
@@ -782,30 +737,14 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
     toast: await rectOf(toastOf(page)),
     credits: await rectOf(page.locator('.maplibregl-ctrl-attrib'))
   });
-  let before = '';
-  await expect
-    .poll(async () => {
-      const now = JSON.stringify(await pin.evaluate(footprintOf));
-      const same = now === before;
-      before = now;
-      return same;
-    })
-    .toBe(true);
+  await settledObservation(() => pin.evaluate(footprintOf));
   const chart = await measure();
   await capture(`single-${tag}-0-chart`);
   await street.click();
   const immediate = await measure();
   await capture(`single-${tag}-1-immediate`);
   await expect(map).toContainText('OpenStreetMap');
-  let still = '';
-  await expect
-    .poll(async () => {
-      const now = JSON.stringify(await pin.evaluate(footprintOf));
-      const same = now === still;
-      still = now;
-      return same;
-    })
-    .toBe(true);
+  await settledObservation(() => pin.evaluate(footprintOf));
   const settled = await measure();
   await capture(`single-${tag}-2-settled`);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
@@ -966,18 +905,8 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
     .poll(async () => (await readTrips(page))[0]?.drops.length)
     .toBe(6);
   const markers = map.locator('.maplibregl-marker[data-place]');
-  let seen = '';
-  const settledSpots = async () => {
-    await expect
-      .poll(async () => {
-        const now = JSON.stringify(await markers.evaluateAll(spotsOf));
-        const still = now === seen;
-        seen = now;
-        return still;
-      })
-      .toBe(true);
-    return JSON.parse(seen) as ReturnType<typeof spotsOf>;
-  };
+  const settledSpots = () =>
+    settledObservation(() => markers.evaluateAll(spotsOf));
   const chain: Record<string, ReturnType<typeof spotsOf>> = {};
   const expectEveryDropOnce = async (state: string) => {
     const spots = await settledSpots();

@@ -28,23 +28,11 @@ bun run build && bun -e 'await Bun.write("wrangler.json", JSON.stringify({name:"
 
 The deploy command is `bunx wrangler deploy`. `Cache-Control: no-cache` on `/service-worker.js` makes the browser revalidate the worker script on every update check, so a new build is noticed. Change these headers in the dashboard, not here. Every precached URL must answer without a redirect: Cloudflare's default `auto-trailing-slash` HTML handling serves `/` from `index.html` directly and redirects only `.html` or `/index` spellings, which the worker never requests.
 
-### Live check
+### Deployment checks
 
-On 2026-11-03 at 04:50:53 GMT, `curl -sI` against `https://krab.lomzem.dev` returned:
+After deploying a worker build, run `curl -sI https://krab.lomzem.dev/service-worker.js` and require a JavaScript `Content-Type` and `Cache-Control: no-cache`. Fetch the body too and confirm it contains the worker rather than the single-page HTML fallback. Check that an emitted `/_app/immutable/` asset has `Cache-Control: public, max-age=31536000, immutable`.
 
-| Path                                      | Status | `Content-Type`     | `Cache-Control`                       |
-| ----------------------------------------- | ------ | ------------------ | ------------------------------------- |
-| `/`                                       | 200    | `text/html`        | `public, max-age=0, must-revalidate`  |
-| `/service-worker.js`                      | 200    | `text/html`        | `no-cache`                            |
-| `/_app/version.json`                      | 200    | `application/json` | `public, max-age=0, must-revalidate`  |
-| `/_app/immutable/entry/start.vzboPR96.js` | 200    | `text/javascript`  | `public, max-age=31536000, immutable` |
-
-The `no-cache` rule for the worker path is live. The deployed build was older than the worker, so `/service-worker.js` fell back to the single-page shell as HTML.
-
-After the worker build is deployed (ticket 11), run these checks:
-
-1. Run `curl -sI https://krab.lomzem.dev/service-worker.js`. It should return a JavaScript `Content-Type` and `Cache-Control: no-cache`. Then run `curl -s` on the same URL and confirm the body is the worker, not HTML.
-2. On a physical iPhone, add Krab to the Home Screen and open it once online. Then try it in airplane mode: Krab should open and show the stored trip. Check that the screen stays on during an active trip.
+Follow the [physical iPhone checklist](../.agents/skills/verify-krab/features/device-checks.md) for Home Screen installation, offline restoration, updates and screen wake lock. Automated WebKit tests cover the worker lifecycle; they do not establish iOS behavior.
 
 ## Kill switch
 

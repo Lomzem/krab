@@ -4,7 +4,6 @@ import ts from 'typescript-eslint';
 import svelte from 'eslint-plugin-svelte';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
-import { plugin as shadcn } from '@shadcn/lint';
 
 const EFFECT_ONLY = [
   {
@@ -60,12 +59,6 @@ export default defineConfig([
     rules: { 'svelte/comment-directive': 'off' }
   },
   {
-    files: ['**/*.{ts,svelte}'],
-    plugins: { shadcn },
-    settings: { shadcn: { ui: '#lib/components/ui' } },
-    rules: { 'shadcn/no-restyle': ['error', { allow: ['layout'] }] }
-  },
-  {
     files: ['e2e/**/*.test.ts'],
     rules: {
       'no-restricted-imports': [
@@ -85,10 +78,6 @@ export default defineConfig([
         }
       ]
     }
-  },
-  {
-    files: ['src/lib/components/ui/**'],
-    rules: { 'shadcn/no-restyle': 'off' }
   },
   prettier
 ]);

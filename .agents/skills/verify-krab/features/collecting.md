@@ -17,14 +17,9 @@ Place a pot, choose Gear in the bottom navigation and tap the pot's row. Collect
 
 ## Driving it with Playwright
 
-Preconditions: launch and doctor from the parent skill; fresh context; made-up fix granted and `Position ready` visible before Drop. `bun scripts/verify-krab/run.ts` runs `scripts/verify-krab/collecting.ts`, which drives every step below and writes `actions.jsonl`, screenshots `01`–`07` with ARIA snapshots, `doctor.json` and the IndexedDB snapshots named here.
+Run `bun scripts/verify-krab/run.ts` through the parent skill's bounded lifecycle. [collecting.ts](../../../../scripts/verify-krab/collecting.ts) owns the exact actions, assertions and evidence filenames.
 
-- **Open:** click Gear, then the `main` button filtered by `Pot 1` and `in the water`. Require the dialog heading `Pot 1`, the text `in the water` and the button `Collect` (exact). Keep `indexeddb-before.json`.
-- **Collect:** click `Collect`. Require the `Catch` heading focused, `Undo collect` in the footer, `toastOf(page)` containing `Pot 1 collected`, and the stored latest drop with a numeric `collectedAt` and `catch: null`.
-- **Catch:** click `One more kept` twice and `One more released` once; require the stored catch still null. Click `Save`; require the dialog hidden, stored `catch: { kept: 2, released: 1 }`, the Collected row `2 kept, 1 released`, and `1 collected` and `Nothing in the water` in main. Keep `indexeddb-catch-saved.json`.
-- **Reload:** reload, choose Gear; require the same row text and IndexedDB equal to `indexeddb-catch-saved.json`.
-- **Drop again:** open the Collected Pot 1 row, click `Drop pot again here`. Require the dialog hidden, toast `Pot 1 dropped`, an in-water Pot 1 row, and two stored drops sharing one `gearId`, the second with `collectedAt: null`, `catch: null` and the made-up position. Keep `indexeddb-dropped-again.json`.
-- **Undo collect:** open the in-water Pot 1, click `Collect`, then `Undo collect`. Require `Collect` focused and the stored latest drop back to `collectedAt: null`, `catch: null`. Keep `indexeddb-after.json`.
+Covers Collect, saving a catch, reload, dropping the same gear again and Undo collect, with persisted records checked at each transition. Catch validation, rapid input, toast lifetime and refused operations have the separate proof owners listed below.
 
 ## Gotchas
 

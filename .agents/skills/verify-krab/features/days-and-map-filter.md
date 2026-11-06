@@ -1,6 +1,6 @@
 # Days and the Map filter
 
-An overnight trip stays one trip. Each drop belongs to the phone's local calendar date when it was placed, and days are numbered from the trip's start, so a drop at 00:10 after a drop at 23:40 starts Day 2. The Map filter narrows only the map: Collected gear, Time in the water and, on multi-day trips, Days on this trip. Ticket 08 built it.
+An overnight trip stays one trip. Each drop belongs to the phone's local calendar date when it was placed, and days are numbered from the trip's start, so a drop at 00:10 after a drop at 23:40 starts Day 2. The Map filter narrows only the map: Collected gear, Time in the water and, on multi-day trips, Days on this trip.
 
 ## Sub-features
 
@@ -25,20 +25,9 @@ Drop gear late in the evening, then drop again after midnight. The Gear tab show
 
 ## Driving it with Playwright
 
-`scripts/verify-krab/days-and-filter.ts` runs through `bun scripts/verify-krab/run.ts` with `timezoneId: 'America/New_York'` and `page.clock` installed at 2031-06-10 23:40 local.
+Run `bun scripts/verify-krab/run.ts` through the parent skill's bounded lifecycle. [days-and-filter.ts](../../../../scripts/verify-krab/days-and-filter.ts) owns the exact actions, assertions and evidence filenames.
 
-1. `holdFixes(page)` from `e2e/held-geolocation.ts` holds `watchPosition`, and `deliverFix(page, fix)` delivers made-up fixes stamped with the faked clock. Drop Pot 1 at `MADE_UP_SEA`.
-2. Open Filter: group "Also show" shows and group "Days on this trip" does not. Capture `01-filter-one-day`. Done.
-3. `page.clock.fastForward('30:00')` to 00:10, deliver a fix 0.001° north, drop Pot 2.
-4. Gear tab: region "Day 1" holds only Pot 1 and region "Day 2" only Pot 2. Capture `02-gear-by-day`.
-5. Map tab: pins `/^Pot 1, Day 1,/` and `/^Pot 2, Day 2,/`. Capture `03-map-two-days`.
-6. Open Filter: All is checked. Capture `04-filter-sheet`. Check Today, Done: the Pot 1 pin is gone and Pot 2 stays. Capture `05-today-only`.
-7. Gear tab, region Day 1, Pot 1, Collect, Escape. Map tab, Filter, untick Collected gear, Done.
-8. Gear tab, region Collected, Pot 1, Show on map: `/^Pot 1, Day 1, collected/` is focused beside Pot 2. Capture `06-show-on-map-collected`.
-9. Open Filter: Collected gear checked and All checked. Untick Collected gear, Done: with All days the collected Pot 1 pin is gone and Pot 2 stays. Capture `07-collected-off`. Tick it again: Pot 1 is back.
-10. `page.clock.pauseAt` 01:09 then `runFor('00:59')`, so the next refresh shows the visible `59m` label under Pot 2. Untick Time in the water, capture `08-filter-time-off`, Done: the `59m` label is gone and the Pot 2 pin stays. Capture `09-no-time-labels`, then `page.clock.resume()`.
-11. Reload, open Filter: Time in the water is checked again.
-12. Evidence: `indexeddb-before.json`, `indexeddb-after.json` (two drops either side of local midnight and no stored day), `requests.json` (no position in any URL), screenshots and ARIA snapshots.
+Covers drops either side of local midnight, day grouping, Today/All, collected visibility, Show on map restoring a hidden target, time-label visibility and default restoration after reload. Persisted reads establish that days are derived rather than stored; request evidence checks position privacy.
 
 ## Gotchas
 

@@ -24,15 +24,9 @@ Save a pot's location during a trip and find the same pot in the Gear list after
 
 ## Driving it with Playwright
 
-Preconditions: fresh context, empty site data, granted emulated location, made-up position and a healthy preview owned by this run. Execute all three journeys (Map, Gear, Denied) with `bun scripts/verify-krab/run.ts`.
+Run `bun scripts/verify-krab/run.ts` through the parent skill's bounded lifecycle. [placing-drop.ts](../../../../scripts/verify-krab/placing-drop.ts) owns the exact actions, assertions and evidence filenames.
 
-- **Read before start (Map journey):** open `/licenses/atkinson-hyperlegible-next-OFL.txt` so the origin exists before Krab runs. `readTrips` must reject with `Cannot read Krab IndexedDB`, and `indexedDB.databases()` must stay empty: reading evidence never creates Krab's database.
-- **Explain:** `await page.goto('/')`; require heading `Krab needs your location` and capture it. Grant via `await context.grantPermissions(['geolocation'])`, set `MADE_UP_SEA` with accuracy 8, then click `page.getByRole('button', { name: 'Turn on location' })`. Require `page.getByText('Position ready')` before any tap on Drop.
-- **Choose entry:** stay on Map, or click `page.getByRole('button', { name: 'Gear', exact: true })` in the fresh Gear journey. Capture the pre-drop screen.
-- **Drop:** click `page.getByRole('button', { name: 'Drop pot', exact: true })`; require `toastOf(page)` from `e2e/fixtures.ts` (the group inside the status region named `Messages`) to contain `Pot 1 dropped`. Capture the action/result and log it.
-- **Find:** click the Gear button. Require `page.getByRole('main').getByRole('listitem').filter({ hasText: 'Pot 1' })` to show `0 ft`. Read the actual IndexedDB record and require the made-up position. Capture Gear.
-- **Restore:** `await page.reload()`, click Gear, require the same row and `0 ft`. Read IndexedDB again and require identical records. Capture the restored screen, ARIA snapshot and action log. Both entry points must pass and their evidence must survive cleanup.
-- **Denied:** in a fresh context, `await context.clearPermissions()`, `page.goto('/')`, click `Turn on location`. Require `page.getByRole('region', { name: 'Location is off' })` to contain `Settings` and capture it. Click `Drop pot`; require `toastOf(page)` to contain `Pot 1 dropped without a position`. Click Gear; require the Pot 1 row to show `No position`. Read IndexedDB and require `position: null`, `noPosition: 'denied'`.
+Covers placing a drop from Map and Gear, restoration with the same saved position, and saving without a position when location is denied. It also proves that reading evidence before first launch leaves IndexedDB absent.
 
 ## Gotchas
 

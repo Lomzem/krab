@@ -4,7 +4,7 @@ Every judge completes image review and its own app interaction before its first 
 
 ## Exclusive session
 
-The coordinator releases implementation/build ownership, freezes the candidate and captures the shared normal/visual evidence first. It then dispatches the three fresh reviewer tasks sequentially. Each judge owns app driving/builds only during its slot; the next starts after the bounded runs exit, containers/lock are gone, and the coordinator confirms the source identity is unchanged. A product change invalidates the round.
+The coordinator releases implementation/build ownership, freezes the candidate and captures the shared normal/visual evidence first. It dispatches reviewers sequentially when they share the checkout. Each judge owns app driving/builds only during its slot; the next starts after the bounded runs exit, containers/lock are gone, and the coordinator confirms the source identity is unchanged. A product change requires renewed evidence for the changed source and an explicit reassessment of affected conclusions.
 
 Keep product code, shared capture contracts/evidence and other reports read-only. Write only:
 
@@ -65,4 +65,4 @@ The report is incomplete until both image review and this interaction pass are d
 - screenshots actually opened, action logs, persistence reads where claimed, and unavailable/device checks;
 - all nine rubric dispositions plus interaction findings, incorporated into the overall judgment and any user-requested score.
 
-Distinguish your interactions from retained coordinator checks and visual observations. A material usability/accessibility defect or missing required interaction evidence cannot be approved. An unavailable environment is an evidence blocker, not an automatic pass. Keep first verdicts independent of other judges, prior scores and implementation feedback. Only the same candidate and same round can satisfy the user's completion gate; a new candidate needs entirely fresh judges and new interaction evidence.
+Distinguish your interactions from retained coordinator checks and visual observations. A material usability/accessibility defect or missing required interaction evidence cannot be approved. An unavailable environment is an evidence blocker, not an automatic pass. Keep first verdicts independent of other judges, prior scores and implementation feedback. Tie approval to the reviewed source identity and the task's completion gate. After a source change, identify affected coverage and repeat the necessary captures and interactions before approval.

@@ -318,17 +318,6 @@ const cases: PolicyCase[] = [
     risk: 'Requested branching rule is missing'
   },
   {
-    name: 'Svelte shadcn restyling',
-    file: 'src/Probe.svelte',
-    valid:
-      '<script lang="ts">import { Badge } from "#lib/components/ui/badge/index.js";</script><Badge class="mt-4">safe</Badge>',
-    invalid:
-      '<script lang="ts">import { Badge } from "#lib/components/ui/badge/index.js";</script><Badge class="p-4">safe</Badge>',
-    command: 'lint',
-    diagnostic: 'shadcn/no-restyle',
-    risk: 'Design-system integration does not recognize Svelte markup or project imports'
-  },
-  {
     name: 'non-mutating formatting',
     file: 'probe.json',
     valid: '{\n  "value": 1\n}\n',

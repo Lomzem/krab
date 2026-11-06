@@ -1,6 +1,6 @@
 # Finding gear
 
-Find gear still in the water on a north-up chart map or in the Gear list. The Map tab shows gear in the water, my position and the nearest gear's distance and direction. Ticket 06 built the map. Days, day markers, the Map filter and the collected layer are in [Days and the Map filter](days-and-map-filter.md).
+Find gear still in the water on a north-up chart map or in the Gear list. The Map tab shows gear in the water, my position and the nearest gear's distance and direction. Days, day markers, the Map filter and the collected layer are in [Days and the Map filter](days-and-map-filter.md).
 
 ## Sub-features
 
@@ -22,24 +22,9 @@ Open Krab. The Map tab is the first tab. Turn on location and drop a pot or net;
 
 ## Driving it with Playwright
 
-`scripts/verify-krab/finding-gear.ts` runs through `bun scripts/verify-krab/run.ts` with two journeys.
+Run `bun scripts/verify-krab/run.ts` through the parent skill's bounded lifecycle. [finding-gear.ts](../../../../scripts/verify-krab/finding-gear.ts) owns the exact actions, assertions and evidence filenames.
 
-- **Finding gear on the Map tab and from the Gear list:**
-  1. Drop Pot 1 at `MADE_UP_SEA`.
-  2. On `getByRole('region', { name: 'Map', exact: true })`, expect:
-     - the button `/^Pot 1,/`;
-     - the img `/^Your position/`;
-     - the heading `/Nearest gear/` with text Pot 1;
-     - the NOAA attribution.
-  3. Tap Pot 1, so the dialog shows heading Pot 1 and no Show on map button. Press Escape; Pot 1 is focused.
-  4. Gear > Pot 1 row > Show on map. Pot 1 on the map is focused and in the viewport.
-  5. Street map: `aria-pressed="true"` and the OpenStreetMap attribution. Centre on my position keeps Pot 1 in view.
-  6. Evidence: screenshots, ARIA snapshots, read-only IndexedDB in `indexeddb-after.json`, and every request URL in `requests.json`.
-- **NOAA chart alignment:**
-  - For z10 and z14, compute the slippy tile and in-tile pixel of two public landmarks (Golden Gate Park as land, the Pacific west of Ocean Beach as water).
-  - Build the URL with the app's `chartSource` and `chartTileUrl`, fetch it from the page with `mode: 'cors'`, draw it to a canvas and read a 5×5 median pixel.
-  - Land must read tan (red − blue > 25) and water blue or white, with `response.type === 'cors'`.
-  - Tiles and samples go to the journey evidence (`tile-z*.png`, `alignment.json`).
+Covers finding a drop on Map and from Gear, opening its sheet, Show on map focus, Street switching and recentering. The separate chart-alignment journey reads land/water pixels from real NOAA tiles at public landmarks at two zooms, retaining sampled tiles and alignment evidence. These landmarks are never a browser position or drop.
 
 ## Gotchas
 

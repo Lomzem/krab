@@ -18,15 +18,9 @@ Place a pot, choose Gear in the bottom navigation, then tap the pot's row. The s
 
 ## Driving it with Playwright
 
-Preconditions: launch and doctor from the parent skill; fresh context; complete the placing-drop Explain and Drop steps first, including the `Position ready` wait before each tap on Drop. `scripts/verify-krab/drop-details.ts` drives every step below except the kind-locked refusal, under `bun scripts/verify-krab/run.ts`. Its evidence is `actions.jsonl`, `01-open` to `08-restored` screenshots with ARIA snapshots, and the IndexedDB snapshots `indexeddb-before-sheet.json`, `indexeddb-details-saved.json`, `indexeddb-kind-switched.json` and `indexeddb-restored.json`. The recipe compares each read against the earlier snapshot: unchanged after Escape and after a refused depth, equal after reload, and equal to the pre-delete snapshot after Undo.
+Run `bun scripts/verify-krab/run.ts` through the parent skill's bounded lifecycle. [drop-details.ts](../../../../scripts/verify-krab/drop-details.ts) owns the exact actions, assertions and evidence filenames.
 
-- **Drop:** drop Pot 1, then choose `Net` in group `Gear to drop`, wait for `Position ready` and drop Net 1.
-- **Open:** click Gear, then `page.getByRole('main').getByRole('button').filter({ hasText: 'Pot 1' })`. Require `page.getByRole('dialog')` with heading `Pot 1`, focus inside the dialog, and `getByLabel('Depth')` with `inputmode="decimal"`. Capture the sheet and its ARIA snapshot.
-- **Draft:** fill `getByLabel('Label')`, press Escape. Require the dialog hidden, the Pot 1 row focused, and IndexedDB unchanged from before the sheet opened.
-- **Depth:** reopen, fill Depth with `-3` and click `Save`. Require the dialog still open, Depth focused with `aria-invalid="true"` and a non-empty accessible description.
-- **Save:** fill Label `red float` and Depth `12.5`, click `Save`. Require the dialog hidden; read IndexedDB and require the drop's `label: 'red float'` and `depthFt: 12.5`. Reload, choose Gear, reopen Pot 1 and require the same values.
-- **Kind:** after dropping a net, open Net 1, click the visible `Pot` text in group `Gear`, click `Save`. Require a `Pot 2` row and no Net 1 row.
-- **Delete:** open Pot 1, click `Delete drop` once. Require the dialog hidden, the `Drop pot` or `Drop net` button focused, the toast containing `Pot 1 deleted` and no Pot 1 row. Click `Undo`; require the toast to contain `Pot 1 restored` and IndexedDB equal to the snapshot taken before the delete.
+Covers discarding a draft with focus restoration, invalid depth, Save/reload, switching kind, Delete and Undo. Persisted reads establish that dismissed or refused edits store nothing and Undo restores the record. The kind-locked refusal remains outside this live recipe.
 
 ## Gotchas
 

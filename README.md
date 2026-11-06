@@ -27,7 +27,7 @@ bun run preview --host 127.0.0.1
 
 `check` synchronizes framework types and runs strict Svelte/TypeScript checking. The static adapter writes the deployable site to `build/`, including the client-rendered `index.html` fallback. Configure a future static host to serve that fallback for application routes. Generated `.svelte-kit/` server intermediates are build tooling output; the shipped `build/` directory needs no SvelteKit application server. `preview` serves the production build locally and is not a hosting setup.
 
-Formatting, lint and test commands are documented in [Code checks](docs/tooling.md). Commit hooks and CI use the shared commands below. After one online load the service worker keeps the app shell for offline use; see [Offline shell and updates](docs/offline.md) for the caching contract, hosting headers and kill switch. There is no map or authentication yet.
+Formatting, lint and test commands are documented in [Code checks](docs/tooling.md). Commit hooks and CI use the shared commands below. After one online load the service worker keeps the app shell for offline use; see [Offline shell and updates](docs/offline.md) for the caching contract, hosting headers and kill switch. The Map tab offers NOAA charts and OpenFreeMap streets; trip data stays on the phone. There is no authentication.
 
 ## Tests
 
@@ -44,30 +44,27 @@ The static shell links a standalone web app manifest and a 180px Apple touch ico
 
 After each build, run `bun run check:assets` from the repository root. This single check parses the emitted HTML and manifest, resolves the start URL and icon references inside `build/`, verifies PNG dimensions, and checks the shell's installation presentation metadata. It uses Bun's HTMLRewriter and requires no running server. A suitable HTTPS origin is needed for installation; hosting is deferred.
 
-Offline startup comes from the service worker described in [Offline shell and updates](docs/offline.md). Automated asset verification does not establish actual iPhone installation or launch behavior; no manual device check is required for the scaffold.
+Offline startup comes from the service worker described in [Offline shell and updates](docs/offline.md). Automated asset verification does not establish actual iPhone installation or launch behavior; use the [device checklist](.agents/skills/verify-krab/features/device-checks.md) for those checks.
 
 ## Code organization
 
 - `src/routes/` contains thin SvelteKit routes that compose feature UI.
-- `src/lib/features/<feature>/` directories own each feature's UI, domain logic, Effect services, and private browser integrations together. Consume another feature through its `index.ts`.
+- `src/lib/features/<feature>/` directories own each feature's UI, domain logic, Effect services, and private browser integrations together. Consume another feature through its `index.ts`; MapTab and PastTrips load `map/ChartMap.svelte` directly through a dynamic import to defer the map component.
   - `trip/` owns the trip record, the drop rules, the GPS freshness policy and IndexedDB storage. Its interface takes a clock, a position source and an `IDBFactory`, and returns Effect values with typed storage failures.
   - `location/` wraps `watchPosition` as the production position source and stops watching while the page is hidden.
   - `on-water/` is the on-water UI: bottom tabs, the first-launch location explanation, the Drop control, the Gear list and the Undo toast. It never touches IndexedDB directly.
 - Extract shared browser integrations when multiple features need them.
-- `src/lib/utils.ts` and future shared helpers contain genuinely reusable, domain-independent code.
-- `src/lib/components/ui/` contains maintained shadcn-svelte components; `components.json` configures their paths. They follow the same general coding policies as other owned code.
 
-Do not create empty feature directories or speculative abstractions. SvelteKit 3 uses `#lib/*` package subpath imports, configured in `package.json`. Configuration lives in `vite.config.ts`, including Tailwind's Vite plugin and SvelteKit's static adapter. Global Tailwind theme tokens (light and dark, following the system setting) and the Badge's Nova styles live in `src/app.css`. The copied component's source and license are recorded in [the attribution](docs/third-party/shadcn-svelte.md). The Atkinson Hyperlegible Next font is self-hosted from `@fontsource/atkinson-hyperlegible-next` under the SIL Open Font License; see [the Atkinson Hyperlegible Next attribution](docs/third-party/atkinson-hyperlegible-next.md).
+Do not create empty feature directories or speculative abstractions. SvelteKit 3 uses `#lib/*` package subpath imports, configured in `package.json`. Configuration lives in `vite.config.ts`, including Tailwind's Vite plugin and SvelteKit's static adapter. Global Tailwind theme tokens (light and dark, following the system setting) live in `src/app.css`. The Atkinson Hyperlegible Next font is self-hosted from `@fontsource/atkinson-hyperlegible-next` under the SIL Open Font License; see [the Atkinson Hyperlegible Next attribution](docs/third-party/atkinson-hyperlegible-next.md).
 
 See [GLOSSARY.md](GLOSSARY.md), [the phone-only active-trip decision](docs/adr/0001-phone-only-active-trip-data.md) and [keeping past trips on the phone](docs/adr/0002-keep-past-trips-on-the-phone.md) before product work.
 
 ## Dependencies and documentation
 
-Direct versions are pinned in `package.json`, with transitive resolutions in `bun.lock`. Current primary package metadata was checked during implementation rather than relying on historical research. SvelteKit 3.1.1, Svelte 5.57.3, Vite 8.3.5, Tailwind 4.3.4, and stable Effect 4.1.2 are installed. TypeScript is deliberately pinned to 6.0.3 because SvelteKit and svelte-check support TypeScript 6; the current TypeScript 7 latest tag is outside their peer ranges.
+Direct versions are pinned in `package.json`, with transitive resolutions in `bun.lock`. Keep TypeScript within the installed SvelteKit and svelte-check peer ranges when updating dependencies.
 
 - [SvelteKit SPA configuration](https://svelte.dev/docs/kit/single-page-apps) and [Vite configuration](https://svelte.dev/docs/kit/configuration)
 - [Tailwind with SvelteKit](https://tailwindcss.com/docs/installation/framework-guides/sveltekit)
-- [shadcn-svelte manual installation](https://www.shadcn-svelte.com/docs/installation/manual)
 - [Effect v4 documentation](https://effect.website/docs/v4/onboarding), matching installed stable v4
 - Primary npm metadata: [SvelteKit](https://registry.npmjs.org/@sveltejs%2fkit), [svelte-check](https://registry.npmjs.org/svelte-check), [TypeScript](https://registry.npmjs.org/typescript), [Effect](https://registry.npmjs.org/effect)
 
@@ -102,4 +99,4 @@ Both scan commands require version 8.30.1 and pass `--redact=100`. Native output
 
 [CI and manual review documentation](docs/ci.md) records pinned Actions, the shared verification sequence, CodeRabbit skip settings, and local validation limits. CI runs on pushes, pull requests, and manual dispatch with read-only repository permission. No deployment or paid scanner integration is configured.
 
-CodeRabbit automatic initial, incremental, and draft reviews are disabled. Do not request a CodeRabbit review for scaffolding, including its completed integration PR, through comments, CLI, or integrations. Reviews are reserved for later product work when explicitly requested; check current public-repository eligibility and limits then.
+CodeRabbit automatic initial, incremental, and draft reviews are disabled. Request manual reviews only when explicitly asked; check current public-repository eligibility and limits then.

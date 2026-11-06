@@ -16,14 +16,9 @@ End a trip from the Map, then choose Past trips in the bottom navigation and tap
 
 ## Driving it with Playwright
 
-Preconditions: launch and doctor from the parent skill; fresh context; made-up fix granted. The recipe uses the same clock and set-up as [Ending a trip](ending-trip.md): Pot 1 collected with 2 kept and Net 1 left in, then `End trip` in the Map region and the dialog's `End trip`. `bun scripts/verify-krab/run.ts` runs the second journey in `scripts/verify-krab/end-and-past-trips.ts`, which drives every step below and writes `actions.jsonl`, screenshots `01`–`07` with ARIA snapshots, `doctor.json` and the IndexedDB snapshots named here.
+Run `bun scripts/verify-krab/run.ts` through the parent skill's bounded lifecycle. [end-and-past-trips.ts](../../../../scripts/verify-krab/end-and-past-trips.ts) owns the exact actions, assertions and evidence filenames.
 
-- **List:** click `Past trips`. Require the `main` button matching `Tuesday, June 10, 2031` to have the accessible name `Tuesday, June 10, 2031 2 drops, 1 uncollected`. Keep `indexeddb-before.json`.
-- **Detail:** click it. In the region named `Tuesday, June 10, 2031`, require the level-1 heading of that name focused, the buttons `Pot 1 2 kept, 0 released` and `Net 1 Uncollected` (exact), and the map pin `Pot 1, 2 kept, 0 released`.
-- **Sheets:** click `Net 1 Uncollected`; require the dialog text `Uncollected. The trip ended with this gear in the water.` and no `Collect` (exact). Press Escape; require the row focused. Click `Pot 1 2 kept, 0 released`; require `Kept: 2` in the `Kept` group's status and no button matching `/again here/`. Click `Show on map`; require the dialog hidden and the pin `Pot 1, 2 kept, 0 released` focused.
-- **Past edit:** click `Pot 1 2 kept, 0 released`, then `One more kept` and `Save`. Require the dialog hidden, the row `Pot 1 3 kept, 0 released` (exact) and no `2 kept` row, and the stored Pot 1 catch `{ kept: 3, released: 0 }`. Keep `indexeddb-catch-edited.json`.
-- **Reload:** reload, choose Past trips; require the same row name and IndexedDB unchanged since the past edit.
-- **Delete trip:** open the trip and click `Delete trip`. Require the dialog heading `Delete this trip?`. Click `Keep it`; require `Delete trip` focused and one stored trip. Click `Delete trip`, then the dialog's `Delete trip`. Require `toastOf(page)` containing `Trip deleted`, `No past trips yet.` in main, the level-1 heading `Past trips` focused and an empty store. Keep `indexeddb-after.json`.
+The past-trips journey covers list/detail, uncollected and collected sheets, Show on map, editing a saved catch, reload, cancelling Delete trip and confirming permanent deletion. It checks persisted state and focus transitions. Multi-day choices, storage faults and deleting the final drop have separate proof owners below.
 
 ## Gotchas
 

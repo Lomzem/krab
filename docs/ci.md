@@ -2,7 +2,7 @@
 
 ## GitHub Actions
 
-`.github/workflows/ci.yml` runs on push, pull request, or manual dispatch using `ubuntu-24.04`, a 20-minute timeout, and `contents: read`. It does not deploy. Checkout fetches all branch/tag history (`fetch-depth: 0`) and disables persisted credentials. The history scanner rejects shallow clones and scans all fetched refs; it cannot inspect unfetched history. The staged scan is normally empty in CI; the existing security scenario proves index behavior.
+[The workflow](../.github/workflows/ci.yml) defines the runner, timeout, triggers and permissions for push, pull request and manual checks. It does not deploy. Checkout fetches all branch/tag history (`fetch-depth: 0`) and disables persisted credentials. The history scanner rejects shallow clones and scans all fetched refs; it cannot inspect unfetched history. The staged scan is normally empty in CI; the existing security scenario proves index behavior.
 
 Action pins checked against official release tags and dereferenced Git objects on 2026-11-02:
 
@@ -40,8 +40,8 @@ Frozen installation runs prepare to synchronize framework types and activate Lef
 
 `.coderabbit.yaml` disables automatic initial reviews (`enabled: false`), push reviews (`auto_incremental_review: false`), and draft reviews (`drafts: false`). Empty `description_keyword` and `labels` prevent keyword/label opt-ins. Path filters exclude lockfile and generated/local output. The [official automatic review controls](https://docs.coderabbit.ai/configuration/auto-review) document these semantics. Manual requests can still trigger reviews regardless of automatic settings.
 
-Do not request any scaffold review, including the completed integration PR, through comments, CLI, review re-requests, or integrations. Reserve manual reviews for later product work when explicitly requested. Recheck current public-repository eligibility, plan quotas, rate limits, and file limits then; this configuration promises no unlimited allowance.
+Request manual reviews only when explicitly asked. Recheck current public-repository eligibility, plan quotas, rate limits, and file limits then; this configuration promises no unlimited allowance.
 
-Configuration was validated locally against the [official v2 JSON Schema](https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json) (Draft 2020-12), using Python jsonschema 4.26.0 and PyYAML 6.0.3 in a disposable environment. The schema is downloaded, not vendored; its validation-time digest is recorded in the local implementation record. It checks supported fields and values. The [configuration reference](https://docs.coderabbit.ai/reference/configuration) and trigger documentation supply the behavioral interpretation. No schema directive comment is needed in YAML.
+The [official v2 JSON Schema](https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json) checks supported fields and values. The [configuration reference](https://docs.coderabbit.ai/reference/configuration) and trigger documentation supply the behavioral interpretation.
 
-Local schema validation does not establish that the hosted service loaded the file or skipped an event. No real CodeRabbit request or service skip test was performed. Local workflow validation and execution of its commands do not establish remote runner success; the parent must inspect an actual Actions run after pushing. No push or PR was created for validation.
+Local schema validation does not establish that the hosted service loaded the file or skipped an event. Local workflow validation and execution of its commands do not establish remote runner success; inspect an actual Actions run after pushing.

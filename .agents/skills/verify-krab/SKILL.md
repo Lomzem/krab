@@ -9,7 +9,7 @@ Read [features/README.md](features/README.md), then the feature being verified. 
 
 ## Launch
 
-Prerequisites: Bun 1.4.4, the repository's Node version, Docker running, and the Playwright image already pulled: `mcr.microsoft.com/playwright:v<installed @playwright/test version>-noble`, resolved by `scripts/playwright-image.ts`. From a fresh checkout:
+Prerequisites: the Bun and Node versions in `package.json` and `.node-version`, Docker running, and the Playwright image already pulled: `mcr.microsoft.com/playwright:v<installed @playwright/test version>-noble`, resolved by `scripts/playwright-image.ts`. From a fresh checkout:
 
 ```sh
 bun install --frozen-lockfile
@@ -19,7 +19,7 @@ bun scripts/verify-krab/run.ts
 
 The executable helper reuses `scripts/e2e-container.ts`: build the static app with `bun run build` and again with `bun run build:next`, mount this checkout at `/work`, run as the host UID/GID, and use the checkout's dependencies. The custom Playwright config launches `vite preview --host 127.0.0.1 --port 4173 --strictPort`. Readiness requires the HTTP response followed by the visible first-launch location explanation. Each journey starts with empty localStorage and IndexedDB in a fresh browser context. There is no account, backend, migration or seed step: Krab creates its IndexedDB schema on first use.
 
-Launch, doctor, drive, evidence copy and cleanup are one bounded command. Success is eleven passed journeys (placing a drop from Map and from Gear, a drop with location denied, finding gear on the Map tab, NOAA chart alignment, collecting, drop details, the compass toggle without an iPhone compass, an overnight trip with the Map filter, ending a trip, and past trips), exit 0, and `Evidence retained after cleanup: <absolute path>`. Build/test output is saved to `run.log` at that path.
+Launch, doctor, drive, evidence copy and cleanup are one bounded command. Success is every configured journey passing, exit 0, and `Evidence retained after cleanup: <absolute path>`. Build/test output is saved to `run.log` at that path.
 
 Isolation: container network and fresh browser contexts isolate other checkouts. In one checkout, `test-results/verify-krab-lock` excludes another verification run. An occupied container preview port fails the run; Playwright never reuses another server. Avoid running another build in this checkout during verification.
 
@@ -37,9 +37,9 @@ This requires exactly one active container matching this checkout and the pinned
 
 ## Drive
 
-The executable recipes are `scripts/verify-krab/placing-drop.ts`, `scripts/verify-krab/finding-gear.ts`, `scripts/verify-krab/collecting.ts`, `scripts/verify-krab/drop-details.ts`, `scripts/verify-krab/compass.ts`, `scripts/verify-krab/days-and-filter.ts` and `scripts/verify-krab/end-and-past-trips.ts`, configured by `scripts/verify-krab.config.ts` and sharing the evidence recorder in `scripts/verify-krab/evidence.ts`. Invoke it through `bun scripts/verify-krab/run.ts` so build, Docker checks, evidence retention and teardown all run. The recipes use the existing `iPhone 17` WebKit project, grant geolocation, and supply only the fictional mid-ocean position from `MADE_UP_SEA` in `playwright.config.ts`. The one exception is the chart alignment journey, which samples NOAA tiles at named public landmarks and never sets them as a position or drop.
+[The journey config](../../../scripts/verify-krab.config.ts) selects the executable recipes; [the feature map](features/README.md) describes coverage and limitations. Invoke them through `bun scripts/verify-krab/run.ts` so build, Docker checks, evidence retention and teardown all run. The recipes use the iPhone WebKit project from [playwright.config.ts](../../../playwright.config.ts), grant geolocation, and supply only its fictional mid-ocean `MADE_UP_SEA` position. The chart alignment journey samples NOAA tiles at named public landmarks without setting them as a position or drop.
 
-Follow the feature file's exact roles and accessible names. Drive real UI actions; use page evaluation for read-only observations of real browser IndexedDB and rendered evidence metadata. Never insert trip records or call component state setters to manufacture success.
+Use the executable recipe's accessible roles and names when driving the documented journey. Drive real UI actions; use page evaluation for read-only observations of real browser IndexedDB and rendered evidence metadata. Never insert trip records or call component state setters to manufacture success.
 
 For future permission/offline journeys in this recipe, use fresh contexts: `await context.clearPermissions()` denies location in this WebKit environment (it does not emulate an iOS prompt), `await context.grantPermissions(['geolocation'])` grants it, and `await context.setOffline(true)` / `await context.setOffline(false)` controls network access. The placing-drop recipe drives denied location with `clearPermissions()`; offline reload is not claimed by it. Add the owning ticket's observable requirements before treating them as verified. A missing precondition fails the journey; do not substitute a convenient path.
 
@@ -69,10 +69,8 @@ Playwright stops the preview process group it launched and closes its browser co
 
 Run no kill-by-name commands. After an interrupted wrapper, inspect `docker ps --filter volume="$PWD"` and the scratch receipt before acting. Stop only the container positively identified as this run's (matching checkout, command and launch time) with `docker stop <container-id>`. Copy `test-results/verify-krab-lock` to the chosen evidence root before removing that lock directory. If ownership is uncertain, report it and leave the process alone. Normal failed test iterations go through the same automatic cleanup as successful ones.
 
-## Helpers
+## Upkeep
 
-The skill also owns `scripts/verify-krab/bundle.ts` (source attribution and evidence indexing), `scripts/verify-krab.visual.config.ts` and `scripts/verify-krab/visual-states.ts`; their supported invocation is documented in [visual-review.md](visual-review.md).
+The runner and its [journey config](../../../scripts/verify-krab.config.ts) own launch and recipe selection; [visual-review.md](visual-review.md) owns visual capture guidance. Playwright consumes the configs and recipes; run the bounded wrapper rather than individual recipe files. Preview uses the image's Node because Bun is supplied by the host.
 
-All shipped TypeScript helpers are executable. The supported complete invocation is `bun scripts/verify-krab/run.ts`. That runs the existing `bun run scripts/e2e-container.ts --config scripts/verify-krab.config.ts`; Playwright then launches `node scripts/verify-krab/preview.ts` and executes `scripts/verify-krab/placing-drop.ts`, `scripts/verify-krab/finding-gear.ts`, `scripts/verify-krab/collecting.ts`, `scripts/verify-krab/drop-details.ts`, `scripts/verify-krab/compass.ts`, `scripts/verify-krab/days-and-filter.ts` and `scripts/verify-krab/end-and-past-trips.ts`. The doctor is also called by the recipe before each drive. The config and recipe are consumed by Playwright, not standalone Bun programs. Preview uses the image's Node because Bun is supplied by the host, not installed in the image.
-
-As features change, use `/maintain-verification-skill` in Claude Code or `$maintain-verification-skill` in Codex to keep this map and its runnable recipes current.
+As features change, use `/maintain-verification-skill` in Claude Code or `$maintain-verification-skill` in Codex to reconcile the feature map and runnable recipes. Real-device coverage is recorded through the [device checklist](features/device-checks.md).
