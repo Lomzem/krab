@@ -27,9 +27,9 @@ import {
   endTrip,
   gearName,
   findDrop,
-  pastOf,
   restoreDrop,
   switchKind,
+  tripsOf,
   uncollectDrop,
   withoutDrop
 } from './rules';
@@ -40,7 +40,7 @@ import {
   type TripStorage
 } from './storage';
 import type { DropTarget, FoundDrop } from './rules';
-import type { Deletion, DropEdit, Kind, Trip, TripDeps } from './types';
+import type { Deletion, DropEdit, Kind, Trip, TripDeps, Trips } from './types';
 
 export type {
   Catch,
@@ -56,7 +56,8 @@ export type {
   Position,
   PositionSource,
   Trip,
-  TripDeps
+  TripDeps,
+  Trips
 } from './types';
 export {
   AnotherTripActive,
@@ -74,7 +75,6 @@ export {
   TripNotFound
 };
 export type { DropAttempt, DropPhase, PlacedDrop };
-export { pastOf };
 export {
   canChangeKind,
   canDropAgain,
@@ -127,7 +127,7 @@ export type DeletedDrop = {
 };
 
 export type TripBook = {
-  activeTrip: () => Effect.Effect<Trip | null, StorageFailed>;
+  trips: () => Effect.Effect<Trips, StorageFailed>;
   placeDrop: (target: DropTarget) => DropAttempt;
   undoDrop: (dropId: string) => Effect.Effect<Trip | null, StorageFailed>;
   saveDrop: (
@@ -161,7 +161,6 @@ export type TripBook = {
   endTrip: (
     tripId: string
   ) => Effect.Effect<Trip, TripNotFound | StorageFailed>;
-  pastTrips: () => Effect.Effect<readonly Trip[], StorageFailed>;
   deleteTrip: (
     tripId: string
   ) => Effect.Effect<void, TripNotEnded | StorageFailed>;
@@ -194,7 +193,7 @@ const collection = (
 };
 
 const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
-  activeTrip: () => Effect.map(storage.readTrips(), activeOf),
+  trips: () => Effect.map(storage.readTrips(), tripsOf),
   placeDrop: (target) => startDrop(deps, storage, target),
   undoDrop: (dropId) =>
     storage.readModifyWrite((trips) => {
@@ -286,7 +285,6 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
         );
       });
     }),
-  pastTrips: () => Effect.map(storage.readTrips(), pastOf),
   deleteTrip: (tripId) =>
     storage.readModifyWrite<undefined, TripNotEnded>((trips) => {
       const trip = tripIn(trips, tripId);
@@ -302,4 +300,9 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
 });
 
 export const tripBook = (deps: TripDeps): TripBook =>
-  bookFor(deps, tripStorage(deps.idb));
+  bookFor(
+    deps,
+    tripStorage(deps.idb, (trips) => {
+      deps.stored(tripsOf(trips));
+    })
+  );

@@ -85,10 +85,13 @@ export type PositionSource = {
   subscribe: (listener: () => void) => () => void;
 };
 
+export type Trips = { active: Trip | null; past: readonly Trip[] };
+
 export type TripDeps = {
   clock: Clock;
   positions: PositionSource;
   idb: IDBFactory;
+  stored: (trips: Trips) => void;
 };
 
 export type DropDetails = Pick<Drop, 'label' | 'bait' | 'depthFt' | 'notes'>;

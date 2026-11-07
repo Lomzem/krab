@@ -104,6 +104,32 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(label).toHaveValue('red float');
 });
 
+test('deleting a drop right after closing another gear sheet returns focus to Drop, not to the other gear', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Position ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await gearRow(page, 'Pot 2').click();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(gearRow(page, 'Pot 2')).toBeFocused();
+
+  await gearRow(page, 'Pot 1').click();
+  await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
+  await expect(sheet).toBeHidden();
+  await expect(toastOf(page)).toContainText('Pot 1 deleted');
+  await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
+});
+
 test('deleting a drop already deleted in another tab closes the sheet without an error and drops its row', async ({
   page,
   context

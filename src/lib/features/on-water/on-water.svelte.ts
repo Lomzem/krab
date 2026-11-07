@@ -1,7 +1,6 @@
 import { Effect, Exit, Result } from 'effect';
 import {
   findDrop,
-  pastOf,
   tripBook,
   type AnotherTripActive,
   type CannotDropAgain,
@@ -23,7 +22,7 @@ import {
   type PlacedDrop,
   type PositionSource,
   type StorageFailed,
-  type Trip,
+  type Trips,
   type TripBook
 } from '#lib/features/trip/index.js';
 
@@ -130,21 +129,36 @@ const askToPersist = () => {
 };
 
 export class OnWater {
-  trip = $state.raw<Trip | null>(null);
-  past = $state.raw<readonly Trip[]>([]);
+  #trips = $state.raw<Trips>({ active: null, past: [] });
   load = $state<Load>('opening');
   notice = $state.raw<Notice | null>(null);
   pending = $state.raw<PendingDrop | null>(null);
   #saving = $state.raw<readonly string[]>([]);
   readonly #book: TripBook;
-  #loads = 0;
-  #reloading = false;
+  #shown = 0;
   #persistAsked = false;
   #noticeKey = 0;
 
   constructor(positions: PositionSource) {
-    this.#book = tripBook({ clock, positions, idb: indexedDB });
+    this.#book = tripBook({
+      clock,
+      positions,
+      idb: indexedDB,
+      stored: (trips) => {
+        this.#trips = trips;
+        this.load = 'ready';
+        this.#shown += 1;
+      }
+    });
     void this.reload();
+  }
+
+  get trip() {
+    return this.#trips.active;
+  }
+
+  get past() {
+    return this.#trips.past;
   }
 
   drop(kind: Kind) {
@@ -165,9 +179,10 @@ export class OnWater {
     const unfollow = attempt.subscribe(() => {
       this.pending = { kind, attempt, phase: attempt.phase(), waited };
     });
-    const outcome = await Effect.runPromise(Effect.result(attempt.result));
-    unfollow();
-    this.pending = null;
+    const outcome = await resultOf(attempt.result).finally(() => {
+      unfollow();
+      this.pending = null;
+    });
     this.#settle(outcome);
     return true;
   }
@@ -197,7 +212,6 @@ export class OnWater {
       return;
     }
     const placed = outcome.success;
-    this.#publish(placed.trip.id, placed.trip);
     this.#say(droppedText(placed), {
       action: 'undo-drop',
       dropId: placed.drop.id,
@@ -230,8 +244,6 @@ export class OnWater {
         this.#say("Couldn't undo. Try again.", undo);
         return true;
       }
-      this.trip = exit.value;
-      this.#reconcile();
       this.#say(`${undo.name} removed`);
       return true;
     }
@@ -240,7 +252,6 @@ export class OnWater {
       this.#say(...restoreFailure(restored.failure._tag, undo));
       return true;
     }
-    this.#publish(restored.success.trip.id, restored.success.trip);
     this.#say(`${undo.name} restored`);
     return true;
   }
@@ -258,9 +269,8 @@ export class OnWater {
       this.#saving = this.#saving.filter((_, index) => index !== at);
     });
     if (Result.isFailure(saved)) return PROBLEMS[saved.failure._tag];
-    const { trip } = saved.success;
-    this.#publish(trip.id, trip);
-    if (findDrop([trip], dropId)?.drop.catch) this.#retireCollectUndo(dropId);
+    if (findDrop([saved.success.trip], dropId)?.drop.catch)
+      this.#retireCollectUndo(dropId);
     return null;
   }
 
@@ -275,7 +285,6 @@ export class OnWater {
       return;
     }
     const { name, changed } = collected.success;
-    this.#publish(collected.success.trip.id, collected.success.trip);
     if (changed)
       this.#say(`${name} collected`, { action: 'undo-collect', dropId, name });
   }
@@ -293,7 +302,6 @@ export class OnWater {
       );
       return;
     }
-    this.#publish(undone.success.trip.id, undone.success.trip);
     if (undone.success.changed) {
       this.#say(
         recorded
@@ -323,8 +331,7 @@ export class OnWater {
       this.#say("Couldn't delete the drop. Try again.");
       return false;
     }
-    const { trip, name, deletion } = deleted.success;
-    this.#publish(deletion.trip.id, trip);
+    const { name, deletion } = deleted.success;
     this.#say(`${name} deleted`, { action: 'restore', deletion, name });
     return true;
   }
@@ -336,7 +343,7 @@ export class OnWater {
       this.#say("Couldn't end the trip. Try again.");
       return false;
     }
-    this.#publish(tripId, Result.isSuccess(ended) ? ended.success : null);
+    if (Result.isFailure(ended)) void this.reload();
     this.#say('Trip ended. It is under Past trips.');
     return true;
   }
@@ -347,7 +354,6 @@ export class OnWater {
       this.#say("Couldn't delete the trip. Try again.");
       return false;
     }
-    this.#publish(tripId, null);
     this.#say('Trip deleted');
     return true;
   }
@@ -357,35 +363,9 @@ export class OnWater {
   }
 
   async reload() {
-    this.#loads += 1;
-    const loading = this.#loads;
-    this.#reloading = true;
-    const loaded = await resultOf(
-      Effect.all([this.#book.activeTrip(), this.#book.pastTrips()])
-    );
-    if (loading !== this.#loads) return;
-    this.#reloading = false;
-    if (Result.isFailure(loaded)) {
-      this.load = 'failed';
-      return;
-    }
-    [this.trip, this.past] = loaded.success;
-    this.load = 'ready';
-  }
-
-  #reconcile() {
-    if (this.load !== 'ready' || this.#reloading) void this.reload();
-  }
-
-  #publish(tripId: string, trip: Trip | null) {
-    this.#reconcile();
-    if (trip?.endedAt === null) {
-      this.trip = trip;
-      return;
-    }
-    if (this.trip?.id === tripId) this.trip = null;
-    const others = this.past.filter((item) => item.id !== tripId);
-    this.past = trip ? pastOf([...others, trip]) : others;
+    const shown = this.#shown;
+    const loaded = await resultOf(this.#book.trips());
+    if (Result.isFailure(loaded) && shown === this.#shown) this.load = 'failed';
   }
 
   #say(text: string, offer: Offer = { action: 'none' }) {

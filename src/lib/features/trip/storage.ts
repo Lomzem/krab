@@ -55,13 +55,24 @@ export type Plan<A, E> = (
   trips: readonly Trip[]
 ) => Result.Result<Change<A>, E>;
 
-type Started = { tx: IDBTransaction; store: IDBObjectStore; read: IDBRequest };
+type Started = {
+  tx: IDBTransaction;
+  order: number;
+  store: IDBObjectStore;
+  read: IDBRequest;
+};
 
-const readAll = (tx: IDBTransaction) =>
+type Created = Pick<Started, 'tx' | 'order'>;
+
+type Committed = (order: number, trips: readonly Trip[]) => void;
+
+type Written<A> = { result: A; trips: readonly Trip[] };
+
+const readAll = ({ tx, order }: Created) =>
   Effect.try({
     try: (): Started => {
       const store = tx.objectStore(TRIPS);
-      return { tx, store, read: store.getAll() };
+      return { tx, order, store, read: store.getAll() };
     },
     catch: (cause) => {
       abortQuietly(tx);
@@ -69,18 +80,40 @@ const readAll = (tx: IDBTransaction) =>
     }
   });
 
-const begin = (db: IDBDatabase, mode: IDBTransactionMode) =>
+const begin = (
+  db: IDBDatabase,
+  mode: IDBTransactionMode,
+  number: () => number
+) =>
   Effect.flatMap(
-    Effect.try({ try: () => db.transaction(TRIPS, mode), catch: failed }),
+    Effect.try({
+      try: (): Created => ({
+        tx: db.transaction(TRIPS, mode),
+        order: number()
+      }),
+      catch: failed
+    }),
     readAll
   );
 
-const apply = <A>(store: IDBObjectStore, change: Change<A>) =>
+const changed = <A>(trips: readonly Trip[], change: Change<A>) => {
+  const replaced = new Set([
+    ...change.remove,
+    ...change.put.map((trip) => trip.id)
+  ]);
+  return [...trips.filter((trip) => !replaced.has(trip.id)), ...change.put];
+};
+
+const apply = <A>(
+  store: IDBObjectStore,
+  trips: readonly Trip[],
+  change: Change<A>
+) =>
   Result.try({
-    try: () => {
+    try: (): Written<A> => {
       for (const trip of change.put) store.put(trip);
       for (const id of change.remove) store.delete(id);
-      return change.result;
+      return { result: change.result, trips: changed(trips, change) };
     },
     catch: failed
   });
@@ -95,34 +128,45 @@ const writeChange = <A, E>(
   store: IDBObjectStore,
   plan: Plan<A, E>,
   rows: unknown
-): Result.Result<A, E | StorageFailed> =>
+): Result.Result<Written<A>, E | StorageFailed> =>
   Result.flatMap(Result.mapError(parseTrips(rows), failed), (trips) =>
-    Result.flatMap(decide(plan, trips), (change) => apply(store, change))
+    Result.flatMap(decide(plan, trips), (change) => apply(store, trips, change))
   );
 
-const finish = <A, E>({ tx, store, read }: Started, plan: Plan<A, E>) =>
+const finish = <A, E>(
+  { tx, order, store, read }: Started,
+  plan: Plan<A, E>,
+  committed: Committed
+) =>
   Effect.callback<A, E | StorageFailed>((resume) => {
-    let outcome: Result.Result<A, E | StorageFailed> | null = null;
-    read.onsuccess = () => {
-      outcome = writeChange(store, plan, read.result);
-      if (Result.isFailure(outcome)) abortQuietly(tx);
-    };
-    tx.oncomplete = () => {
-      resume(
-        outcome && Result.isSuccess(outcome)
-          ? Effect.succeed(outcome.success)
-          : Effect.fail(outcome?.failure ?? failed(tx.error))
-      );
-    };
-    tx.onabort = () => {
-      resume(
-        Effect.fail(
-          outcome && Result.isFailure(outcome)
-            ? outcome.failure
-            : failed(tx.error)
-        )
-      );
-    };
+    let outcome: Result.Result<Written<A>, E | StorageFailed> | null = null;
+    const watched = Result.try({
+      try: () => {
+        tx.oncomplete = () => {
+          if (!outcome || Result.isFailure(outcome)) {
+            resume(Effect.fail(outcome?.failure ?? failed(tx.error)));
+            return;
+          }
+          committed(order, outcome.success.trips);
+          resume(Effect.succeed(outcome.success.result));
+        };
+        tx.onabort = () => {
+          resume(
+            Effect.fail(
+              outcome && Result.isFailure(outcome)
+                ? outcome.failure
+                : failed(tx.error)
+            )
+          );
+        };
+        read.onsuccess = () => {
+          outcome = writeChange(store, plan, read.result);
+          if (Result.isFailure(outcome)) abortQuietly(tx);
+        };
+      },
+      catch: failed
+    });
+    if (Result.isFailure(watched)) resume(Effect.fail(watched.failure));
   });
 
 const isClosed = (failure: unknown) =>
@@ -137,7 +181,30 @@ export type TripStorage = {
   readTrips: () => Effect.Effect<readonly Trip[], StorageFailed>;
 };
 
-export const tripStorage = (idb: IDBFactory): TripStorage => {
+const isolated =
+  (stored: (trips: readonly Trip[]) => void) => (trips: readonly Trip[]) => {
+    const told = Result.try(() => {
+      stored(trips);
+    });
+    if (Result.isFailure(told)) reportError(told.failure);
+  };
+
+export const tripStorage = (
+  idb: IDBFactory,
+  stored: (trips: readonly Trip[]) => void
+): TripStorage => {
+  const tell = isolated(stored);
+  let created = 0;
+  let shown = 0;
+  const committed: Committed = (order, trips) => {
+    if (order <= shown) return;
+    shown = order;
+    tell(trips);
+  };
+  const number = () => {
+    created += 1;
+    return created;
+  };
   let current: IDBDatabase | null = null;
   const forget = (db: IDBDatabase) => {
     if (current === db) current = null;
@@ -166,8 +233,8 @@ export const tripStorage = (idb: IDBFactory): TripStorage => {
     });
   const transact = <A, E>(mode: IDBTransactionMode, plan: Plan<A, E>) =>
     Effect.flatMap(connection, (db) =>
-      begin(db, mode).pipe(
-        Effect.flatMap((started) => finish(started, plan)),
+      begin(db, mode, number).pipe(
+        Effect.flatMap((started) => finish(started, plan, committed)),
         Effect.tapError(forgetIfClosed(db))
       )
     );

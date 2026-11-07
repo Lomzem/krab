@@ -19,7 +19,8 @@ const placedBook = async () => {
       denied: () => true,
       subscribe: () => () => undefined
     },
-    idb: new IDBFactory()
+    idb: new IDBFactory(),
+    stored: () => undefined
   });
   const placed = await Effect.runPromise(
     book.placeDrop({ kind: 'pot' }).result
@@ -33,7 +34,7 @@ const saveDepth = async (typed: string) => {
   const saved = await Effect.runPromise(
     Effect.result(book.saveDrop(dropId, edit, null))
   );
-  const stored = await Effect.runPromise(book.activeTrip());
+  const stored = (await Effect.runPromise(book.trips())).active;
   return {
     refused: saved._tag === 'Failure' ? saved.failure._tag : null,
     depthFt: stored?.drops[0]?.depthFt
@@ -46,7 +47,7 @@ const saveCatch = async (typed: CatchDraft | null) => {
   const saved = await Effect.runPromise(
     Effect.result(book.saveDrop(dropId, editOf(emptyDraft(), typed), null))
   );
-  const stored = await Effect.runPromise(book.activeTrip());
+  const stored = (await Effect.runPromise(book.trips())).active;
   return {
     refused: saved._tag === 'Failure' ? saved.failure._tag : null,
     catch: stored?.drops[0]?.catch

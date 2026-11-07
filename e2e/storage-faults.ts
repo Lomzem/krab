@@ -11,7 +11,7 @@ type Completed = ((this: IDBTransaction, event: Event) => void) | null;
 type HeldRead = {
   holdNextRead?: boolean;
   releaseRead?: () => void;
-  readsDone?: number;
+  heldDelivered?: boolean;
 };
 
 export const injectStorageFaults = (page: Page) =>
@@ -19,7 +19,6 @@ export const injectStorageFaults = (page: Page) =>
     const failing = (fault: StorageFault) =>
       sessionStorage.getItem(flag) === fault;
     const held = window as HeldRead;
-    held.readsDone = 0;
     const database = IDBDatabase.prototype;
     const begin = Reflect.get(database, 'transaction') as Begin;
     const abort = (tx: IDBTransaction) => () => {
@@ -29,6 +28,10 @@ export const injectStorageFaults = (page: Page) =>
       let handler: Completed = null;
       let completed: Event | null = null;
       let released = false;
+      const deliver = (event: Event) => {
+        handler?.call(tx, event);
+        held.heldDelivered = true;
+      };
       Object.defineProperty(tx, 'oncomplete', {
         configurable: true,
         get: () => handler,
@@ -38,11 +41,11 @@ export const injectStorageFaults = (page: Page) =>
       });
       tx.addEventListener('complete', (event) => {
         completed = event;
-        if (released) handler?.call(tx, event);
+        if (released) deliver(event);
       });
       held.releaseRead = () => {
         released = true;
-        if (completed) handler?.call(tx, completed);
+        if (completed) deliver(completed);
       };
     };
     const refuseCompletion = (tx: IDBTransaction) => {
@@ -62,12 +65,10 @@ export const injectStorageFaults = (page: Page) =>
         if (failing('defect')) refuseCompletion(tx);
         return tx;
       }
-      tx.addEventListener('complete', () => {
-        held.readsDone = (held.readsDone ?? 0) + 1;
-      });
       if (failing('reads')) queueMicrotask(abort(tx));
       if (held.holdNextRead) {
         held.holdNextRead = false;
+        held.heldDelivered = false;
         holdCompletion(tx);
       }
       return tx;
@@ -133,16 +134,10 @@ export const holdNextRead = (page: Page) =>
   });
 
 export const releaseHeldRead = async (page: Page) => {
-  const before = await page.evaluate(() => {
-    const held = window as HeldRead;
-    const done = held.readsDone ?? 0;
-    held.releaseRead?.();
-    return done;
+  await page.evaluate(() => {
+    (window as HeldRead).releaseRead?.();
   });
-  await page.waitForFunction(
-    (done) => ((window as HeldRead).readsDone ?? 0) > done,
-    before
-  );
+  await page.waitForFunction(() => (window as HeldRead).heldDelivered);
   await page.evaluate(
     () =>
       new Promise((settled) => {
