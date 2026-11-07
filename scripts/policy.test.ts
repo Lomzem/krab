@@ -9,7 +9,7 @@ import {
 } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = await mkdtemp(join(tmpdir(), 'krab-policy-'));
@@ -22,7 +22,7 @@ type PolicyCase = {
   file: string;
   valid: string;
   invalid: string;
-  command: string;
+  command: 'lint' | 'check' | 'format:check';
   diagnostic: string;
   risk: string;
 };
@@ -210,7 +210,7 @@ const cases: PolicyCase[] = [
     file,
     valid,
     invalid,
-    command: 'lint',
+    command: 'lint' as const,
     diagnostic: 'policy/no-comments',
     risk: 'Configuration parser is absent or confuses strings with comments'
   })),
@@ -335,29 +335,61 @@ await cp(source, root, {
     )
 });
 await symlink(join(source, 'node_modules'), join(root, 'node_modules'));
-for (const row of cases) {
-  const original = row.file === 'bun.lock' ? lockfile : undefined;
-  for (const [text, expected] of [
-    [row.valid, 0],
-    [row.invalid, 1]
+const fixtures = cases.map((row, index) => ({
+  ...row,
+  file:
+    row.file === 'bun.lock'
+      ? row.file
+      : join(dirname(row.file), `policy-${String(index)}-${basename(row.file)}`)
+}));
+const batches = [
+  fixtures.filter((row) => row.diagnostic === 'policy/no-comments'),
+  fixtures.filter(
+    (row) => row.command === 'lint' && row.diagnostic !== 'policy/no-comments'
+  ),
+  fixtures.filter((row) => row.command === 'check'),
+  fixtures.filter((row) => row.command === 'format:check')
+];
+function diagnosticFor(row: PolicyCase, output: string) {
+  if (row.command !== 'lint') return output;
+  if (row.diagnostic === 'policy/no-comments')
+    return output.split('\n').find((line) => line.startsWith(`${row.file}:`));
+  return output
+    .split('\n\n')
+    .find((block) => block.includes(join(root, row.file)));
+}
+for (const batch of batches) {
+  const first = batch[0];
+  assert.ok(first, 'Every policy command must have fixtures');
+  for (const [variant, expected] of [
+    ['valid', 0],
+    ['invalid', 1]
   ] as const) {
-    await writeFile(join(root, row.file), text);
-    const result = spawnSync('bun', ['run', row.command], {
+    for (const row of batch)
+      await writeFile(join(root, row.file), row[variant]);
+    const result = spawnSync('bun', ['run', first.command], {
       cwd: root,
       encoding: 'utf8'
     });
     const output = result.stdout + result.stderr;
-    assert.equal(result.status, expected, `${row.name}: ${output}`);
-    if (expected === 1)
-      assert.ok(output.includes(row.diagnostic), `${row.name}: ${output}`);
-    assert.equal(
-      await readFile(join(root, row.file), 'utf8'),
-      text,
-      `${row.name}: check rewrote input`
-    );
-    if (original === undefined) await rm(join(root, row.file));
-    else await writeFile(join(root, row.file), original);
+    assert.equal(result.status, expected, `${first.command}: ${output}`);
+    for (const row of batch) {
+      assert.ok(
+        expected === 0 || diagnosticFor(row, output)?.includes(row.diagnostic),
+        `${row.name}: missing file-specific diagnostic: ${output}`
+      );
+      assert.equal(
+        await readFile(join(root, row.file), 'utf8'),
+        row[variant],
+        `${row.name}: check rewrote input`
+      );
+    }
   }
-  console.log(`PASS ${row.name}`);
+  for (const row of batch) {
+    if (row.file === 'bun.lock')
+      await writeFile(join(root, row.file), lockfile);
+    else await rm(join(root, row.file));
+    console.log(`PASS ${row.name}`);
+  }
 }
 await rm(root, { recursive: true, force: true });
