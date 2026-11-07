@@ -103,26 +103,32 @@ const writeChange = <A, E>(
 const finish = <A, E>({ tx, store, read }: Started, plan: Plan<A, E>) =>
   Effect.callback<A, E | StorageFailed>((resume) => {
     let outcome: Result.Result<A, E | StorageFailed> | null = null;
-    read.onsuccess = () => {
-      outcome = writeChange(store, plan, read.result);
-      if (Result.isFailure(outcome)) abortQuietly(tx);
-    };
-    tx.oncomplete = () => {
-      resume(
-        outcome && Result.isSuccess(outcome)
-          ? Effect.succeed(outcome.success)
-          : Effect.fail(outcome?.failure ?? failed(tx.error))
-      );
-    };
-    tx.onabort = () => {
-      resume(
-        Effect.fail(
-          outcome && Result.isFailure(outcome)
-            ? outcome.failure
-            : failed(tx.error)
-        )
-      );
-    };
+    const watched = Result.try({
+      try: () => {
+        tx.oncomplete = () => {
+          resume(
+            outcome && Result.isSuccess(outcome)
+              ? Effect.succeed(outcome.success)
+              : Effect.fail(outcome?.failure ?? failed(tx.error))
+          );
+        };
+        tx.onabort = () => {
+          resume(
+            Effect.fail(
+              outcome && Result.isFailure(outcome)
+                ? outcome.failure
+                : failed(tx.error)
+            )
+          );
+        };
+        read.onsuccess = () => {
+          outcome = writeChange(store, plan, read.result);
+          if (Result.isFailure(outcome)) abortQuietly(tx);
+        };
+      },
+      catch: failed
+    });
+    if (Result.isFailure(watched)) resume(Effect.fail(watched.failure));
   });
 
 const isClosed = (failure: unknown) =>

@@ -4,6 +4,7 @@ import {
   holdStorage,
   releaseStorage,
   storedCollections,
+  storedDrops,
   test,
   toastOf
 } from './fixtures';
@@ -671,4 +672,47 @@ test('a failed save offers Retry and Dismiss until one is chosen, and Retry save
   const rows = page.getByRole('main').getByRole('listitem');
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText('Pot 1');
+});
+
+test('a drop that stops on an unexpected storage error offers Retry with Drop usable again, a Retry that stops the same way says so again, and Retry saves the drop once storage works', async ({
+  page
+}) => {
+  const failedSave = toastOf(page).filter({
+    hasText: "Couldn't save the drop, so nothing was saved."
+  });
+  const retry = failedSave.getByRole('button', { name: 'Retry' });
+  const saved = toastOf(page).filter({ hasText: 'Pot 1 dropped' });
+  const shownAfterStorageSettles = async (toast: Locator) => {
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(0);
+        return toast.count();
+      })
+      .toBe(1);
+  };
+  const errors: Error[] = [];
+  page.on('pageerror', (error) => errors.push(error));
+
+  await injectStorageFaults(page);
+  await openWithPausedClock(page);
+  await failStorage(page, 'defect');
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await shownAfterStorageSettles(failedSave);
+  await expect(
+    page.getByRole('button', { name: 'Drop pot' }),
+    'A drop that ended without storing must leave Drop usable.'
+  ).toBeVisible();
+
+  await retry.click();
+  await shownAfterStorageSettles(failedSave);
+  expect(await storedDrops(page)).toBe(0);
+
+  await failStorage(page, null);
+  await retry.click();
+  await shownAfterStorageSettles(saved);
+  expect(await storedDrops(page)).toBe(1);
+  expect(
+    errors,
+    'The handled storage error must not reach the page as an unhandled error.'
+  ).toEqual([]);
 });

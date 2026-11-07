@@ -165,9 +165,10 @@ export class OnWater {
     const unfollow = attempt.subscribe(() => {
       this.pending = { kind, attempt, phase: attempt.phase(), waited };
     });
-    const outcome = await Effect.runPromise(Effect.result(attempt.result));
-    unfollow();
-    this.pending = null;
+    const outcome = await resultOf(attempt.result).finally(() => {
+      unfollow();
+      this.pending = null;
+    });
     this.#settle(outcome);
     return true;
   }
