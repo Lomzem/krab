@@ -16,7 +16,8 @@ import {
   type Gear,
   type Kind,
   type Located,
-  type Trip
+  type Trip,
+  type Trips
 } from './types';
 
 export const KINDS: readonly Kind[] = ['pot', 'net'];
@@ -29,6 +30,11 @@ export const pastOf = (trips: readonly Trip[]) =>
   trips
     .filter((trip) => trip.endedAt !== null)
     .sort((a, b) => b.startedAt - a.startedAt);
+
+export const tripsOf = (trips: readonly Trip[]): Trips => ({
+  active: activeOf(trips),
+  past: pastOf(trips)
+});
 
 export const endTrip = (trip: Trip, at: number): Trip | null =>
   trip.endedAt === null ? { ...trip, endedAt: at } : null;

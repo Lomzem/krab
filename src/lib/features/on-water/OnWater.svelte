@@ -197,17 +197,21 @@
     });
   };
 
-  const opensFrom =
-    (from: SheetOrigin['from']) => (dropId: string, opener: HTMLElement) => {
-      sheet = { dropId, from, opener };
-    };
-
   let returnTo: HTMLElement | null = null;
   let returnDrop: string | null = null;
 
+  const openSheet = (origin: SheetOrigin) => {
+    sheet = origin;
+    returnTo = origin.opener;
+    returnDrop = origin.dropId;
+  };
+
+  const opensFrom =
+    (from: SheetOrigin['from']) => (dropId: string, opener: HTMLElement) => {
+      openSheet({ dropId, from, opener });
+    };
+
   const closeSheet = () => {
-    returnTo = sheet?.opener ?? null;
-    returnDrop = sheet?.dropId ?? null;
     sheet = null;
   };
 
@@ -384,7 +388,7 @@
           pastShow = null;
         }}
         onopen={(dropId: string, opener: HTMLElement, from: 'list' | 'map') => {
-          sheet = { dropId, from, opener };
+          openSheet({ dropId, from, opener });
         }}
         ondelete={(tripId: string) => water.deleteTrip(tripId)}
         onretry={reload}

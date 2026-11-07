@@ -29,7 +29,8 @@ import {
   type NoPosition,
   type Position,
   type Trip,
-  type TripBook
+  type TripBook,
+  type TripDeps
 } from './index';
 
 const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
@@ -37,12 +38,13 @@ const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 const SEA = { lat: 0, lon: -140 };
 
 type Timer = { at: number; wake: () => void };
 
-const harness = () => {
+const harness = (stored: TripDeps['stored'] = () => undefined) => {
   const state: { now: number; fix: Fix | null; denied: boolean } = {
     now: T0,
     fix: { ...SEA, accuracyM: 5, at: T0 },
@@ -76,7 +78,8 @@ const harness = () => {
         return () => listeners.delete(listener);
       }
     },
-    idb
+    idb,
+    stored
   };
   const tell = () => {
     for (const listener of [...listeners]) listener();
@@ -100,7 +103,7 @@ const harness = () => {
   };
   const open = async () => {
     const book = tripBook(deps);
-    await Effect.runPromise(book.activeTrip());
+    await Effect.runPromise(activeIn(book));
     return book;
   };
   const listening = () => listeners.size;
@@ -168,6 +171,12 @@ const withStoredTrips = async <A>(
 };
 
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect);
+
+const activeIn = (book: TripBook) =>
+  Effect.map(book.trips(), (trips) => trips.active);
+
+const pastIn = (book: TripBook) =>
+  Effect.map(book.trips(), (trips) => trips.past);
 
 const place = async (book: TripBook, kind: 'pot' | 'net') =>
   run(book.placeDrop({ kind }).result);
@@ -268,6 +277,29 @@ const drain = () =>
     setTimeout(resolve, 10);
   });
 
+it('keeps a committed drop saved and reports it when showing the stored trips throws', async () => {
+  const broken = new Error('showing trips broke');
+  const reported: unknown[] = [];
+  vi.stubGlobal('reportError', (error: unknown) => {
+    reported.push(error);
+  });
+  const shown: Trip[][] = [];
+  const { open } = harness((trips) => {
+    shown.push(trips.active ? [trips.active] : []);
+    Effect.runSync(Effect.die(broken));
+  });
+  const book = await open();
+
+  const placed = await run(book.placeDrop({ kind: 'pot' }).result);
+  await drain();
+
+  expect(placed.name).toBe('Pot 1');
+  expect(await run(activeIn(book))).toEqual(placed.trip);
+  expect(shown.at(-1)).toEqual([placed.trip]);
+  expect(reported).toHaveLength(shown.length);
+  expect(String(reported.at(-1))).toContain(broken.message);
+});
+
 it('saves nothing until 20 s after the tap, then saves without a position', async () => {
   const { state, open, advance } = harness();
   state.fix = null;
@@ -276,11 +308,11 @@ it('saves nothing until 20 s after the tap, then saves without a position', asyn
   const attempt = book.placeDrop({ kind: 'net' });
   advance(19_999);
   await drain();
-  expect(await run(book.activeTrip())).toBeNull();
+  expect(await run(activeIn(book))).toBeNull();
 
   advance(1);
   await drain();
-  const saved = await run(book.activeTrip());
+  const saved = await run(activeIn(book));
   expect(saved?.gear).toMatchObject([{ kind: 'net', number: 1 }]);
   expect(saved?.drops).toMatchObject([
     { placedAt: T0, position: null, noPosition: 'no-fix' }
@@ -301,7 +333,7 @@ it('stores nothing when the wait is cancelled, even if a fix arrives later', asy
   const failure = await run(Effect.flip(attempt.result));
   report({ ...SEA, accuracyM: 5, at: state.now });
   advance(20_000);
-  const active = await run(book.activeTrip());
+  const active = await run(activeIn(book));
 
   expect(failure._tag).toBe('DropCancelled');
   expect(attempt.phase()).toBe('settled');
@@ -317,7 +349,7 @@ it('records the skipped reason when saved without a position during the wait', a
   advance(3000);
   attempt.saveWithoutPosition();
   const placed = await run(attempt.result);
-  const active = await run(book.activeTrip());
+  const active = await run(activeIn(book));
 
   expect(placed.drop.placedAt).toBe(T0);
   expect(placed.drop.position).toBeNull();
@@ -399,7 +431,7 @@ it('stores nothing when a save fails, and replaying its Retry saves that drop on
 
   const attempt = book.placeDrop({ kind: 'pot' });
   const failure = await run(Effect.flip(attempt.result));
-  const afterFailure = await run(book.activeTrip());
+  const afterFailure = await run(activeIn(book));
   assert(failure._tag === 'DropNotSaved');
   advance(30_000);
   report({ lat: 0.01, lon: -140, accuracyM: 4, at: state.now });
@@ -409,7 +441,7 @@ it('stores nothing when a save fails, and replaying its Retry saves that drop on
   const concurrent = await run(
     Effect.all([failure.retry, failure.retry], { concurrency: 'unbounded' })
   );
-  const reopened = await run((await open()).activeTrip());
+  const reopened = await run(activeIn(await open()));
   const next = await place(book, 'pot');
 
   expect(afterFailure).toBeNull();
@@ -486,7 +518,7 @@ it('fails a save on a connection that closed as not saved, and Retry saves it on
   const failure = await run(Effect.flip(attempt.result));
   assert(failure._tag === 'DropNotSaved');
   const retried = await run(failure.retry);
-  const reopened = await run((await open()).activeTrip());
+  const reopened = await run(activeIn(await open()));
 
   expect(retried.name).toBe('Pot 1');
   expect(reopened?.drops).toEqual([retried.drop]);
@@ -499,7 +531,7 @@ it('lets another connection delete the database, then saves the next drop on a f
 
   await request(() => idb.deleteDatabase('krab'));
   const next = await place(book, 'net');
-  const reopened = await run((await open()).activeTrip());
+  const reopened = await run(activeIn(await open()));
 
   expect(next.name).toBe('Net 1');
   expect(reopened?.drops).toEqual([next.drop]);
@@ -516,7 +548,7 @@ it('reports a storage error thrown while starting a save as not saved, and leave
 
   const attempt = book.placeDrop({ kind: 'pot' });
   const failure = await run(Effect.flip(attempt.result));
-  const active = await run(book.activeTrip());
+  const active = await run(activeIn(book));
 
   expect(failure._tag).toBe('DropNotSaved');
   expect(active).toBeNull();
@@ -566,7 +598,7 @@ it.each([
       trips.put(contradictory)
     );
 
-    const read = await run(Effect.flip(book.activeTrip()));
+    const read = await run(Effect.flip(activeIn(book)));
     const attempt = book.placeDrop({ kind: 'pot' });
     const failure = await run(Effect.flip(attempt.result));
     const stored = await withStoredTrips(idb, 'readonly', (trips) =>
@@ -634,7 +666,7 @@ it('removes the drop but keeps the trip while other drops remain', async () => {
   const second = await place(book, 'net');
 
   await run(book.undoDrop(second.drop.id));
-  const active = await run(book.activeTrip());
+  const active = await run(activeIn(book));
 
   expect(active?.id).toBe(first.trip.id);
   expect(active?.drops.map((drop) => drop.id)).toEqual([first.drop.id]);
@@ -646,7 +678,7 @@ it('removes the trip with its only drop, so the next drop starts a new trip', as
   const only = await place(book, 'pot');
 
   await run(book.undoDrop(only.drop.id));
-  const afterUndo = await run(book.activeTrip());
+  const afterUndo = await run(activeIn(book));
   const next = await place(book, 'pot');
 
   expect(afterUndo).toBeNull();
@@ -662,7 +694,7 @@ it('restores the active trip from the same database', async () => {
   const net = await place(before, 'net');
 
   const after = await open();
-  const restored = await run(after.activeTrip());
+  const restored = await run(activeIn(after));
 
   expect(restored).toEqual(net.trip);
   expect(restored?.drops.map((drop) => drop.id)).toEqual([
@@ -797,7 +829,7 @@ it('saves trimmed details and rejects a negative or non-numeric depth', async ()
       )
     )
   );
-  const stored = (await run(book.activeTrip()))?.drops[0];
+  const stored = (await run(activeIn(book)))?.drops[0];
 
   expect(rejected.map((failure) => failure._tag)).toEqual([
     'InvalidDepth',
@@ -850,11 +882,11 @@ it('a Save whose kind is locked because the gear was dropped again stores none o
       Effect.runPromise(Effect.flip(book.saveDrop(dropId, edit, 'net')))
     )
   );
-  const refused = await run(book.activeTrip());
+  const refused = await run(activeIn(book));
   for (const [dropId, edit] of edits) {
     await run(book.saveDrop(dropId, edit, 'pot'));
   }
-  const saved = await run(book.activeTrip());
+  const saved = await run(activeIn(book));
 
   expect(refusals.map((failure) => failure._tag)).toEqual([
     'KindLocked',
@@ -882,7 +914,7 @@ it('restores a deleted drop exactly once, in its original list position', async 
   );
 
   const deleted = await run(book.deleteDrop(middle.drop.id));
-  const during = await run(book.activeTrip());
+  const during = await run(activeIn(book));
   const restored = await run(book.restoreDrop(deleted.deletion));
   await run(book.restoreDrop(deleted.deletion));
 
@@ -893,7 +925,7 @@ it('restores a deleted drop exactly once, in its original list position', async 
   ]);
   expect(during?.gear.map((gear) => gear.kind)).toEqual(['pot', 'pot']);
   expect(restored.name).toBe('Net 1');
-  expect(await run(book.activeTrip())).toEqual(before);
+  expect(await run(activeIn(book))).toEqual(before);
 });
 
 it('removes the trip with its only drop, and restoring brings back the same trip', async () => {
@@ -904,7 +936,7 @@ it('removes the trip with its only drop, and restoring brings back the same trip
 
   const second = await run(book.deleteDrop(pot2.drop.id));
   const only = await run(book.deleteDrop(pot1.drop.id));
-  const emptied = await run(book.activeTrip());
+  const emptied = await run(activeIn(book));
   await run(book.restoreDrop(only.deletion));
   await run(book.restoreDrop(second.deletion));
   const next = await place(book, 'pot');
@@ -928,7 +960,7 @@ it('refuses to restore an emptied active trip after another trip has started', a
   );
 
   expect(refusal._tag).toBe('AnotherTripActive');
-  expect(await run(book.activeTrip())).toEqual(started.trip);
+  expect(await run(activeIn(book))).toEqual(started.trip);
 });
 
 it('restores a drop among its gear by drop time after the drop before it was deleted too, so Drop again stays on the latest', async () => {
@@ -1024,12 +1056,12 @@ it.each<[string, (setup: Restoring) => Promise<Deletion>]>([
     const { open, advance } = withoutLocation();
     const book = await open();
     const deletion = await arrange({ book, advance });
-    const before = await run(book.activeTrip());
+    const before = await run(activeIn(book));
 
     const refusal = await run(Effect.flip(book.restoreDrop(deletion)));
 
     expect(refusal._tag).toBe('DroppedAgain');
-    expect(await run(book.activeTrip())).toEqual(before);
+    expect(await run(activeIn(book))).toEqual(before);
   }
 );
 
@@ -1066,7 +1098,7 @@ it('refuses Drop again and Undo collect on gear a stored trip already has in the
       next: { pot: 2, net: 1 }
     })
   );
-  const before = await run(book.activeTrip());
+  const before = await run(activeIn(book));
   assert(before);
   const later = before.drops[1];
 
@@ -1080,7 +1112,7 @@ it('refuses Drop again and Undo collect on gear a stored trip already has in the
     false
   ]);
   expect([again._tag, undo._tag]).toEqual(['CannotDropAgain', 'DroppedAgain']);
-  expect(await run(book.activeTrip())).toEqual(before);
+  expect(await run(activeIn(book))).toEqual(before);
 });
 
 it('collects at the tap time once, and undo collect puts it back with no catch', async () => {
@@ -1105,7 +1137,7 @@ it('collects at the tap time once, and undo collect puts it back with no catch',
   );
   const undone = await run(book.undoCollect(pot.drop.id));
   const undoneAgain = await run(book.undoCollect(pot.drop.id));
-  const stored = (await run(book.activeTrip()))?.drops[0];
+  const stored = (await run(activeIn(book)))?.drops[0];
 
   expect([collected.name, collected.changed, again.changed]).toEqual([
     'Pot 1',
@@ -1175,7 +1207,7 @@ it('records nothing caught as 0 and 0, apart from not recorded, and only whole c
       )
     )
   );
-  const drops = (await run(book.activeTrip()))?.drops;
+  const drops = (await run(activeIn(book)))?.drops;
 
   expect(refusals.map((failure) => failure._tag)).toEqual([
     'InvalidCatch',
@@ -1212,7 +1244,7 @@ it('drops the same gear again from its latest collected drop with its number, la
       null
     )
   );
-  const collected = await run(book.activeTrip());
+  const collected = await run(activeIn(book));
   const offeredWhenCollected = collected?.drops.map((drop) =>
     canDropAgain(collected, drop)
   );
@@ -1294,7 +1326,7 @@ it('retries a failed drop again into exactly one new drop of the same gear', asy
     failure._tag === 'DropNotSaved'
       ? await Promise.all([run(failure.retry), run(failure.retry)])
       : [];
-  const active = await run(book.activeTrip());
+  const active = await run(activeIn(book));
 
   expect(failure._tag).toBe('DropNotSaved');
   expect(retries.map((placed) => placed.name)).toEqual(['Pot 1', 'Pot 1']);
@@ -1556,11 +1588,11 @@ it('ends the trip once, keeping its gear in the water as uncollected drops, and 
 
   abortNextTransaction();
   const failed = await flip(book.endTrip(pot1.trip.id));
-  const stillRunning = await run(book.activeTrip());
+  const stillRunning = await run(activeIn(book));
   const ended = await run(book.endTrip(pot1.trip.id));
   advance(60_000);
   const again = await run(book.endTrip(pot1.trip.id));
-  const afterEnd = await run(book.activeTrip());
+  const afterEnd = await run(activeIn(book));
   const nextNet = await place(book, 'net');
   const nextPot = await place(book, 'pot');
 
@@ -1570,7 +1602,7 @@ it('ends the trip once, keeping its gear in the water as uncollected drops, and 
   expect(again).toEqual(ended);
   expect(pastTripCounts(ended)).toBe('3 drops, 2 uncollected');
   expect(afterEnd).toBeNull();
-  expect(await run(book.pastTrips())).toEqual([ended]);
+  expect(await run(pastIn(book))).toEqual([ended]);
   expect([nextNet.name, nextPot.name]).toEqual(['Net 1', 'Pot 1']);
   expect(nextPot.trip.id).not.toBe(pot1.trip.id);
 });
@@ -1584,7 +1616,7 @@ it('refuses to end a trip that is gone, such as one whose only drop was undone',
   const refusal = await flip(book.endTrip(only.trip.id));
 
   expect(refusal._tag).toBe('TripNotFound');
-  expect(await run(book.pastTrips())).toEqual([]);
+  expect(await run(pastIn(book))).toEqual([]);
 });
 
 it('never collects or undoes a collect on a past trip, refuses a catch on an uncollected past drop, and saves details and catch on a collected one with its position kept', async () => {
@@ -1620,7 +1652,7 @@ it('never collects or undoes a collect on a past trip, refuses a catch on an unc
     )
   );
   await run(book.saveDrop(net.drop.id, { details, catch: null }, null));
-  const [past] = await run(book.pastTrips());
+  const [past] = await run(pastIn(book));
   const trimmed = {
     label: 'red float',
     bait: 'squid',
@@ -1680,9 +1712,9 @@ it('deletes past drops down to removing the trip, and restoring brings back the 
   const active = await place(book, 'pot');
 
   const second = await run(book.deleteDrop(pot.drop.id));
-  const kept = await run(book.pastTrips());
+  const kept = await run(pastIn(book));
   const only = await run(book.deleteDrop(net.drop.id));
-  const emptied = await run(book.pastTrips());
+  const emptied = await run(pastIn(book));
   const restored = await run(book.restoreDrop(only.deletion));
   await run(book.restoreDrop(only.deletion));
   await run(book.restoreDrop(second.deletion));
@@ -1695,8 +1727,8 @@ it('deletes past drops down to removing the trip, and restoring brings back the 
   expect(emptied).toEqual([]);
   expect(restored.trip.endedAt).toBe(ended.endedAt);
   expect(stored).toEqual(ended);
-  expect(await run(book.pastTrips())).toEqual([ended]);
-  expect(await run(book.activeTrip())).toEqual(active.trip);
+  expect(await run(pastIn(book))).toEqual([ended]);
+  expect(await run(activeIn(book))).toEqual(active.trip);
 });
 
 it('deletes a past trip with its drops, leaving other trips alone, and refuses to delete the active trip', async () => {
@@ -1717,15 +1749,15 @@ it('deletes a past trip with its drops, leaving other trips alone, and refuses t
 
   expect(refusal._tag).toBe('TripNotEnded');
   expect(gone._tag).toBe('DropNotFound');
-  expect(await run(book.pastTrips())).toEqual([kept]);
-  expect(await run(book.activeTrip())).toEqual(active.trip);
+  expect(await run(pastIn(book))).toEqual([kept]);
+  expect(await run(activeIn(book))).toEqual(active.trip);
 });
 
 it('lists past trips newest first, with their dates and counts in prose', async () => {
   const { state, open } = withoutLocation();
   const book = await open();
   const endAt = async (localTime: string) => {
-    const trip = await run(book.activeTrip());
+    const trip = await run(activeIn(book));
     state.now = Date.parse(localTime);
     if (trip) await run(book.endTrip(trip.id));
   };
@@ -1740,7 +1772,7 @@ it('lists past trips newest first, with their dates and counts in prose', async 
   await placeAt(book, state, '2027-01-01T09:00:00-05:00');
   await endAt('2027-01-01T12:00:00-05:00');
 
-  const listed = await run(book.pastTrips());
+  const listed = await run(pastIn(book));
 
   expect(listed.map((trip) => [tripDates(trip), pastTripCounts(trip)])).toEqual(
     [
