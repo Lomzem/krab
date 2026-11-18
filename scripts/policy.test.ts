@@ -338,6 +338,27 @@ const cases: PolicyCase[] = [
     risk: 'Script strings that reach the screen escape the copy check, or developer errors and class lists are flagged'
   },
   {
+    name: 'UI copy word limit in hyphenated Svelte text',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<script lang="ts">const style = "min-h-12 w-full rounded-control border px-3";</script><p class={style}>day-one trip ready</p>',
+    invalid: '<p>day-one trip is ready for the water today</p>',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Markup text with hyphenated words passes as a class list, or script class lists are flagged'
+  },
+  {
+    name: 'UI copy word limit in asserted feature TypeScript',
+    file: 'src/lib/features/on-water/probe.ts',
+    valid:
+      'export type Hint = "Saving gives it the next pot number";\nexport const hint = "Next pot" as const;\nexport const style = "min-h-12 w-full rounded-control border px-3" as const;\nexport const query = \'[data-pot="saving gives it the next number"]\' satisfies string;',
+    invalid:
+      'export const hint = "Saving gives it the next pot number" as const;',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Runtime strings under a TypeScript assertion escape the copy check, or type-only literals and selectors are flagged'
+  },
+  {
     name: 'UI copy sentence punctuation',
     file: 'src/lib/features/on-water/Probe.svelte',
     valid: '<h2>Delete this trip?</h2>',
@@ -354,6 +375,24 @@ const cases: PolicyCase[] = [
     command: 'lint',
     diagnostic: 'you or your',
     risk: 'Copy addresses the reader'
+  },
+  {
+    name: 'UI copy second person in Svelte text with symbols',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p>Depth = 0</p>',
+    invalid: '<p>Check your depth = 0</p>',
+    command: 'lint',
+    diagnostic: 'you or your',
+    risk: 'Symbols in markup text skip the copy check'
+  },
+  {
+    name: 'UI copy second person in attribute with symbols',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p title="Depth = 0">Depth</p>',
+    invalid: '<p title="Check your depth = 0">Depth</p>',
+    command: 'lint',
+    diagnostic: 'you or your',
+    risk: 'Symbols in copy attributes skip the copy check'
   },
   {
     name: 'UI copy em and en dashes',

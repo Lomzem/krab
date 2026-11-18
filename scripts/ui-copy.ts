@@ -66,22 +66,32 @@ const isClassList = (tokens: readonly string[]) =>
   tokens.some((token) => /[-:[]/.test(token));
 
 export const copyProblems = (raw: string): Problem[] => {
+  const text = raw.replace(/\s+/g, ' ').trim();
+  const tokens = words(text);
+  const problems: Problem[] = [];
+  if (tokens.length > 5)
+    problems.push({ messageId: 'words', count: tokens.length });
+  if (/[.!](?:\s|$)|\?\s/.test(text))
+    problems.push({ messageId: 'punctuation' });
+  if (/\byou(?:r|rs|rself|['’](?:re|ve|ll|d))?\b/iu.test(text))
+    problems.push({ messageId: 'secondPerson' });
+  if (/[\u2013\u2014]/.test(text)) problems.push({ messageId: 'dash' });
+  return problems;
+};
+
+const scriptCopyProblems = (raw: string): Problem[] => {
   const text = raw
     .replace(/<[^>]*>/g, '')
     .replace(/\s+/g, ' ')
     .trim();
   const tokens = words(text);
   if (tokens.length === 0 || /[[\]={}<>|\\]/.test(text)) return [];
-  const problems: Problem[] = [];
-  const secondPerson = /\byou(?:r|rs|rself|['’](?:re|ve|ll|d))?\b/iu.test(text);
+  const problems = copyProblems(text);
+  const secondPerson = problems.some(
+    ({ messageId }) => messageId === 'secondPerson'
+  );
   if (!secondPerson && tokens.length > 1 && isClassList(text.split(' ')))
     return [];
-  if (tokens.length > 5)
-    problems.push({ messageId: 'words', count: tokens.length });
-  if (/[.!](?:\s|$)|\?\s/.test(text))
-    problems.push({ messageId: 'punctuation' });
-  if (secondPerson) problems.push({ messageId: 'secondPerson' });
-  if (/[\u2013\u2014]/.test(text)) problems.push({ messageId: 'dash' });
   return problems;
 };
 
@@ -110,9 +120,23 @@ const calleeName = (callee: Node) => {
   return null;
 };
 
-const isCode = (node: Rule.Node) => {
-  const parent = node.parent as Node | null;
-  if (parent === null) return false;
+const RUNTIME_WRAPPERS = new Set([
+  'TSAsExpression',
+  'TSNonNullExpression',
+  'TSSatisfiesExpression',
+  'TSTypeAssertion'
+]);
+
+const isCode = (literalNode: Rule.Node) => {
+  let node = literalNode as Parented;
+  while (
+    node.parent &&
+    RUNTIME_WRAPPERS.has(node.parent.type) &&
+    (node.parent as unknown as { expression: unknown }).expression === node
+  )
+    node = node.parent;
+  const parent = node.parent as Node | null | undefined;
+  if (!parent) return false;
   switch (parent.type) {
     case 'ImportDeclaration':
     case 'ExportAllDeclaration':
@@ -202,8 +226,8 @@ const rule: Rule.RuleModule = {
     schema: []
   },
   create(context) {
-    const report = (node: Parented, text: string) => {
-      for (const { messageId, count } of copyProblems(text))
+    const report = (node: Parented, problems: readonly Problem[]) => {
+      for (const { messageId, count } of problems)
         context.report({
           node: node as unknown as Rule.Node,
           messageId,
@@ -211,14 +235,15 @@ const rule: Rule.RuleModule = {
         });
     };
     const container = (node: { children: readonly Child[] }) => {
-      for (const run of phrases(node.children)) report(run.node, run.text);
+      for (const run of phrases(node.children))
+        report(run.node, copyProblems(run.text));
     };
     const containerNode = (node: Parented & { children: readonly Child[] }) => {
       if (isInline(node as unknown as Child)) return;
       container(node);
     };
     const literal = (node: Rule.Node, text: string) => {
-      if (!isCode(node)) report(node, text);
+      if (!isCode(node)) report(node, scriptCopyProblems(text));
     };
     const script: Rule.RuleListener = {
       Literal(node) {
@@ -236,9 +261,13 @@ const rule: Rule.RuleModule = {
         if (!COPY_ATTRIBUTES.has(node.key.name)) return;
         report(
           node,
-          node.value
-            .map((part) => (part.type === 'SvelteLiteral' ? part.value : SLOT))
-            .join('')
+          copyProblems(
+            node.value
+              .map((part) =>
+                part.type === 'SvelteLiteral' ? part.value : SLOT
+              )
+              .join('')
+          )
         );
       },
       Program(node: { body: unknown[] }) {
