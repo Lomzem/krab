@@ -78,14 +78,13 @@
   const refused = $derived(wrong.length > 0);
   const guidance = $derived.by(() => {
     if (value === null || wrong.length === 0) return '';
-    if (wrong.length > 1)
-      return 'Kept and Released need whole numbers, 0 or more.';
+    if (wrong.length > 1) return 'Whole numbers only';
     const [[side, name]] = wrong;
     const blank = value[side].trim() === '';
     return blank &&
       SIDES.every(([each]) => each === side || countOf(value[each]) !== null)
-      ? `Enter ${name} too, or leave both empty.`
-      : `${name} needs a whole number, 0 or more.`;
+      ? `Enter ${name} too`
+      : `Whole number for ${name}`;
   });
 
   const stepper =
@@ -200,8 +199,6 @@
     >
       {#if refused}
         {guidance}
-      {:else if !value}
-        Not recorded. Leave both empty if you didn't count.
       {/if}
     </p>
     {#if value}

@@ -68,7 +68,7 @@ export const groupChip = (
     more,
     uncollected: uncollected > 0,
     label: [
-      `${shown}. ${String(items.length)} gear ${apart ? 'in this area' : 'here'}`,
+      `${shown}, ${String(items.length)} gear ${apart ? 'in this area' : 'here'}`,
       day === null && spread.length > 1 && ` on ${listed(spread)}`,
       `: ${items.map((item) => item.name).join(', ')}`,
       layers.length > 1 && `; ${layers.join(', ')}`,

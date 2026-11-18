@@ -6,13 +6,11 @@
   let {
     kind = $bindable('pot'),
     stored,
-    name,
     locked,
     idPrefix
   }: {
     kind?: Kind;
     stored: Kind;
-    name: string;
     locked: boolean;
     idPrefix: string;
   } = $props();
@@ -20,10 +18,8 @@
   const word = (option: Kind) => KIND_NAMES[option].toLowerCase();
 
   const hint = $derived.by(() => {
-    if (locked)
-      return `${name} has been dropped again, so it stays a ${word(stored)}.`;
-    if (kind !== stored)
-      return `Saving gives it the next ${word(kind)} number.`;
+    if (locked) return "Can't change, dropped again";
+    if (kind !== stored) return `Saves as the next ${word(kind)}`;
     return null;
   });
 </script>

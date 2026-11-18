@@ -34,12 +34,6 @@
     </h2>
   {/snippet}
 
-  <p class="text-[15px] text-muted-foreground">
-    {apart
-      ? 'Too close together to pick at this zoom. Zoom in to see them apart, or choose one to open it.'
-      : 'Too close together to pick on the map. Choose one to open it.'}
-  </p>
-
   <ul class="-mx-4 mt-3 border-t border-border">
     {#each items as item (item.id)}
       <li class="border-b border-border">

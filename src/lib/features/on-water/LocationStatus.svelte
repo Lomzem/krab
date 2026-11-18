@@ -46,9 +46,6 @@
         >
           Location is off
         </h2>
-        <p class="text-[14px] leading-snug text-muted-foreground">
-          Drops save without a position.
-        </p>
       </div>
       <button
         type="button"
@@ -57,18 +54,19 @@
         aria-controls="location-off-steps"
         onclick={() => {
           guidanceOpen = !guidanceOpen;
-        }}>{guidanceOpen ? 'Hide steps' : 'How to turn on in Settings'}</button
+        }}>{guidanceOpen ? 'Hide steps' : 'Show steps'}</button
       >
     </div>
     {#if guidanceOpen}
-      <p id="location-off-steps" class="pt-1 pb-1 text-[15px] leading-snug">
-        Open Settings, then Privacy &amp; Security, then Location Services. Make
-        sure Location Services is on and Safari Websites is set to While Using
-        the App. Then reopen Krab.
-      </p>
+      <ol id="location-off-steps" class="pt-1 pb-1 text-[15px] leading-snug">
+        <li>Settings › Privacy &amp; Security › Location Services</li>
+        <li>Location Services on</li>
+        <li>Safari Websites › While Using</li>
+        <li>Reopen Krab</li>
+      </ol>
     {/if}
   </section>
-{:else}
+{:else if status.kind === 'finding' || rough}
   <p
     class={[
       'flex items-center gap-2 border-t border-border bg-card px-4 pt-2 text-[15px] font-medium',
@@ -86,13 +84,11 @@
     ></span>
     <span>
       {#if status.kind === 'finding'}
-        Finding your position
+        Finding position
       {:else if rough}
         Rough position, within about <span aria-hidden="true"
           >{rough.short}</span
         ><span class="sr-only">{rough.spoken}</span>
-      {:else}
-        Position ready
       {/if}
     </span>
   </p>

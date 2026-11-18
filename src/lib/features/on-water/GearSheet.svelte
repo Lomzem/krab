@@ -10,12 +10,11 @@
   import type { SaveProblem } from './on-water.svelte';
 
   const PROBLEMS: Record<Exclude<SaveProblem, 'depth'>, string> = {
-    catch: "Couldn't save the catch. It needs whole numbers from 0.",
-    uncollected:
-      "Couldn't save the catch. This gear is back in the water, so nothing was saved.",
-    kind: 'This gear has been dropped again, so it keeps its kind. Nothing was saved.',
-    gone: "Couldn't save. That drop is gone.",
-    storage: "Couldn't save. Try again."
+    catch: 'Catch needs whole numbers',
+    uncollected: "Couldn't save, gear in water",
+    kind: "Couldn't save, gear dropped again",
+    gone: "Couldn't save, drop is gone",
+    storage: "Couldn't save"
   };
 
   const TITLE_ID = 'gear-sheet-title';

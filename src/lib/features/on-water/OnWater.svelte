@@ -53,7 +53,7 @@
 
   const TICK_MS = 15_000;
   const SAVING_SHOWN_AFTER_MS = 500;
-  const TRIP_LOAD_FAILED = "Couldn't load your trip.";
+  const TRIP_LOAD_FAILED = "Couldn't load the trip";
 
   const watch = new PositionWatch();
   const water = new OnWater(watch);
@@ -479,7 +479,6 @@
   {#if water.pending?.phase === 'acquiring'}
     {@const { attempt } = water.pending}
     <GettingPosition
-      kind={water.pending.kind}
       oncancel={attempt.cancel}
       onskip={attempt.saveWithoutPosition}
     />

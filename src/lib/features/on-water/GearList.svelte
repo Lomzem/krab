@@ -199,7 +199,5 @@
     </section>
   {/if}
 {:else}
-  <p class="px-4 text-[16px]">
-    No trip running. Drop a pot or a net to start one.
-  </p>
+  <p class="px-4 text-[16px]">Nothing in the water</p>
 {/if}

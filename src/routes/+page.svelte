@@ -4,7 +4,7 @@
 
 <svelte:head>
   <title>Krab</title>
-  <meta name="description" content="Keep track of your crab pots and nets." />
+  <meta name="description" content="Track crab pots and nets" />
 </svelte:head>
 
 <OnWater />

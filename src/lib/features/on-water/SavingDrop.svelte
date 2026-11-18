@@ -25,5 +25,4 @@
       Saving drop
     </h2>
   </div>
-  <p class="text-[16px]">Saving it now.</p>
 </section>

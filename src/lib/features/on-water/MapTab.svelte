@@ -132,7 +132,7 @@
       rough: rough !== null,
       courseDeg: course,
       label: [
-        'Your position',
+        'Current position',
         rough && `rough, within about ${rough.spoken}`,
         course !== null && `heading ${compassPoint(course)[0]}`
       ]
@@ -265,7 +265,7 @@
       class="flex min-h-12 items-center gap-3 border-b border-border bg-card py-0.5 pr-2 pl-4"
     >
       <p class="min-w-0 flex-1 text-[15px] text-muted-foreground">
-        Trip running. {gearCounts(trip).inWater}.
+        {gearCounts(trip).inWater}
       </p>
       <button
         bind:this={endButton}
@@ -279,13 +279,7 @@
       >
     </div>
   {/if}
-  {#if !trip}
-    <p
-      class="border-b border-border bg-card px-4 py-3 text-[16px] text-muted-foreground"
-    >
-      No trip running. Drop a pot or a net to start one.
-    </p>
-  {:else if nearest?.direction}
+  {#if trip && nearest?.direction}
     {@const direction = nearest.direction}
     <section
       class="flex min-h-14 items-center gap-3 border-b border-border bg-card px-4 py-1"
@@ -299,7 +293,7 @@
           <span class="sr-only">Nearest gear: </span>{nearest.name}
         </h2>
         <p class="text-[14px] text-muted-foreground" aria-hidden="true">
-          Nearest to you
+          Nearest
         </p>
       </div>
       <DirectionCue {direction} {compass} ontoggle={oncompass} />
@@ -391,9 +385,7 @@
         {/snippet}
       </ChartMap>
     {:catch}
-      <p class="px-4 pt-4 text-[16px]">
-        The map can't show on this phone. Your gear is listed under Gear.
-      </p>
+      <p class="px-4 pt-4 text-[16px]">This phone can't show maps</p>
     {/await}
   </div>
 </section>
