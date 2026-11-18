@@ -27,7 +27,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page
@@ -111,7 +111,7 @@ test('deleting a drop right after closing another gear sheet returns focus to Dr
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.getByRole('button', { name: 'Drop pot' }).click();
@@ -138,7 +138,7 @@ test('deleting a drop already deleted in another tab closes the sheet without an
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   for (const name of ['Pot 1', 'Pot 2']) {
     await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(`${name} dropped`);
@@ -174,7 +174,7 @@ test('while a sheet action is storing, the sheet ignores its other actions, and 
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   for (const name of ['Pot 1', 'Pot 2']) {
     await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(`${name} dropped`);
@@ -210,7 +210,7 @@ test('while a sheet action is storing, the sheet ignores its other actions, and 
   await expect(label).toHaveValue('blue buoy');
 });
 
-test('on a 320 by 640 screen, tabbing from a corrected Depth after a refused Save shows all of Notes clear of the footer, and multiline notes save and reload intact', async ({
+test('on a 320 by 640 screen, tabbing from corrected Depth through Label and Bait after a refused Save shows all of Notes clear of the footer, and multiline notes save and reload intact', async ({
   page
 }) => {
   await page.setViewportSize({ width: 320, height: 640 });
@@ -222,7 +222,7 @@ test('on a 320 by 640 screen, tabbing from a corrected Depth after a refused Sav
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
@@ -236,8 +236,14 @@ test('on a 320 by 640 screen, tabbing from a corrected Depth after a refused Sav
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(depth).toBeFocused();
   await depth.fill('17.5');
-  await page.keyboard.press('Tab');
-  await expect(notes).toBeFocused();
+  for (const field of [
+    sheet.getByLabel('Label'),
+    sheet.getByLabel('Bait'),
+    notes
+  ]) {
+    await page.keyboard.press('Tab');
+    await expect(field).toBeFocused();
+  }
 
   const outsideBody = () =>
     notes.evaluate((field) => {
@@ -287,7 +293,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     await page.goto('/');
     await page.getByRole('button', { name: 'Turn on location' }).click();
-    await expect(page.getByText('Position ready')).toBeVisible();
+    await expect(page.getByText('Finding position')).toBeHidden();
     for (const name of ['Pot 1', 'Pot 2']) {
       await page.getByRole('button', { name: 'Drop pot' }).click();
       await expect(toastOf(page)).toContainText(`${name} dropped`);
@@ -367,7 +373,7 @@ test('with the page zoomed up to 200% on 320 and 393 wide screens in both themes
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   const steps = [];
   for (const width of [320, 393])
     for (const colorScheme of ['light', 'dark'] as const)

@@ -13,9 +13,9 @@ import {
 } from './storage-faults';
 
 const MORNING = new Date('2031-06-10T07:30:00-04:00');
-const TRIP_LOAD_FAILED = "Couldn't load your trip.";
-const PAST_LOAD_FAILED = "Couldn't load past trips.";
-const NO_TRIP = 'No trip running';
+const TRIP_LOAD_FAILED = "Couldn't load the trip";
+const PAST_LOAD_FAILED = "Couldn't load past trips";
+const EMPTY_GEAR = 'Nothing in the water';
 
 test.use({ timezoneId: 'America/New_York' });
 
@@ -39,7 +39,7 @@ const startWithLocation = async (page: Page) => {
   await page.clock.install({ time: MORNING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
 };
 
 const endTheTrip = async (page: Page) => {
@@ -66,15 +66,15 @@ test('a trip whose stored records fail to read shows that it could not load, not
   await failStorage(page, 'reads');
   await page.reload();
   await expect(main).toContainText(TRIP_LOAD_FAILED);
-  await expect(main).not.toContainText(NO_TRIP);
+  await expect(main.getByRole('region', { name: 'Map view' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Drop pot' })).toBeVisible();
   await expectAccessibleInBothThemes(page);
   await tab(page, 'Gear').click();
   await expect(main).toContainText(TRIP_LOAD_FAILED);
-  await expect(main).not.toContainText(NO_TRIP);
+  await expect(main).not.toContainText(EMPTY_GEAR);
   await tab(page, 'Past trips').click();
   await expect(main).toContainText(PAST_LOAD_FAILED);
-  await expect(main).not.toContainText('No past trips yet.');
+  await expect(main).not.toContainText('No past trips');
 
   await tab(page, 'Gear').click();
   await failStorage(page, null);
@@ -98,7 +98,7 @@ test('storage that fails to open says the trip could not load, Retry opens it ag
   await page.reload();
   await tab(page, 'Gear').click();
   await expect(main).toContainText(TRIP_LOAD_FAILED);
-  await expect(main).not.toContainText(NO_TRIP);
+  await expect(main).not.toContainText(EMPTY_GEAR);
   await failStorage(page, null);
   await main.getByRole('button', { name: 'Retry' }).click();
   await expect(inWaterRow(page, 'Pot 1')).toBeVisible();
@@ -108,7 +108,7 @@ test('storage that fails to open says the trip could not load, Retry opens it ag
   await tab(page, 'Gear').click();
   await expect(main).toContainText(TRIP_LOAD_FAILED);
   await failStorage(page, null);
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await dropPot(page, 'Pot 2');
   await expect(inWaterRow(page, 'Pot 1')).toBeVisible();
   await expect(inWaterRow(page, 'Pot 2')).toBeVisible();
@@ -124,7 +124,7 @@ test('a double tap while storage is still opening makes one drop attempt, and it
   await holdFirstOpen(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Finding your position')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeVisible();
   await page
     .getByRole('button', { name: 'Drop pot' })
     .evaluate((button: HTMLElement) => {
@@ -135,13 +135,11 @@ test('a double tap while storage is still opening makes one drop attempt, and it
     page.getByRole('heading', { name: 'Getting position' })
   ).toBeFocused();
   await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(toastOf(page)).toContainText(
-    'Drop cancelled. Nothing was saved.'
-  );
+  await expect(toastOf(page)).toContainText('Drop cancelled');
   await releaseFirstOpen(page);
 
   await deliverFix(page, MADE_UP_SEA);
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await dropPot(page, 'Pot 1');
   await tab(page, 'Gear').click();
   await expect(main).toContainText('1 in the water');
@@ -159,7 +157,7 @@ test('a drop tapped while storage is still opening keeps the tap time and the fi
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await deliverFix(page, MADE_UP_SEA);
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
 
   await page.clock.fastForward('10:00');
