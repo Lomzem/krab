@@ -54,28 +54,105 @@ const INLINE = new Set([
   'sup',
   'time'
 ]);
+const CONTAINERS = new Set([
+  'Program',
+  'SvelteElement',
+  'SvelteIfBlock',
+  'SvelteElseBlock',
+  'SvelteEachBlock',
+  'SvelteKeyBlock',
+  'SvelteSnippetBlock',
+  'SvelteAwaitPendingBlock',
+  'SvelteAwaitThenBlock',
+  'SvelteAwaitCatchBlock'
+]);
 const DEVELOPER_CALLS = new Set(['Error', 'TaggedError', 'RegExp']);
 const COMPARISONS = new Set(['===', '!==', '==', '!=', 'in']);
 const CLASS_TOKEN =
   /^[a-z0-9!@:_\-[\]/.%#()&>*~=,+'"\uE000]*[a-z0-9\])%\uE000]$/;
 
+const WORD_CHARACTER = /[\p{L}\p{N}\uE000]/u;
 const words = (text: string) =>
-  text.split(/\s+/).filter((token) => /[\p{L}\p{N}\uE000]/u.test(token));
+  text.split(/\s+/).filter((token) => WORD_CHARACTER.test(token));
 const isClassList = (tokens: readonly string[]) =>
   tokens.every((token) => CLASS_TOKEN.test(token)) &&
   tokens.some((token) => /[-:[]/.test(token));
 
-export const copyProblems = (raw: string): Problem[] => {
-  const text = raw.replace(/\s+/g, ' ').trim();
-  const tokens = words(text);
+type Choices = readonly (readonly string[])[];
+type Check<S> = {
+  start: S;
+  step: (state: S, character: string) => readonly [S, number];
+};
+type Punctuation = 'plain' | 'stop' | 'ask' | 'asked';
+
+const SECOND_PERSON = new Set(['you', 'your', 'yours', 'yourself']);
+const wordCount: Check<boolean> = {
+  start: false,
+  step: (counted, character) => {
+    if (/\s/.test(character)) return [false, 0];
+    const starts = !counted && WORD_CHARACTER.test(character);
+    return [counted || starts, starts ? 1 : 0];
+  }
+};
+const punctuation: Check<Punctuation> = {
+  start: 'plain',
+  step: (state, character) => {
+    if (/\s/.test(character))
+      return state === 'ask' || state === 'asked'
+        ? ['asked', 0]
+        : ['plain', state === 'stop' ? 1 : 0];
+    const hit = state === 'asked' ? 1 : 0;
+    if (/[.!]/.test(character)) return ['stop', hit];
+    return [character === '?' ? 'ask' : 'plain', hit];
+  }
+};
+const secondPerson: Check<string> = {
+  start: '',
+  step: (run, character) => {
+    if (!/\w/iu.test(character)) return ['', SECOND_PERSON.has(run) ? 1 : 0];
+    const next = run + character.toLowerCase();
+    return ['yourself'.startsWith(next) ? next : '-', 0];
+  }
+};
+const dash: Check<null> = {
+  start: null,
+  step: (state, character) => [state, /[\u2013\u2014]/.test(character) ? 1 : 0]
+};
+
+const read = <S>(check: Check<S>, from: S, option: string) => {
+  let state = from;
+  let gained = 0;
+  for (const character of option) {
+    const [to, gain] = check.step(state, character);
+    state = to;
+    gained += gain;
+  }
+  return [state, gained] as const;
+};
+
+const most = <S>(choices: Choices, check: Check<S>) => {
+  let best = new Map([[check.start, 0]]);
+  for (const options of [...choices, [' ']]) {
+    const next = new Map<S, number>();
+    for (const [from, score] of best)
+      for (const option of options) {
+        const [to, gained] = read(check, from, option);
+        next.set(to, Math.max(next.get(to) ?? 0, score + gained));
+      }
+    best = next;
+  }
+  return Math.max(...best.values());
+};
+
+export const copyProblems = (choices: Choices): Problem[] => {
   const problems: Problem[] = [];
-  if (tokens.length > 5)
-    problems.push({ messageId: 'words', count: tokens.length });
-  if (/[.!](?:\s|$)|\?\s/.test(text))
+  const count = most(choices, wordCount);
+  if (count > 5) problems.push({ messageId: 'words', count });
+  if (most(choices, punctuation) > 0)
     problems.push({ messageId: 'punctuation' });
-  if (/\byou(?:r|rs|rself|['’](?:re|ve|ll|d))?\b/iu.test(text))
+  if (most(choices, secondPerson) > 0)
     problems.push({ messageId: 'secondPerson' });
-  if (/[\u2013\u2014]/.test(text)) problems.push({ messageId: 'dash' });
+  if (most(choices, dash) > 0) problems.push({ messageId: 'dash' });
   return problems;
 };
 
@@ -86,7 +163,7 @@ const scriptCopyProblems = (raw: string): Problem[] => {
     .trim();
   const tokens = words(text);
   if (tokens.length === 0 || /[[\]={}<>|\\]/.test(text)) return [];
-  const problems = copyProblems(text);
+  const problems = copyProblems([[text]]);
   const secondPerson = problems.some(
     ({ messageId }) => messageId === 'secondPerson'
   );
@@ -101,7 +178,8 @@ const attributeName = (node: Parented) => {
   for (let at = node.parent; at; at = at.parent) {
     if (at.type === 'SvelteAttribute')
       return (at as unknown as AST.SvelteAttribute).key.name;
-    if (at.type === 'SvelteDirective' || at.type === 'SvelteStyleDirective') {
+    if (at.type === 'SvelteStyleDirective') return 'style';
+    if (at.type === 'SvelteDirective') {
       const directive = at as unknown as AST.SvelteDirective;
       return directive.kind === 'Class' ? 'class' : null;
     }
@@ -148,16 +226,56 @@ const isValue = (node: Parented, parent: Parented) => {
   return false;
 };
 
+const isCopyTag = (tag: Parented) => {
+  if ((tag as unknown as AST.SvelteMustacheTag).kind !== 'text') return false;
+  const at = tag.parent;
+  if (at?.type === 'SvelteAttribute')
+    return COPY_ATTRIBUTES.has((at as unknown as AST.SvelteAttribute).key.name);
+  return at !== undefined && at !== null && CONTAINERS.has(at.type);
+};
+
 const isRendered = (literal: Parented) => {
   let node = unwrap(literal);
   while (node.parent && isValue(node, node.parent)) node = unwrap(node.parent);
-  const tag = node.parent;
-  if (tag?.type !== 'SvelteMustacheTag') return false;
-  if ((tag as unknown as AST.SvelteMustacheTag).kind !== 'text') return false;
-  if (tag.parent?.type !== 'SvelteAttribute') return true;
-  return COPY_ATTRIBUTES.has(
-    (tag.parent as unknown as AST.SvelteAttribute).key.name
-  );
+  return node.parent?.type === 'SvelteMustacheTag' && isCopyTag(node.parent);
+};
+
+type Expression = Parented & Record<string, unknown>;
+
+const renderings = (start: Expression): string[] => {
+  let node = start;
+  while (RUNTIME_WRAPPERS.has(node.type)) node = node.expression as Expression;
+  switch (node.type) {
+    case 'Literal':
+      return typeof node.value === 'string' ? [node.value] : [SLOT];
+    case 'TemplateLiteral':
+      return [
+        (node.quasis as { value: { cooked?: string | null } }[])
+          .map((part) => part.value.cooked ?? '')
+          .join(SLOT)
+      ];
+    case 'ConditionalExpression':
+      return [
+        ...renderings(node.consequent as Expression),
+        ...renderings(node.alternate as Expression)
+      ];
+    case 'LogicalExpression':
+      return [
+        ...(node.operator === '&&'
+          ? [SLOT]
+          : renderings(node.left as Expression)),
+        ...renderings(node.right as Expression)
+      ];
+    default:
+      return [SLOT];
+  }
+};
+
+type Part = AST.SvelteLiteral | AST.SvelteMustacheTag | AST.SvelteText;
+const partRenderings = (part: Part) => {
+  if (part.type !== 'SvelteMustacheTag') return [part.value];
+  if (part.kind !== 'text') return [SLOT];
+  return renderings(part.expression as unknown as Expression);
 };
 
 const isCode = (literal: Parented) => {
@@ -201,7 +319,7 @@ const isCode = (literal: Parented) => {
   );
 };
 
-type Run = { text: string; node: Parented };
+type Run = { parts: string[][]; node: Parented };
 type Child = AST.SvelteHTMLElement['children'][number];
 
 const isAlternative = (attribute: AST.SvelteStartTag['attributes'][number]) =>
@@ -222,14 +340,14 @@ const isInline = (node: Child): node is AST.SvelteHTMLElement =>
 const phrases = (children: readonly Child[]): Run[] => {
   const runs: Run[] = [];
   const open: { run: Run | null } = { run: null };
-  const extend = (text: string, node: Parented) => {
-    open.run ??= { text: '', node };
-    open.run.text += text;
+  const extend = (part: Part) => {
+    open.run ??= { parts: [], node: part };
+    open.run.parts.push(partRenderings(part));
   };
   const walk = (list: readonly Child[]) => {
     for (const child of list) {
-      if (child.type === 'SvelteText') extend(child.value, child);
-      else if (child.type === 'SvelteMustacheTag') extend(` ${SLOT} `, child);
+      if (child.type === 'SvelteText' || child.type === 'SvelteMustacheTag')
+        extend(child);
       else if (isInline(child)) walk(child.children);
       else if (child.type !== 'SvelteHTMLComment') {
         if (open.run) runs.push(open.run);
@@ -263,15 +381,15 @@ const rule: Rule.RuleModule = {
     };
     const container = (node: { children: readonly Child[] }) => {
       for (const run of phrases(node.children))
-        report(run.node, copyProblems(run.text));
+        report(run.node, copyProblems(run.parts));
     };
     const containerNode = (node: Parented & { children: readonly Child[] }) => {
       if (isInline(node as unknown as Child)) return;
       container(node);
     };
     const literal = (node: Rule.Node, text: string) => {
-      if (isRendered(node)) report(node, copyProblems(text));
-      else if (!isCode(node)) report(node, scriptCopyProblems(text));
+      if (!isRendered(node) && !isCode(node))
+        report(node, scriptCopyProblems(text));
     };
     const script: Rule.RuleListener = {
       Literal(node) {
@@ -287,29 +405,16 @@ const rule: Rule.RuleModule = {
     const markup = {
       SvelteAttribute(node: AST.SvelteAttribute) {
         if (!COPY_ATTRIBUTES.has(node.key.name)) return;
-        report(
-          node,
-          copyProblems(
-            node.value
-              .map((part) =>
-                part.type === 'SvelteLiteral' ? part.value : SLOT
-              )
-              .join('')
-          )
-        );
+        report(node, copyProblems(node.value.map(partRenderings)));
       },
       Program(node: { body: unknown[] }) {
         container({ children: node.body as Child[] });
       },
-      SvelteElement: containerNode,
-      SvelteIfBlock: containerNode,
-      SvelteElseBlock: containerNode,
-      SvelteEachBlock: containerNode,
-      SvelteKeyBlock: containerNode,
-      SvelteSnippetBlock: containerNode,
-      SvelteAwaitPendingBlock: containerNode,
-      SvelteAwaitThenBlock: containerNode,
-      SvelteAwaitCatchBlock: containerNode
+      ...Object.fromEntries(
+        [...CONTAINERS]
+          .filter((type) => type !== 'Program')
+          .map((type) => [type, containerNode])
+      )
     };
     return { ...script, ...(markup as unknown as Rule.RuleListener) };
   }

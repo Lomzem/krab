@@ -381,6 +381,61 @@ const cases: PolicyCase[] = [
     risk: 'Copy chosen in a text expression passes as a class list'
   },
   {
+    name: 'UI copy word limit beside Svelte style directives',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><div style:grid-template-columns={ready ? '[a] 1fr [b] 1fr [c] 1fr [d]' : '1fr'} style:grid-template-rows=\"{ready ? '[a] 1fr [b] 1fr [c] 1fr [d]' : '1fr'}\">{ready ? 'Depth' : 'Wait'}</div>",
+    invalid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><div style:grid-template-columns={ready ? '[a] 1fr [b] 1fr [c] 1fr [d]' : '1fr'}>{ready ? 'day-one trip is ready for the water today' : 'Wait'}</div>",
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'CSS values in style directives are read as screen copy, or copy beside them is missed'
+  },
+  {
+    name: 'UI copy word limit in mixed Svelte attributes',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready, count }: { ready: boolean; count: number } = $props();</script><button aria-label=\"Delete {ready ? 'trip' : 'day'} and all drops\" title=\"Pot {count}{ready ? 'a' : 'b'} kept here today\">Delete</button>",
+    invalid:
+      '<script lang="ts">let { ready }: { ready: boolean } = $props();</script><button aria-label="Delete {ready ? \'this trip\' : \'trip\'} and all drops">Delete</button>',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'A label mixing text and chosen strings exceeds the limit while each part passes, or joined parts count twice'
+  },
+  {
+    name: 'UI copy word limit in mixed Svelte text',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready, count }: { ready: boolean; count: number } = $props();</script><p>Delete {ready ? 'trip' : 'day'} and all drops</p><p>Pot {count}{ready ? 'a' : 'b'} kept here today</p>",
+    invalid:
+      '<script lang="ts">let { ready }: { ready: boolean } = $props();</script><p>Delete {ready && \'this trip\'} and all drops</p>',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Text mixing markup and chosen strings exceeds the limit while each part passes, or joined parts count twice'
+  },
+  {
+    name: 'UI copy word limit across several chosen strings',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { a, b }: { a: boolean; b: boolean } = $props();</script><button aria-label=\"one two three{a ? 'A' : ' A'}{b ? 'B' : ' B'}\">Drop</button>",
+    invalid:
+      "<script lang=\"ts\">let { a, b }: { a: boolean; b: boolean } = $props();</script><button aria-label=\"one two three four{a ? 'A' : ' A'}{b ? 'B' : ' B'}\">Drop</button>",
+    command: 'lint',
+    diagnostic: 'has 6 words',
+    risk: 'Only one choice at a time is varied, so copy that is too long only when several choices split words passes'
+  },
+  {
+    name: 'UI copy punctuation across chosen strings',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { a, b }: { a: boolean; b: boolean } = $props();</script><p>{a ? 'v1.2' : 'v1'} {b ? 'Ready?' : 'Set'}</p>",
+    invalid:
+      "<script lang=\"ts\">let { a, b }: { a: boolean; b: boolean } = $props();</script><p>{a ? 'Saved' : 'Saved.'}{b ? 'x' : ' x'}</p>",
+    command: 'lint',
+    diagnostic: 'sentence punctuation',
+    risk: 'A stop from one choice and a space from another form a sentence only together'
+  },
+  {
     name: 'UI copy word limit in asserted feature TypeScript',
     file: 'src/lib/features/on-water/probe.ts',
     valid:
