@@ -318,6 +318,53 @@ const cases: PolicyCase[] = [
     risk: 'Requested branching rule is missing'
   },
   {
+    name: 'UI copy word limit in Svelte markup',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<script lang="ts">const count = 1;</script><p class="px-4 text-[16px] text-muted-foreground">{count} in the <strong>water</strong></p><button aria-label="One more kept">+</button>',
+    invalid: '<p>Leave both empty if nothing counted</p>',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Long explanatory copy reaches the screen'
+  },
+  {
+    name: 'UI copy word limit in feature TypeScript',
+    file: 'src/lib/features/on-water/probe.ts',
+    valid:
+      'export const undo = (name: string) => `Couldn\'t undo, ${name} is gone`;\nexport const failure = new Error("Storage refused the write. Retry the transaction later.");\nexport const style = "min-h-12 w-full rounded-control border px-3";',
+    invalid: 'export const hint = "Saving gives it the next pot number";',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Script strings that reach the screen escape the copy check, or developer errors and class lists are flagged'
+  },
+  {
+    name: 'UI copy sentence punctuation',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<h2>Delete this trip?</h2>',
+    invalid: '<p>Position ready.</p>',
+    command: 'lint',
+    diagnostic: 'sentence punctuation',
+    risk: 'Copy is written as sentences, or a closing question mark is refused'
+  },
+  {
+    name: 'UI copy second person',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p>Finding position</p>',
+    invalid: '<p>Finding your position</p>',
+    command: 'lint',
+    diagnostic: 'you or your',
+    risk: 'Copy addresses the reader'
+  },
+  {
+    name: 'UI copy em and en dashes',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p title="Pot 3, Day 1">Pot 3</p>',
+    invalid: '<p title="Pot 3 — Day 1">Pot 3</p>',
+    command: 'lint',
+    diagnostic: 'em or en dash',
+    risk: 'Dashes join phrases into sentences in attribute copy'
+  },
+  {
     name: 'non-mutating formatting',
     file: 'probe.json',
     valid: '{\n  "value": 1\n}\n',
