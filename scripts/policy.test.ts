@@ -348,6 +348,39 @@ const cases: PolicyCase[] = [
     risk: 'Markup text with hyphenated words passes as a class list, or script class lists are flagged'
   },
   {
+    name: 'UI copy word limit in Svelte expressions',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { mode, labels, pick }: { mode: string; labels: Record<string, string>; pick: (query: string) => string } = $props();</script><button aria-label={mode === 'day-one trip is ready for the water today' ? 'Drop' : 'Wait'} title={labels['day-one trip is ready for the water today']} class={mode ? 'min-h-12 w-full rounded-control border px-3' : 'px-3'}>{pick('[data-pot=\"saving gives it the next number\"]')}</button>",
+    invalid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><button aria-label={ready ? 'day-one trip is ready for the water today' : 'Drop'}>Drop</button>",
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Copy chosen in an attribute expression passes as a class list, or tests, keys, arguments and class expressions are flagged'
+  },
+  {
+    name: 'UI copy second person in Svelte expressions with symbols',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><p title={ready ? 'Depth = 0' : 'Depth'}>{ready || 'Depth = 0'}</p>",
+    invalid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><p aria-label={ready ? 'Check your depth = 0' : 'Depth'}>Depth</p>",
+    command: 'lint',
+    diagnostic: 'you or your',
+    risk: 'Symbols in attribute expression copy skip the copy check'
+  },
+  {
+    name: 'UI copy word limit in Svelte text expressions',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><p>{ready ? 'day-one trip ready' : 'Wait'}</p>",
+    invalid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><p>{ready ? 'day-one trip is ready for the water today' : 'Wait'}</p>",
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Copy chosen in a text expression passes as a class list'
+  },
+  {
     name: 'UI copy word limit in asserted feature TypeScript',
     file: 'src/lib/features/on-water/probe.ts',
     valid:

@@ -127,14 +127,41 @@ const RUNTIME_WRAPPERS = new Set([
   'TSTypeAssertion'
 ]);
 
-const isCode = (literalNode: Rule.Node) => {
-  let node = literalNode as Parented;
+const unwrap = (start: Parented) => {
+  let node = start;
   while (
     node.parent &&
     RUNTIME_WRAPPERS.has(node.parent.type) &&
     (node.parent as unknown as { expression: unknown }).expression === node
   )
     node = node.parent;
+  return node;
+};
+
+const isValue = (node: Parented, parent: Parented) => {
+  if (parent.type === 'ConditionalExpression')
+    return (parent as unknown as { test: unknown }).test !== node;
+  if (parent.type === 'LogicalExpression') {
+    const logical = parent as unknown as { operator: string; left: unknown };
+    return logical.left !== node || logical.operator !== '&&';
+  }
+  return false;
+};
+
+const isRendered = (literal: Parented) => {
+  let node = unwrap(literal);
+  while (node.parent && isValue(node, node.parent)) node = unwrap(node.parent);
+  const tag = node.parent;
+  if (tag?.type !== 'SvelteMustacheTag') return false;
+  if ((tag as unknown as AST.SvelteMustacheTag).kind !== 'text') return false;
+  if (tag.parent?.type !== 'SvelteAttribute') return true;
+  return COPY_ATTRIBUTES.has(
+    (tag.parent as unknown as AST.SvelteAttribute).key.name
+  );
+};
+
+const isCode = (literal: Parented) => {
+  const node = unwrap(literal);
   const parent = node.parent as Node | null | undefined;
   if (!parent) return false;
   switch (parent.type) {
@@ -243,7 +270,8 @@ const rule: Rule.RuleModule = {
       container(node);
     };
     const literal = (node: Rule.Node, text: string) => {
-      if (!isCode(node)) report(node, scriptCopyProblems(text));
+      if (isRendered(node)) report(node, copyProblems(text));
+      else if (!isCode(node)) report(node, scriptCopyProblems(text));
     };
     const script: Rule.RuleListener = {
       Literal(node) {
