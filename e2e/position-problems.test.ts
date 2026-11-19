@@ -36,9 +36,9 @@ test.describe('with location denied', () => {
     await page.getByRole('button', { name: 'Turn on location' }).click();
 
     const guidance = page.getByRole('region', { name: 'Location is off' });
-    await expect(guidance).toContainText('Settings');
+    await expect(guidance).toBeVisible();
     const disclosure = guidance.getByRole('button', {
-      name: 'How to turn on in Settings'
+      name: 'Show steps'
     });
     await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
     await disclosure.click();
@@ -46,16 +46,14 @@ test.describe('with location denied', () => {
     await expect(hide).toHaveAttribute('aria-expanded', 'true');
     await expect(
       page.locator(`#${String(await hide.getAttribute('aria-controls'))}`)
-    ).toContainText('Open Settings, then Privacy & Security');
+    ).toContainText('Settings › Privacy & Security › Location Services');
     await expectAccessibleInBothThemes(page);
     await hide.click();
     await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
     await expectAccessibleInBothThemes(page);
 
     await page.getByRole('button', { name: 'Drop pot' }).click();
-    await expect(toastOf(page)).toContainText(
-      'Pot 1 dropped without a position'
-    );
+    await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
     await expectAccessibleInBothThemes(page);
 
     await page.getByRole('button', { name: 'Gear', exact: true }).click();
@@ -72,10 +70,12 @@ test.describe('with location denied', () => {
     await page.getByRole('button', { name: 'Turn on location' }).click();
     const guidance = page.getByRole('region', { name: 'Location is off' });
     const show = guidance.getByRole('button', {
-      name: 'How to turn on in Settings'
+      name: 'Show steps'
     });
     const hide = guidance.getByRole('button', { name: 'Hide steps' });
-    const steps = page.getByText('Open Settings, then Privacy & Security');
+    const steps = page.getByText(
+      'Settings › Privacy & Security › Location Services'
+    );
     await expect(show).toBeVisible();
     const askedAtStart = await asks(page);
 
@@ -104,9 +104,7 @@ test.describe('with location denied', () => {
       await expect(hide).toHaveCount(0);
     }
     await page.getByRole('button', { name: 'Drop pot' }).click();
-    await expect(toastOf(page)).toContainText(
-      'Pot 1 dropped without a position'
-    );
+    await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
     expect(await asks(page), 'location asked for again').toBe(askedAtStart);
   });
 });
@@ -120,7 +118,7 @@ test('while getting a position, Cancel and Save without position are reachable 4
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Finding your position')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeVisible();
 
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(
@@ -133,7 +131,7 @@ test('while getting a position, Cancel and Save without position are reachable 4
   await expectAccessibleInBothThemes(page);
 
   await save.click();
-  await expect(toastOf(page)).toContainText('dropped without a position');
+  await expect(toastOf(page)).toContainText('dropped, no position');
   await expect(page.getByRole('button', { name: /^Drop / })).toBeFocused();
 });
 
@@ -150,32 +148,33 @@ const gettingPositionShown = async (page: Page) => {
   return page.getByRole('heading', { name: 'Getting position' }).count();
 };
 
-test('Position ready lasts 5 seconds from each fix, is rechecked on resume, then falls back to Finding your position and a drop waits', async ({
+test('Finding position returns just after 5 seconds or on resume with a stale fix, and a drop waits', async ({
   page
 }) => {
+  const finding = page.getByText('Finding position');
   await holdFixes(page);
   await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Finding your position')).toBeVisible();
+  await expect(finding).toBeVisible();
   await page.clock.pauseAt(PAUSED);
 
   await deliverFix(page, MADE_UP_SEA, PAUSED);
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(finding).toBeHidden();
 
   await page.clock.runFor(5000);
   await page.evaluate(resume);
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(finding).toBeHidden();
 
   await page.clock.runFor(1);
-  await expect(page.getByText('Finding your position')).toBeVisible();
+  await expect(finding).toBeVisible();
 
   await deliverFix(page, MADE_UP_SEA, new Date('2031-03-04T06:00:05.001Z'));
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(finding).toBeHidden();
 
   await page.clock.setSystemTime(new Date('2031-03-04T06:01:00Z'));
   await page.evaluate(resume);
-  await expect(page.getByText('Finding your position')).toBeVisible();
+  await expect(finding).toBeVisible();
 
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect.poll(() => gettingPositionShown(page)).toBe(1);
@@ -188,7 +187,7 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
   await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Finding your position')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeVisible();
   await page.clock.pauseAt(PAUSED);
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(
@@ -219,10 +218,10 @@ test('a drop with a fresh fix shows saving feedback only once saving has taken h
   await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Finding your position')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeVisible();
   await page.clock.pauseAt(PAUSED);
   await deliverFix(page, MADE_UP_SEA, PAUSED);
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   const dropPot = page.getByRole('button', { name: 'Drop pot' });
   const saving = page.getByRole('heading', { name: 'Saving drop' });
 
@@ -329,7 +328,7 @@ test('the position watch stops while Krab is hidden and resumes as one watch whe
   await page.addInitScript(countWatches);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   expect(await watches(page)).toEqual({ active: 1, most: 1 });
 
   await setHidden(page, true);
@@ -341,5 +340,5 @@ test('the position watch stops while Krab is hidden and resumes as one watch whe
   expect(await watches(page)).toEqual({ active: 1, most: 1 });
   await setHidden(page, false);
   expect(await watches(page)).toEqual({ active: 1, most: 1 });
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
 });

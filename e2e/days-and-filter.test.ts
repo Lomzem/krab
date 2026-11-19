@@ -14,7 +14,7 @@ const dropPotAt = async (page: Page, north: number, name: string) => {
     latitude: MADE_UP_SEA.latitude + north,
     longitude: MADE_UP_SEA.longitude
   });
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText(`${name} dropped`);
 };

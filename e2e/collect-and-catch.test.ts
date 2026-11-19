@@ -30,7 +30,7 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await gearTab(page).click();
@@ -124,7 +124,7 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await gearTab(page).click();
@@ -170,7 +170,7 @@ const collectPot = async (page: Page) => {
   const sheet = page.getByRole('dialog');
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await gearTab(page).click();
@@ -300,14 +300,9 @@ test('Kept and Released take typed whole counts beside the steppers; a blank or 
   await collectedRow(page, 'Pot 1').click();
   await expect(kept).toHaveValue('13');
   for (const [keptText, releasedText, refused, guidance] of [
-    ['13', '', [released], 'Enter Released too, or leave both empty.'],
-    ['2.5', '3', [kept], 'Kept needs a whole number, 0 or more.'],
-    [
-      '',
-      'x',
-      [kept, released],
-      'Kept and Released need whole numbers, 0 or more.'
-    ]
+    ['13', '', [released], 'Enter Released too'],
+    ['2.5', '3', [kept], 'Whole number for Kept'],
+    ['', 'x', [kept, released], 'Whole numbers only']
   ] as const) {
     await kept.fill(keptText);
     await released.fill(releasedText);
@@ -391,7 +386,7 @@ test('a whole-number catch refused because another tab put its gear back in the 
 
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(sheet.getByRole('alert')).toHaveText(
-    "Couldn't save the catch. This gear is back in the water, so nothing was saved."
+    "Couldn't save, gear in water"
   );
   await expect(sheet).toBeVisible();
   expect(await storedCollections(page)).toEqual([
@@ -406,7 +401,6 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   const kept = sheet.getByRole('textbox', { name: 'Kept' });
   const released = sheet.getByRole('textbox', { name: 'Released' });
   const save = sheet.getByRole('button', { name: 'Save' });
-  const notRecorded = "Not recorded. Leave both empty if you didn't count.";
   const reopen = async () => {
     await page.reload();
     await gearTab(page).click();
@@ -419,7 +413,8 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   await page.keyboard.press('Tab');
   for (const field of [kept, released]) {
     await expect(field).not.toHaveAttribute('aria-invalid');
-    await expect(field).toHaveAccessibleDescription(notRecorded);
+    await expect(field).toHaveValue('');
+    await expect(field).toHaveAccessibleDescription('');
   }
 
   await sheet.getByRole('button', { name: 'One more kept' }).click();
@@ -429,8 +424,8 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   await expect(released).toHaveValue('0');
 
   for (const [typed, guidance] of [
-    ['2.5', 'Released needs a whole number, 0 or more.'],
-    ['', 'Enter Released too, or leave both empty.']
+    ['2.5', 'Whole number for Released'],
+    ['', 'Enter Released too']
   ] as const) {
     await released.fill(typed);
     await expect(released).not.toHaveAttribute('aria-invalid');
@@ -463,7 +458,8 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   );
   for (const field of [kept, released]) {
     await expect(field).not.toHaveAttribute('aria-invalid');
-    await expect(field).toHaveAccessibleDescription(notRecorded);
+    await expect(field).toHaveValue('');
+    await expect(field).toHaveAccessibleDescription('');
   }
   expect(await catchLayout(page)).toEqual(before);
   await save.click();

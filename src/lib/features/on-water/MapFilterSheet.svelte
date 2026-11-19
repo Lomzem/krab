@@ -43,12 +43,6 @@
     </h2>
   {/snippet}
 
-  <p class="text-[15px] text-muted-foreground">
-    {multiDay
-      ? 'Gear in the water always shows for the days you pick.'
-      : 'Gear in the water always shows.'}
-  </p>
-
   <fieldset class="mt-4">
     <legend class="mb-2 text-[17px] font-semibold">Also show</legend>
     <div class="grid gap-2">

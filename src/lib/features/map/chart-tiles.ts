@@ -12,7 +12,7 @@ export const chartSource: RasterSourceSpecification = {
   minzoom: GRID_OFFSET,
   maxzoom: 16,
   attribution:
-    '<a href="https://nauticalcharts.noaa.gov/">NOAA Office of Coast Survey</a>. Not to be used for navigation.'
+    '<a href="https://nauticalcharts.noaa.gov/">NOAA chart</a>, not for navigation'
 };
 
 export const chartTileUrl = (url: string) =>

@@ -318,6 +318,180 @@ const cases: PolicyCase[] = [
     risk: 'Requested branching rule is missing'
   },
   {
+    name: 'UI copy word limit in Svelte markup',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<script lang="ts">const count = 1;</script><p class="px-4 text-[16px] text-muted-foreground">{count} in the <strong>water</strong></p><button aria-label="One more kept">+</button>',
+    invalid: '<p>Leave both empty if nothing counted</p>',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Long explanatory copy reaches the screen'
+  },
+  {
+    name: 'UI copy word limit in feature TypeScript',
+    file: 'src/lib/features/on-water/probe.ts',
+    valid:
+      'export const undo = (name: string) => `Couldn\'t undo, ${name} is gone`;\nexport const failure = new Error("Storage refused the write. Retry the transaction later.");\nexport const style = "min-h-12 w-full rounded-control border px-3";',
+    invalid: 'export const hint = "Saving gives it the next pot number";',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Script strings that reach the screen escape the copy check, or developer errors and class lists are flagged'
+  },
+  {
+    name: 'UI copy word limit in hyphenated Svelte text',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<script lang="ts">const style = "min-h-12 w-full rounded-control border px-3";</script><p class={style}>day-one trip ready</p>',
+    invalid: '<p>day-one trip is ready for the water today</p>',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Markup text with hyphenated words passes as a class list, or script class lists are flagged'
+  },
+  {
+    name: 'UI copy word limit in Svelte expressions',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { mode, labels, pick }: { mode: string; labels: Record<string, string>; pick: (query: string) => string } = $props();</script><button aria-label={mode === 'day-one trip is ready for the water today' ? 'Drop' : 'Wait'} title={labels['day-one trip is ready for the water today']} class={mode ? 'min-h-12 w-full rounded-control border px-3' : 'px-3'}>{pick('[data-pot=\"saving gives it the next number\"]')}</button>",
+    invalid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><button aria-label={ready ? 'day-one trip is ready for the water today' : 'Drop'}>Drop</button>",
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Copy chosen in an attribute expression passes as a class list, or tests, keys, arguments and class expressions are flagged'
+  },
+  {
+    name: 'UI copy second person in Svelte expressions with symbols',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><p title={ready ? 'Depth = 0' : 'Depth'}>{ready || 'Depth = 0'}</p>",
+    invalid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><p aria-label={ready ? 'Check your depth = 0' : 'Depth'}>Depth</p>",
+    command: 'lint',
+    diagnostic: 'you or your',
+    risk: 'Symbols in attribute expression copy skip the copy check'
+  },
+  {
+    name: 'UI copy word limit in Svelte text expressions',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><p>{ready ? 'day-one trip ready' : 'Wait'}</p>",
+    invalid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><p>{ready ? 'day-one trip is ready for the water today' : 'Wait'}</p>",
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Copy chosen in a text expression passes as a class list'
+  },
+  {
+    name: 'UI copy word limit beside Svelte style directives',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><div style:grid-template-columns={ready ? '[a] 1fr [b] 1fr [c] 1fr [d]' : '1fr'} style:grid-template-rows=\"{ready ? '[a] 1fr [b] 1fr [c] 1fr [d]' : '1fr'}\">{ready ? 'Depth' : 'Wait'}</div>",
+    invalid:
+      "<script lang=\"ts\">let { ready }: { ready: boolean } = $props();</script><div style:grid-template-columns={ready ? '[a] 1fr [b] 1fr [c] 1fr [d]' : '1fr'}>{ready ? 'day-one trip is ready for the water today' : 'Wait'}</div>",
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'CSS values in style directives are read as screen copy, or copy beside them is missed'
+  },
+  {
+    name: 'UI copy word limit in mixed Svelte attributes',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready, count }: { ready: boolean; count: number } = $props();</script><button aria-label=\"Delete {ready ? 'trip' : 'day'} and all drops\" title=\"Pot {count}{ready ? 'a' : 'b'} kept here today\">Delete</button>",
+    invalid:
+      '<script lang="ts">let { ready }: { ready: boolean } = $props();</script><button aria-label="Delete {ready ? \'this trip\' : \'trip\'} and all drops">Delete</button>',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'A label mixing text and chosen strings exceeds the limit while each part passes, or joined parts count twice'
+  },
+  {
+    name: 'UI copy word limit in mixed Svelte text',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { ready, count }: { ready: boolean; count: number } = $props();</script><p>Delete {ready ? 'trip' : 'day'} and all drops</p><p>Pot {count}{ready ? 'a' : 'b'} kept here today</p>",
+    invalid:
+      '<script lang="ts">let { ready }: { ready: boolean } = $props();</script><p>Delete {ready && \'this trip\'} and all drops</p>',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Text mixing markup and chosen strings exceeds the limit while each part passes, or joined parts count twice'
+  },
+  {
+    name: 'UI copy word limit across several chosen strings',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { a, b }: { a: boolean; b: boolean } = $props();</script><button aria-label=\"one two three{a ? 'A' : ' A'}{b ? 'B' : ' B'}\">Drop</button>",
+    invalid:
+      "<script lang=\"ts\">let { a, b }: { a: boolean; b: boolean } = $props();</script><button aria-label=\"one two three four{a ? 'A' : ' A'}{b ? 'B' : ' B'}\">Drop</button>",
+    command: 'lint',
+    diagnostic: 'has 6 words',
+    risk: 'Only one choice at a time is varied, so copy that is too long only when several choices split words passes'
+  },
+  {
+    name: 'UI copy punctuation across chosen strings',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "<script lang=\"ts\">let { a, b }: { a: boolean; b: boolean } = $props();</script><p>{a ? 'v1.2' : 'v1'} {b ? 'Ready?' : 'Set'}</p>",
+    invalid:
+      "<script lang=\"ts\">let { a, b }: { a: boolean; b: boolean } = $props();</script><p>{a ? 'Saved' : 'Saved.'}{b ? 'x' : ' x'}</p>",
+    command: 'lint',
+    diagnostic: 'sentence punctuation',
+    risk: 'A stop from one choice and a space from another form a sentence only together'
+  },
+  {
+    name: 'UI copy word limit in asserted feature TypeScript',
+    file: 'src/lib/features/on-water/probe.ts',
+    valid:
+      'export type Hint = "Saving gives it the next pot number";\nexport const hint = "Next pot" as const;\nexport const style = "min-h-12 w-full rounded-control border px-3" as const;\nexport const query = \'[data-pot="saving gives it the next number"]\' satisfies string;',
+    invalid:
+      'export const hint = "Saving gives it the next pot number" as const;',
+    command: 'lint',
+    diagnostic: 'the limit is 5',
+    risk: 'Runtime strings under a TypeScript assertion escape the copy check, or type-only literals and selectors are flagged'
+  },
+  {
+    name: 'UI copy sentence punctuation',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<h2>Delete this trip?</h2>',
+    invalid: '<p>Position ready.</p>',
+    command: 'lint',
+    diagnostic: 'sentence punctuation',
+    risk: 'Copy is written as sentences, or a closing question mark is refused'
+  },
+  {
+    name: 'UI copy second person',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p>Finding position</p>',
+    invalid: '<p>Finding your position</p>',
+    command: 'lint',
+    diagnostic: 'you or your',
+    risk: 'Copy addresses the reader'
+  },
+  {
+    name: 'UI copy second person in Svelte text with symbols',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p>Depth = 0</p>',
+    invalid: '<p>Check your depth = 0</p>',
+    command: 'lint',
+    diagnostic: 'you or your',
+    risk: 'Symbols in markup text skip the copy check'
+  },
+  {
+    name: 'UI copy second person in attribute with symbols',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p title="Depth = 0">Depth</p>',
+    invalid: '<p title="Check your depth = 0">Depth</p>',
+    command: 'lint',
+    diagnostic: 'you or your',
+    risk: 'Symbols in copy attributes skip the copy check'
+  },
+  {
+    name: 'UI copy em and en dashes',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p title="Pot 3, Day 1">Pot 3</p>',
+    invalid: '<p title="Pot 3 — Day 1">Pot 3</p>',
+    command: 'lint',
+    diagnostic: 'em or en dash',
+    risk: 'Dashes join phrases into sentences in attribute copy'
+  },
+  {
     name: 'non-mutating formatting',
     file: 'probe.json',
     valid: '{\n  "value": 1\n}\n',

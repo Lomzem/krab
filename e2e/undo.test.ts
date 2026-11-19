@@ -326,9 +326,7 @@ test("saving a recorded catch retires that gear's Collect Undo so it cannot clea
   ).toBeHidden();
   await collectedRow(page, 'Pot 4').click();
   await sheet.getByRole('button', { name: 'Undo collect' }).click();
-  await expect(toastOf(page)).toContainText(
-    'Pot 4 back in the water. Its recorded catch was cleared.'
-  );
+  await expect(toastOf(page)).toContainText('Pot 4 back in, catch cleared');
   await closeSheet(page, 'Escape');
 
   const expected = [
@@ -433,7 +431,7 @@ test('a catch Save that fails to store keeps its Collect Undo for the remaining 
       await page.clock.runFor(0);
       return sheet.getByRole('alert').textContent();
     })
-    .toContain("Couldn't save. Try again.");
+    .toBe("Couldn't save");
   await expectFailureInSight(page);
 
   await page.setViewportSize({ width: 320, height: 640 });
@@ -446,7 +444,7 @@ test('a catch Save that fails to store keeps its Collect Undo for the remaining 
       await page.clock.runFor(0);
       return sheet.getByRole('alert').textContent();
     }, 'Saving again while storage still fails says so again.')
-    .toContain("Couldn't save. Try again.");
+    .toBe("Couldn't save");
   await expectFailureInSight(page);
   await expect(sheet.getByRole('textbox', { name: 'Kept' })).toHaveValue('4');
   await expect(sheet.getByRole('textbox', { name: 'Released' })).toHaveValue(
@@ -520,7 +518,7 @@ test('a catch Save that stops on an unexpected storage error says so in the shee
         message: 'A Save that ended without storing must say so in the sheet.'
       }
     )
-    .toBe("Couldn't save. Try again.");
+    .toBe("Couldn't save");
   await expectFailureInSight(page);
   await expect(
     save,
@@ -678,7 +676,7 @@ test('a drop that stops on an unexpected storage error offers Retry with Drop us
   page
 }) => {
   const failedSave = toastOf(page).filter({
-    hasText: "Couldn't save the drop, so nothing was saved."
+    hasText: "Couldn't save the drop"
   });
   const retry = failedSave.getByRole('button', { name: 'Retry' });
   const saved = toastOf(page).filter({ hasText: 'Pot 1 dropped' });

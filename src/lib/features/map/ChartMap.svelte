@@ -41,19 +41,10 @@
   const CREDITS_RESERVE = 40;
   const LANE_GAP = 8;
   const SAFE_EDGE_SLACK = 1 + 1e-6;
-  const OUTAGE_NOTICE: Record<Outage, { shown: string; more: string }> = {
-    offline: {
-      shown: "Offline. The map can't load.",
-      more: 'Your gear and position still show.'
-    },
-    unexplained: {
-      shown: "The map can't load right now.",
-      more: 'Your gear and position still show.'
-    },
-    'not-answering': {
-      shown: "The map service isn't answering.",
-      more: "The map can't load. Your gear and position still show."
-    }
+  const OUTAGE_NOTICE: Record<Outage, string> = {
+    offline: 'Map offline',
+    unexplained: "Map can't load",
+    'not-answering': 'Map service not answering'
   };
 
   let {
@@ -735,12 +726,11 @@
       {/if}
     </div>
     {#if availability !== 'available'}
-      {@const outage = OUTAGE_NOTICE[availability]}
       <p
         class="flex-none border-b border-border bg-card px-3 py-1.5 text-[14px] leading-tight text-foreground"
         role="status"
       >
-        {outage.shown}<span class="sr-only"> {outage.more}</span>
+        {OUTAGE_NOTICE[availability]}
       </p>
     {/if}
   {/if}
@@ -758,7 +748,7 @@
         <p
           class="absolute inset-x-3 top-3 rounded-control border border-border bg-card px-4 py-3 text-[16px]"
         >
-          The map can't show on this phone. Your gear is listed under Gear.
+          This phone can't show maps
         </p>
       {/if}
 

@@ -5,7 +5,7 @@
     type DetailsDraft
   } from './details-draft';
 
-  const DEPTH_PROBLEM = 'Enter the depth in feet as a number, 0 or more.';
+  const DEPTH_PROBLEM = 'Enter feet, 0 or more';
 
   let {
     draft = $bindable(emptyDraft()),
@@ -29,26 +29,6 @@
 </script>
 
 <div class="grid gap-4">
-  <div class="grid gap-1.5">
-    <label class={label} for="{idPrefix}-label">Label</label>
-    <input
-      id="{idPrefix}-label"
-      class={field}
-      bind:value={draft.label}
-      autocomplete="off"
-      enterkeyhint="next"
-    />
-  </div>
-  <div class="grid gap-1.5">
-    <label class={label} for="{idPrefix}-bait">Bait</label>
-    <input
-      id="{idPrefix}-bait"
-      class={field}
-      bind:value={draft.bait}
-      autocomplete="off"
-      enterkeyhint="next"
-    />
-  </div>
   <div id="{idPrefix}-depth-field" class="grid scroll-my-3 gap-1.5">
     <label class={label} for="{idPrefix}-depth"
       >Depth<span class="sr-only"> (ft)</span></label
@@ -82,6 +62,26 @@
         {depthError}
       </p>
     {/if}
+  </div>
+  <div class="grid gap-1.5">
+    <label class={label} for="{idPrefix}-label">Label</label>
+    <input
+      id="{idPrefix}-label"
+      class={field}
+      bind:value={draft.label}
+      autocomplete="off"
+      enterkeyhint="next"
+    />
+  </div>
+  <div class="grid gap-1.5">
+    <label class={label} for="{idPrefix}-bait">Bait</label>
+    <input
+      id="{idPrefix}-bait"
+      class={field}
+      bind:value={draft.bait}
+      autocomplete="off"
+      enterkeyhint="next"
+    />
   </div>
   <div class="grid gap-1.5">
     <label class={label} for="{idPrefix}-notes">Notes</label>

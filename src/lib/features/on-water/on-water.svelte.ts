@@ -86,23 +86,22 @@ const clock: Clock = {
 
 const droppedText = (placed: PlacedDrop) => {
   if (placed.rough) {
-    return `${placed.name} dropped. Rough position, within about ${placed.rough.short}.`;
+    return `${placed.name} dropped, rough position`;
   }
-  if (!placed.drop.position)
-    return `${placed.name} dropped without a position.`;
+  if (!placed.drop.position) return `${placed.name} dropped, no position`;
   return `${placed.name} dropped`;
 };
 
 const droppedAgainText = (name: string) =>
-  `Couldn't undo. ${name} has been dropped again since.`;
+  `Couldn't undo, ${name} dropped again`;
 
 const undoCollectFailure = (
   tag: (DropNotFound | DroppedAgain | StorageFailed)['_tag'],
   undo: UndoCollect
 ): [string, Offer?] => {
   if (tag === 'DroppedAgain') return [droppedAgainText(undo.name)];
-  if (tag === 'DropNotFound') return [`Couldn't undo. ${undo.name} is gone.`];
-  return ["Couldn't undo. Try again.", undo];
+  if (tag === 'DropNotFound') return [`Couldn't undo, ${undo.name} is gone`];
+  return ["Couldn't undo", undo];
 };
 
 const restoreFailure = (
@@ -111,9 +110,9 @@ const restoreFailure = (
 ): [string, Offer?] => {
   if (tag === 'DroppedAgain') return [droppedAgainText(undo.name)];
   if (tag === 'AnotherTripActive') {
-    return [`Couldn't restore ${undo.name}. Another trip has started.`];
+    return ["Couldn't restore, another trip active"];
   }
-  return ["Couldn't undo. Try again.", undo];
+  return ["Couldn't undo", undo];
 };
 
 const resultOf = <A, E>(
@@ -196,16 +195,14 @@ export class OnWater {
     if (Result.isFailure(outcome)) {
       const failure = outcome.failure;
       if (failure._tag === 'DropCancelled') {
-        this.#say('Drop cancelled. Nothing was saved.');
+        this.#say('Drop cancelled');
         return;
       }
       if (failure._tag === 'CannotDropAgain') {
-        this.#say(
-          "Couldn't drop that gear again. It's no longer the latest collected drop, so nothing was saved."
-        );
+        this.#say("Couldn't drop that gear again");
         return;
       }
-      this.#say("Couldn't save the drop, so nothing was saved.", {
+      this.#say("Couldn't save the drop", {
         action: 'retry',
         retry: failure.retry
       });
@@ -241,7 +238,7 @@ export class OnWater {
         this.#book.undoDrop(undo.dropId)
       );
       if (Exit.isFailure(exit)) {
-        this.#say("Couldn't undo. Try again.", undo);
+        this.#say("Couldn't undo", undo);
         return true;
       }
       this.#say(`${undo.name} removed`);
@@ -279,8 +276,8 @@ export class OnWater {
     if (Result.isFailure(collected)) {
       this.#say(
         collected.failure._tag === 'DropNotFound'
-          ? "Couldn't collect. That drop is gone."
-          : "Couldn't collect. Try again."
+          ? 'That drop is gone'
+          : "Couldn't collect"
       );
       return;
     }
@@ -305,7 +302,7 @@ export class OnWater {
     if (undone.success.changed) {
       this.#say(
         recorded
-          ? `${name} back in the water. Its recorded catch was cleared.`
+          ? `${name} back in, catch cleared`
           : `${name} back in the water`
       );
       return;
@@ -328,7 +325,7 @@ export class OnWater {
         void this.reload();
         return true;
       }
-      this.#say("Couldn't delete the drop. Try again.");
+      this.#say("Couldn't delete the drop");
       return false;
     }
     const { name, deletion } = deleted.success;
@@ -340,18 +337,18 @@ export class OnWater {
     if (this.pending) return false;
     const ended = await resultOf(this.#book.endTrip(tripId));
     if (Result.isFailure(ended) && ended.failure._tag === 'StorageFailed') {
-      this.#say("Couldn't end the trip. Try again.");
+      this.#say("Couldn't end the trip");
       return false;
     }
     if (Result.isFailure(ended)) void this.reload();
-    this.#say('Trip ended. It is under Past trips.');
+    this.#say('Trip ended');
     return true;
   }
 
   async deleteTrip(tripId: string) {
     const deleted = await resultOf(this.#book.deleteTrip(tripId));
     if (Result.isFailure(deleted)) {
-      this.#say("Couldn't delete the trip. Try again.");
+      this.#say("Couldn't delete the trip");
       return false;
     }
     this.#say('Trip deleted');

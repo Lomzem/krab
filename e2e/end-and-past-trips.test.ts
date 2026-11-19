@@ -32,7 +32,7 @@ const dropPotAt = async (page: Page, north: number, name: string) => {
     latitude: MADE_UP_SEA.latitude + north,
     longitude: MADE_UP_SEA.longitude
   });
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText(`${name} dropped`);
 };
@@ -46,9 +46,7 @@ const endTheTrip = async (page: Page, outcome: string) => {
   await expect(sheet).toContainText(outcome);
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
-  await expect(toastOf(page)).toContainText(
-    'Trip ended. It is under Past trips.'
-  );
+  await expect(toastOf(page)).toContainText('Trip ended');
 };
 
 const startMixedTrip = async (page: Page) => {
@@ -57,7 +55,7 @@ const startMixedTrip = async (page: Page) => {
   await page.clock.install({ time: MORNING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await dropOf(page, 'Pot', 'Pot 1');
   await dropOf(page, 'Net', 'Net 1');
 
@@ -81,26 +79,23 @@ test('ending a mixed trip preserves collected and uncollected gear on the main m
   await startMixedTrip(page);
   const endButton = mapArea.getByRole('button', { name: 'End trip' });
   await endButton.click();
-  await expect(sheet).toContainText(
-    "1 drop is still in the water. It'll be saved as uncollected."
-  );
+  await expect(sheet).toContainText('1 still in the water');
   await sheet.getByRole('button', { name: 'Keep fishing' }).click();
   await expect(sheet).toBeHidden();
   await expect(endButton).toBeFocused();
 
-  await endTheTrip(
-    page,
-    "1 drop is still in the water. It'll be saved as uncollected."
-  );
+  await endTheTrip(page, '1 still in the water');
   await expect(page.getByRole('button', { name: 'Drop net' })).toBeFocused();
   await expect(endButton).toHaveCount(0);
-  await expect(mapArea).toContainText('No trip running');
+  await tab(page, 'Gear').click();
+  await expect(page.getByRole('main')).toContainText('Nothing in the water');
+  await tab(page, 'Map').click();
 
   const pastLayer = sheet
     .getByRole('group', { name: 'Also show' })
     .getByRole('checkbox', { name: 'Past trips' });
   const pastGroup = mapArea.getByRole('button', {
-    name: 'Pot 1 +1 more. 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    name: 'Pot 1 +1 more, 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
     exact: true
   });
   const showPastLayer = async (on: boolean) => {
@@ -111,7 +106,7 @@ test('ending a mixed trip preserves collected and uncollected gear on the main m
     await expect(pastGroup).toHaveCount(on ? 1 : 0);
   };
   await expect(
-    mapArea.getByRole('img', { name: /^Your position/ })
+    mapArea.getByRole('img', { name: /^Current position/ })
   ).toBeVisible();
   await expect(pastGroup).toHaveCount(0);
   await mapArea.getByRole('button', { name: /^Filter/ }).click();
@@ -150,10 +145,7 @@ test('a past trip lists its collected and uncollected gear, saves an edited catc
   const sheet = page.getByRole('dialog');
   const main = page.getByRole('main');
   await startMixedTrip(page);
-  await endTheTrip(
-    page,
-    "1 drop is still in the water. It'll be saved as uncollected."
-  );
+  await endTheTrip(page, '1 still in the water');
   await tab(page, 'Past trips').click();
   const pastTrip = main.getByRole('button', { name: new RegExp(TRIP_DATE) });
   await expect(pastTrip).toHaveAccessibleName(
@@ -177,7 +169,7 @@ test('a past trip lists its collected and uncollected gear, saves an edited catc
   await expect(pot1).toBeVisible();
   await expect(net1).toBeVisible();
   const detailGroup = detail.getByRole('button', {
-    name: 'Pot 1 +1 more. 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    name: 'Pot 1 +1 more, 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
     exact: true
   });
   await expect(detailGroup).toBeVisible();
@@ -196,7 +188,7 @@ test('a past trip lists its collected and uncollected gear, saves an edited catc
   await expectAccessibleInBothThemes(page);
 
   await net1.click();
-  await expect(sheet).toContainText('Uncollected.');
+  await expect(sheet).toContainText('Uncollected');
   await expect(
     sheet.getByRole('button', { name: 'Collect', exact: true })
   ).toHaveCount(0);
@@ -266,10 +258,7 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   await dropPotAt(page, 0, 'Pot 1');
   await page.clock.fastForward('30:00');
   await dropPotAt(page, 0.0005, 'Pot 2');
-  await endTheTrip(
-    page,
-    "2 drops are still in the water. They'll be saved as uncollected."
-  );
+  await endTheTrip(page, '2 still in the water');
 
   await tab(page, 'Past trips').click();
   await main
@@ -301,7 +290,7 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   await sheet.getByRole('button', { name: 'Delete drop' }).click();
   await expect(sheet).toBeHidden();
   await expect(toastOf(page)).toContainText('Pot 1 deleted');
-  await expect(main).toContainText('No past trips yet.');
+  await expect(main).toContainText('No past trips');
   await expect(listHeading).toBeFocused();
 
   await toastOf(page).getByRole('button', { name: 'Undo' }).click();
@@ -338,12 +327,12 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   await releaseStorage(page);
   await expect(sheet).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip deleted');
-  await expect(main).toContainText('No past trips yet.');
+  await expect(main).toContainText('No past trips');
   await expect(listHeading).toBeFocused();
 
   await page.reload();
   await tab(page, 'Past trips').click();
-  await expect(main).toContainText('No past trips yet.');
+  await expect(main).toContainText('No past trips');
 });
 
 test('past trips show what was just written even while storage reads fail, and history that fails to load offers Retry instead of reading as empty', async ({
@@ -360,14 +349,11 @@ test('past trips show what was just written even while storage reads fail, and h
   await page.clock.install({ time: MORNING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await dropOf(page, 'Pot', 'Pot 1');
 
   await failStorage(page, 'reads');
-  await endTheTrip(
-    page,
-    "1 drop is still in the water. It'll be saved as uncollected."
-  );
+  await endTheTrip(page, '1 still in the water');
   await tab(page, 'Past trips').click();
   await expect(pastTrip).toBeVisible();
   await pastTrip.click();
@@ -376,19 +362,19 @@ test('past trips show what was just written even while storage reads fail, and h
     .click();
   await sheet.getByRole('button', { name: 'Delete drop' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 deleted');
-  await expect(main).toContainText('No past trips yet.');
+  await expect(main).toContainText('No past trips');
   await toastOf(page).getByRole('button', { name: 'Undo' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 restored');
   await expect(pastTrip).toBeVisible();
 
   await page.reload();
   await tab(page, 'Past trips').click();
-  await expect(main).toContainText("Couldn't load past trips.");
-  await expect(main).not.toContainText('No past trips yet.');
+  await expect(main).toContainText("Couldn't load past trips");
+  await expect(main).not.toContainText('No past trips');
   await expect(pastTrip).toHaveCount(0);
 
   await failStorage(page, null);
   await main.getByRole('button', { name: 'Retry' }).click();
   await expect(pastTrip).toBeVisible();
-  await expect(main).not.toContainText("Couldn't load past trips.");
+  await expect(main).not.toContainText("Couldn't load past trips");
 });

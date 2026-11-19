@@ -32,7 +32,7 @@ for (const { phone, setup } of PHONES) {
 
     await page.goto('/');
     await page.getByRole('button', { name: 'Turn on location' }).click();
-    await expect(page.getByText('Position ready')).toBeVisible();
+    await expect(page.getByText('Finding position')).toBeHidden();
     await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText('Pot 1 dropped');
     await page.getByRole('button', { name: 'Drop pot' }).click();
@@ -119,7 +119,7 @@ test('a phone that keeps the screen on holds one lock during a trip, takes it ag
   await page.addInitScript(holdLocksLikeAPhone);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   expect(await locksHeld(page)).toEqual({ held: 0, most: 0 });
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');

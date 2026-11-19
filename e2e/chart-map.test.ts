@@ -15,7 +15,7 @@ const OPEN_FREE_MAP = 'https://tiles.openfreemap.org/';
 const dropPotAndOpenMap = async (page: Page) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.getByRole('button', { name: 'Map', exact: true }).click();
@@ -26,7 +26,7 @@ const mapArea = (page: Page) =>
 const potOnMap = (page: Page) =>
   mapArea(page).getByRole('button', { name: /^Pot 1,/ });
 const myPosition = (page: Page) =>
-  mapArea(page).getByRole('img', { name: /^Your position/ });
+  mapArea(page).getByRole('img', { name: /^Current position/ });
 
 const chartLevel = (url: string) => Number(CHART_TILE.exec(url)?.[1]);
 
@@ -66,7 +66,7 @@ test('the Map tab shows gear and my position from the phone and asks NOAA only f
 
   await expect(potOnMap(page)).toBeVisible();
   await expect(myPosition(page)).toBeVisible();
-  await expect(mapArea(page)).toContainText('Not to be used for navigation');
+  await expect(mapArea(page)).toContainText('not for navigation');
 
   const zoomIn = mapArea(page).getByRole('button', { name: 'Zoom in' });
   await expect(async () => {
@@ -159,16 +159,14 @@ const streetMapButton = (page: Page) =>
   mapArea(page).getByRole('button', { name: 'Street map' });
 const outageNotice = (page: Page, shown: string | RegExp) =>
   mapArea(page).getByRole('status').filter({ hasText: shown });
-const cannotLoad = (page: Page) =>
-  outageNotice(page, "The map can't load right now.");
-const offline = (page: Page) =>
-  outageNotice(page, "Offline. The map can't load.");
+const cannotLoad = (page: Page) => outageNotice(page, /^Map can't load$/);
+const offline = (page: Page) => outageNotice(page, 'Map offline');
 const claimsACause = (page: Page) =>
-  outageNotice(page, /No signal|Offline|isn't answering/);
+  outageNotice(page, /Map offline|Map service not answering/);
 const notAnswering = (page: Page) =>
-  outageNotice(page, "The map service isn't answering");
+  outageNotice(page, 'Map service not answering');
 const anyOutage = (page: Page) =>
-  outageNotice(page, /map can't load|No signal/);
+  outageNotice(page, /Map can't load|Map offline|Map service not answering/);
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`in ${colorScheme} mode, Street map shows a check while it is on and none once the keyboard turns it off again, keeps its name and stays the same size so no map control moves`, async ({
@@ -211,7 +209,6 @@ test('map tiles and a Street style the browser cannot load while it is online sa
 
   const notice = cannotLoad(page);
   await expect(notice).toBeVisible();
-  await expect(notice).toContainText('Your gear and position still show.');
   await expect(claimsACause(page)).toHaveCount(0);
   expect(await page.evaluate(() => navigator.onLine)).toBe(true);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
@@ -265,9 +262,6 @@ test('while the browser is offline the Map tab says so for map tiles and the Str
   await streetMapButton(page).click();
   await expect(streetMapButton(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(offline(page)).toBeVisible();
-  await expect(offline(page)).toContainText(
-    'Your gear and position still show.'
-  );
   await expect(cannotLoad(page)).toHaveCount(0);
   await expect(potOnMap(page)).toBeVisible();
   await expect(myPosition(page)).toBeVisible();
@@ -283,7 +277,7 @@ test('while the browser is offline the Map tab says so for map tiles and the Str
   await expect(potOnMap(page)).toBeVisible();
 });
 
-test('when NOAA answers map tiles busy or failing, the Map tab says the map service is not answering rather than no signal, still shows gear and clears once a map tile arrives', async ({
+test('when NOAA answers map tiles busy or failing, the Map tab reports that the service is not answering, still shows gear and clears once a map tile arrives', async ({
   context,
   page
 }) => {
@@ -545,7 +539,7 @@ test('while moving with a rough fix, my position reads as rough with my heading'
   await page.getByRole('button', { name: 'Map', exact: true }).click();
 
   await expect(myPosition(page)).toHaveAccessibleName(
-    'Your position, rough, within about 390 feet, heading east'
+    'Current position, rough, within about 390 feet, heading east'
   );
 });
 
@@ -642,7 +636,7 @@ test('eight drops shown apart merge into groups as I zoom out without any marker
       latitude: MADE_UP_SEA.latitude + index * 0.001,
       longitude: MADE_UP_SEA.longitude
     });
-    await expect(page.getByText('Position ready')).toBeVisible();
+    await expect(page.getByText('Finding position')).toBeHidden();
     await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(
       `Pot ${String(index + 1)} dropped`
@@ -690,7 +684,7 @@ test('eight drops shown apart merge into groups as I zoom out without any marker
   await expectAccessibleInBothThemes(page);
   const lead = /^\d/.exec(await group.innerText())?.[0];
   await expect(group).toHaveAccessibleName(
-    `Pot ${String(lead)} +7 more. 8 gear in this area: ${Array.from({ length: 8 }, (_, step) => `Pot ${String(step + 1)}`).join(', ')}`
+    `Pot ${String(lead)} +7 more, 8 gear in this area: ${Array.from({ length: 8 }, (_, step) => `Pot ${String(step + 1)}`).join(', ')}`
   );
   await expect(map.getByRole('button', { name: /^Pot \d,/ })).toHaveCount(0);
 
@@ -767,7 +761,7 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
         latitude: MADE_UP_SEA.latitude + index * 0.0012,
         longitude: MADE_UP_SEA.longitude + index * 0.0004
       });
-      await expect(page.getByText('Position ready')).toBeVisible();
+      await expect(page.getByText('Finding position')).toBeHidden();
       const kind = name.startsWith('Net') ? 'Net' : 'Pot';
       await page
         .getByRole('group', { name: 'Gear to drop' })
@@ -881,7 +875,7 @@ test('while the map shows all gear, a drop beyond its edge brings all gear back 
       latitude: MADE_UP_SEA.latitude + north,
       accuracy: 8
     });
-    await expect(page.getByText('Position ready')).toBeVisible();
+    await expect(page.getByText('Finding position')).toBeHidden();
     await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(`${name} dropped`);
     return mapArea(page).getByRole('button', {
@@ -1004,7 +998,7 @@ test('while the map shows all gear, a map notice that appears later leaves every
     latitude: MADE_UP_SEA.latitude + 0.01,
     accuracy: 8
   });
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
   const pins = mapArea(page).getByRole('button', { name: /^Pot \d,/ });
@@ -1082,7 +1076,7 @@ test('on a 320 by 640 screen with a map notice showing, a new drop stays clear o
     latitude: MADE_UP_SEA.latitude - 0.02,
     accuracy: 8
   });
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
   const newest = mapArea(page).getByRole('button', { name: /^Pot 2[ ,]/ });
@@ -1300,7 +1294,7 @@ const dropAt = async (page: Page, number: number, north = 0, east = 0) => {
     latitude: MADE_UP_SEA.latitude + north,
     longitude: MADE_UP_SEA.longitude + east
   });
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
 };
@@ -1399,7 +1393,7 @@ test('a group led by collected gear says how many are in the water and collected
 }) => {
   const map = mapArea(page);
   const sheet = page.getByRole('dialog');
-  const group = map.getByRole('button', { name: /\+\d more\./ });
+  const group = map.getByRole('button', { name: /\+\d more,/ });
   const others = group.getByText(/^\+\d$/);
   const othersBorder = () =>
     others.evaluate((segment) => getComputedStyle(segment).borderTopStyle);
@@ -1417,7 +1411,7 @@ test('a group led by collected gear says how many are in the water and collected
 
   await page.getByRole('button', { name: 'Map', exact: true }).click();
   await expect(group).toHaveAccessibleName(
-    /^Pot \d \+2 more\. 3 gear here: Pot \d, Pot \d, Pot \d$/
+    /^Pot \d \+2 more, 3 gear here: Pot \d, Pot \d, Pot \d$/
   );
   expect(await othersBorder()).toBe('solid');
 
@@ -1429,7 +1423,7 @@ test('a group led by collected gear says how many are in the water and collected
   await gearRow(page, 'Pot 2').click();
   await sheet.getByRole('button', { name: 'Show on map' }).click();
   await expect(group).toHaveAccessibleName(
-    'Pot 2 +2 more. 3 gear here: Pot 1, Pot 3, Pot 2; 2 in the water, 1 collected'
+    'Pot 2 +2 more, 3 gear here: Pot 1, Pot 3, Pot 2; 2 in the water, 1 collected'
   );
   await expect(others).toHaveText('+2');
   expect(await othersBorder()).toBe('solid');
@@ -1447,7 +1441,7 @@ test('a group led by collected gear says how many are in the water and collected
   await sheet.getByRole('checkbox', { name: 'Collected gear' }).uncheck();
   await sheet.getByRole('button', { name: 'Done' }).click();
   await expect(group).toHaveAccessibleName(
-    /^Pot \d \+1 more\. 2 gear here: Pot 1, Pot 3$/
+    /^Pot \d \+1 more, 2 gear here: Pot 1, Pot 3$/
   );
   await map.getByRole('button', { name: /^Filter/ }).click();
   await sheet.getByRole('checkbox', { name: 'Collected gear' }).check();
@@ -1456,7 +1450,7 @@ test('a group led by collected gear says how many are in the water and collected
   await collectFromGroup('Pot 1');
   await collectFromGroup('Pot 3');
   await expect(group).toHaveAccessibleName(
-    /^Pot \d \+2 more\. 3 gear here: Pot \d, Pot \d, Pot \d$/
+    /^Pot \d \+2 more, 3 gear here: Pot \d, Pot \d, Pot \d$/
   );
   expect(await othersBorder()).toBe('dashed');
 });
@@ -1466,20 +1460,20 @@ test('collecting the gear that leads a group returns focus to the group, now led
 }) => {
   const map = mapArea(page);
   const sheet = page.getByRole('dialog');
-  const group = map.getByRole('button', { name: /\+\d more\./ });
+  const group = map.getByRole('button', { name: /\+\d more,/ });
   await holdFixes(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   for (const number of [1, 2]) await dropAt(page, number);
   await page.getByRole('button', { name: 'Map', exact: true }).click();
-  await expect(group).toHaveAccessibleName(/^Pot 2 \+1 more\./);
+  await expect(group).toHaveAccessibleName(/^Pot 2 \+1 more,/);
 
   await group.click();
   await sheet.getByRole('button', { name: /^Pot 2,/ }).click();
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(sheet).toHaveCount(0);
-  await expect(group).toHaveAccessibleName(/^Pot 1 \+1 more\./);
+  await expect(group).toHaveAccessibleName(/^Pot 1 \+1 more,/);
   await expect(group).toBeFocused();
 });
 
@@ -1518,7 +1512,7 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
   test.slow();
   const map = mapArea(page);
   const sheet = page.getByRole('dialog');
-  const group = map.getByRole('button', { name: /^Pot \d+ \+\d+ more\./ });
+  const group = map.getByRole('button', { name: /^Pot \d+ \+\d+ more,/ });
   const endTrip = async () => {
     await page.getByRole('button', { name: 'End trip' }).click();
     await sheet.getByRole('button', { name: 'End trip' }).click();
@@ -1531,7 +1525,7 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
     ).join(', ');
     await expect(group).toHaveAccessibleName(
       new RegExp(
-        `^Pot \\d+ \\+${String(more)} more\\. ${String(more + 1)} gear here: ${names}; all uncollected$`
+        `^Pot \\d+ \\+${String(more)} more, ${String(more + 1)} gear here: ${names}; all uncollected$`
       )
     );
     await expect(group).toContainText(`+${String(more)}`);
@@ -1649,7 +1643,7 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
   await expect(pot3).toBeVisible();
   await expect(shownOnMap).toHaveCount(0);
   expect(await ringed(pot3)).toBe(false);
-  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more\. 2 gear here: /);
+  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more, 2 gear here: /);
 
   await showFromGear('Pot 3');
   await expect(pot3).toBeFocused();
@@ -1672,7 +1666,7 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
   await showFromGear('Pot 2');
   await expect(ledByPot2).toBeFocused();
   await expect(ledByPot2).toHaveAccessibleName(
-    /^Pot 2 \+1 more\. 2 gear here: /
+    /^Pot 2 \+1 more, 2 gear here: /
   );
   await expect(ledByPot2).toHaveAttribute('aria-current', 'true');
   await expect(shownOnMap).toHaveCount(1);
@@ -1685,14 +1679,14 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
 
   await panAway(page, pair);
   await expect(shownOnMap).toHaveCount(0);
-  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more\. 2 gear here: /);
+  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more, 2 gear here: /);
   expect(await ringed(pair)).toBe(false);
 
   await showFromGear('Pot 2');
   await expect(ledByPot2).toHaveAttribute('aria-current', 'true');
   await map.getByRole('button', { name: 'Show all gear' }).click();
   await expect(shownOnMap).toHaveCount(0);
-  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more\. 2 gear here: /);
+  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more, 2 gear here: /);
   expect(await ringed(pair)).toBe(false);
 
   await showFromGear('Pot 2');
@@ -1723,7 +1717,7 @@ test('on a 320 by 640 screen, opening the Map tab and Show on map from the Gear 
   await page.setViewportSize({ width: 320, height: 640 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.evaluate(watchCredits, 30);
@@ -1866,7 +1860,7 @@ test.describe('with location denied', () => {
       await page.getByRole('button', { name: 'Turn on location' }).click();
       await page
         .getByRole('region', { name: 'Location is off' })
-        .getByRole('button', { name: 'How to turn on in Settings' })
+        .getByRole('button', { name: 'Show steps' })
         .click();
       await page.getByRole('button', { name: 'Drop pot' }).click();
       await expect(toastOf(page)).toContainText('Pot 1 dropped');

@@ -24,15 +24,6 @@
   const uncollected = $derived(
     trip ? trip.drops.filter((drop) => drop.collectedAt === null).length : 0
   );
-  const outcome = $derived.by(() => {
-    if (uncollected === 0) {
-      return 'Everything has been collected. The trip moves to past trips.';
-    }
-    if (uncollected === 1) {
-      return "1 drop is still in the water. It'll be saved as uncollected.";
-    }
-    return `${String(uncollected)} drops are still in the water. They'll be saved as uncollected.`;
-  });
 </script>
 
 <Sheet {open} titleId={TITLE_ID} {onclose} {returnFocus}>
@@ -42,7 +33,9 @@
     </h2>
   {/snippet}
 
-  <p class="text-[16px] leading-normal">{outcome}</p>
+  {#if uncollected > 0}
+    <p class="text-[16px] leading-normal">{uncollected} still in the water</p>
+  {/if}
 
   {#snippet footer()}
     <button

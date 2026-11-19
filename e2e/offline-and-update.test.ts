@@ -33,7 +33,7 @@ const servesVersion = async (page: Page, version: string) =>
 
 const dropPot = async (page: Page) => {
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
 };

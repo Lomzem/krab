@@ -8,12 +8,8 @@
   aria-labelledby="location-intro-title"
 >
   <h2 id="location-intro-title" class="text-[18px] font-semibold">
-    Krab needs your location
+    Krab needs location
   </h2>
-  <p class="text-[16px] leading-normal">
-    Each time you drop a pot or a net, Krab saves where it went so you can find
-    it again. Your locations stay on this phone. Your phone will ask next.
-  </p>
   <button type="button" class="w-full {ACTION_BUTTON}" onclick={onallow}
     >Turn on location</button
   >

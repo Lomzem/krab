@@ -4,6 +4,7 @@ import ts from 'typescript-eslint';
 import svelte from 'eslint-plugin-svelte';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
+import krab from './scripts/ui-copy.ts';
 
 const EFFECT_ONLY = [
   {
@@ -57,6 +58,12 @@ export default defineConfig([
     files: ['**/*.svelte', '**/*.svelte.ts'],
     languageOptions: { parserOptions: { parser: ts.parser } },
     rules: { 'svelte/comment-directive': 'off' }
+  },
+  {
+    files: ['src/**/*.svelte', 'src/lib/**/*.ts'],
+    ignores: ['**/*.test.ts', '**/*.d.ts'],
+    plugins: { krab },
+    rules: { 'krab/ui-copy': 'error' }
   },
   {
     files: ['e2e/**/*.test.ts'],

@@ -1,12 +1,8 @@
 <script lang="ts">
-  import { KIND_NAMES, type Kind } from '#lib/features/trip/index.js';
   import { ACTION_BUTTON, QUIET_BUTTON } from './controls';
 
-  let {
-    kind,
-    oncancel,
-    onskip
-  }: { kind: Kind; oncancel: () => void; onskip: () => void } = $props();
+  let { oncancel, onskip }: { oncancel: () => void; onskip: () => void } =
+    $props();
 
   let heading = $state<HTMLHeadingElement>();
 
@@ -33,11 +29,6 @@
       Getting position
     </h2>
   </div>
-  <p class="text-[16px] leading-normal">
-    Hold still. If no position arrives within 20 seconds, the {KIND_NAMES[
-      kind
-    ].toLowerCase()} is saved without one.
-  </p>
   <div class="grid grid-cols-2 gap-2">
     <button type="button" class={QUIET_BUTTON} onclick={oncancel}>Cancel</button
     >

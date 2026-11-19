@@ -118,9 +118,7 @@
 
 <form id={formId} class="grid gap-5" onsubmit={submit} novalidate>
   {#if collectedAt === null && subject.trip.endedAt !== null}
-    <p class="text-[16px] font-medium">
-      Uncollected. The trip ended with this gear in the water.
-    </p>
+    <p class="text-[16px] font-medium">Uncollected</p>
   {:else if collectedAt === null}
     <div class="grid gap-3">
       <div
@@ -169,7 +167,6 @@
   <KindField
     bind:kind
     {stored}
-    name={subject.name}
     locked={!canChangeKind(subject.trip, drop.gearId)}
     {idPrefix}
   />

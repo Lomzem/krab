@@ -279,9 +279,7 @@
           {/snippet}
         </ChartMap>
       {:catch}
-        <p class="px-4 pt-4 text-[16px]">
-          The map can't show on this phone. The trip's gear is listed below.
-        </p>
+        <p class="px-4 pt-4 text-[16px]">This phone can't show maps</p>
       {/await}
     </div>
 
@@ -351,11 +349,11 @@
       Past trips
     </h1>
     {#if failed}
-      <LoadFailed text="Couldn't load past trips." {onretry} />
+      <LoadFailed text="Couldn't load past trips" {onretry} />
     {/if}
     {#if past.length === 0}
       {#if !failed}
-        <p class="px-4 text-[16px]">No past trips yet.</p>
+        <p class="px-4 text-[16px]">No past trips</p>
       {/if}
     {:else}
       <ul bind:this={list} class="border-t border-border bg-card">
@@ -429,9 +427,7 @@
     </h2>
   {/snippet}
 
-  <p class="text-[16px] leading-normal">
-    Its drops and catches are removed from this phone. This can't be undone.
-  </p>
+  <p class="text-[16px] leading-normal">Can't be undone</p>
 
   {#snippet footer()}
     <button
