@@ -87,7 +87,7 @@ test.describe('with location denied', () => {
   });
 });
 
-test('while getting a position, Cancel and Save without position are reachable 44 px targets and the row above stops repeating Finding position', async ({
+test('while getting a position, Cancel and Save without position are reachable 44 px targets the row above stops repeating Finding position, and the map keeps its size', async ({
   page
 }) => {
   await page.addInitScript(() => {
@@ -97,12 +97,15 @@ test('while getting a position, Cancel and Save without position are reachable 4
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeVisible();
+  const view = page.getByRole('region', { name: 'Map view' });
+  const viewBox = await view.boundingBox();
 
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(
     page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeFocused();
   await expect(page.getByText('Finding position')).toBeHidden();
+  expect(await view.boundingBox()).toEqual(viewBox);
   const cancel = page.getByRole('button', { name: 'Cancel' });
   const save = page.getByRole('button', { name: 'Save without position' });
   await expectTouchTarget(cancel);
@@ -214,7 +217,7 @@ test('a stale fix shows as Last position with no distances, and Centre on my pos
 });
 
 for (const width of [320, 393]) {
-  test(`at ${String(width)} px wide, location turned off after a fix hides my position, and Drop says it saves without one in the same box`, async ({
+  test(`at ${String(width)} px wide, location turned off after a fix hides my position, and Drop says it saves without one in the same 64 px box`, async ({
     page
   }) => {
     await page.setViewportSize({ width, height: 700 });
@@ -228,6 +231,7 @@ for (const width of [320, 393]) {
     ).toBeVisible();
     const ready = page.getByRole('button', { name: 'Drop pot', exact: true });
     const readyBox = await ready.boundingBox();
+    expect(readyBox?.height).toBe(64);
 
     await denyLocation(page);
     const denied = page.getByRole('button', {

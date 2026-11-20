@@ -43,20 +43,15 @@
   <button
     bind:this={button}
     type="button"
-    class="grid min-h-16 min-w-0 grow-999 basis-32 touch-manipulation rounded-control bg-action px-3 py-2 text-control leading-tight font-semibold text-action-foreground compact:min-h-14 compact:py-1 {FOCUS} {PRESS} active:brightness-95"
+    class="flex min-h-16 min-w-0 grow-999 basis-32 touch-manipulation flex-col items-center justify-center rounded-control bg-action px-3 py-2 text-control leading-tight font-semibold text-action-foreground compact:min-h-14 compact:py-1 {FOCUS} {PRESS} active:brightness-95"
     onclick={ondrop}
   >
-    {#each [false, true] as without (without)}
-      <span
-        class={[
-          'col-start-1 row-start-1 flex items-center gap-2 place-self-center text-left',
-          denied !== without && 'invisible'
-        ]}
-        aria-hidden={denied !== without}
-      >
-        <GearIcon {kind} size={22} />
-        {without ? `Drop ${name} without position` : `Drop ${name}`}
-      </span>
-    {/each}
+    <span class="flex items-center gap-2">
+      <GearIcon {kind} size={22} />
+      Drop {name}
+    </span>
+    {#if denied}
+      <span class="text-sm font-medium">without position</span>
+    {/if}
   </button>
 </div>
