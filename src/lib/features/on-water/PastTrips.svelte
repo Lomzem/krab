@@ -24,6 +24,7 @@
   import { chipBoxes } from './pin-chip';
   import SelectedCheck from './SelectedCheck.svelte';
   import Sheet from './Sheet.svelte';
+  import type { Notice } from './on-water.svelte';
   import UncollectedMark from './UncollectedMark.svelte';
 
   const DELETE_TITLE_ID = 'delete-trip-title';
@@ -42,7 +43,8 @@
     onshown,
     onopen,
     ondelete,
-    onretry
+    onretry,
+    notice
   }: {
     past: readonly Trip[];
     failed: boolean;
@@ -53,6 +55,7 @@
     onopen: (dropId: string, opener: HTMLElement, from: 'list' | 'map') => void;
     ondelete: (tripId: string) => Promise<boolean>;
     onretry: () => Promise<void>;
+    notice: Notice | null;
   } = $props();
 
   let selection = $state<PastDaySelection>('all');
@@ -419,6 +422,7 @@
   open={deleteOpen && trip !== null}
   titleId={DELETE_TITLE_ID}
   onclose={keepTrip}
+  {notice}
   returnFocus={() => (deleteButton?.isConnected ? deleteButton : titleHeading)}
 >
   {#snippet heading()}

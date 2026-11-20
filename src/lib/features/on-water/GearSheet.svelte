@@ -7,7 +7,7 @@
   import GearDetailsForm from './GearDetailsForm.svelte';
   import GearIcon from './GearIcon.svelte';
   import Sheet from './Sheet.svelte';
-  import type { SaveProblem } from './on-water.svelte';
+  import type { Notice, SaveProblem } from './on-water.svelte';
 
   const PROBLEMS: Record<Exclude<SaveProblem, 'depth'>, string> = {
     catch: 'Catch needs whole numbers',
@@ -29,6 +29,7 @@
     oncollect,
     ondropagain,
     returnFocus,
+    notice,
     actions,
     direction,
     endAction
@@ -41,6 +42,7 @@
     oncollect?: (dropId: string) => void;
     ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     returnFocus: () => HTMLElement | null | undefined;
+    notice: Notice | null;
     actions?: Snippet<[Drop]>;
     direction?: Snippet<[Drop]>;
     endAction?: Snippet<[Drop]>;
@@ -61,7 +63,13 @@
   );
 </script>
 
-<Sheet open={subject !== null} titleId={TITLE_ID} {onclose} {returnFocus}>
+<Sheet
+  open={subject !== null}
+  titleId={TITLE_ID}
+  {onclose}
+  {returnFocus}
+  {notice}
+>
   {#snippet heading()}
     {#if subject}
       <h2

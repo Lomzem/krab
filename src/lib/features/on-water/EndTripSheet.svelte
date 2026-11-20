@@ -2,6 +2,7 @@
   import type { Trip } from '#lib/features/trip/index.js';
   import { DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
   import Sheet from './Sheet.svelte';
+  import type { Notice } from './on-water.svelte';
 
   const TITLE_ID = 'end-trip-title';
 
@@ -11,7 +12,8 @@
     busy,
     onend,
     onclose,
-    returnFocus
+    returnFocus,
+    notice
   }: {
     trip: Trip | null;
     open: boolean;
@@ -19,6 +21,7 @@
     onend: () => void;
     onclose: () => void;
     returnFocus: () => HTMLElement | null | undefined;
+    notice: Notice | null;
   } = $props();
 
   const uncollected = $derived(
@@ -26,7 +29,7 @@
   );
 </script>
 
-<Sheet {open} titleId={TITLE_ID} {onclose} {returnFocus}>
+<Sheet {open} titleId={TITLE_ID} {onclose} {returnFocus} {notice}>
   {#snippet heading()}
     <h2 id={TITLE_ID} class="text-[22px] leading-tight font-semibold">
       End this trip?

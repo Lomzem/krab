@@ -397,6 +397,7 @@
         }}
         ondelete={(tripId: string) => water.deleteTrip(tripId)}
         onretry={reload}
+        notice={water.notice}
       />
     {/if}
   </main>
@@ -410,6 +411,7 @@
     oncollect={collect}
     ondropagain={dropAgain}
     returnFocus={sheetReturnFocus}
+    notice={water.notice}
   >
     {#snippet actions(target: Drop)}
       {#if sheet?.from === 'list' && target.position}
@@ -465,6 +467,7 @@
       endOpen = false;
     }}
     returnFocus={endReturnFocus}
+    notice={water.notice}
   />
 
   <UndoToast

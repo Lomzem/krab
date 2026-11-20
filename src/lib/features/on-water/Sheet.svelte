@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { tick, type Snippet } from 'svelte';
+  import { tick, untrack, type Snippet } from 'svelte';
+  import type { Notice } from './on-water.svelte';
 
   let {
     open,
     titleId,
     onclose,
     returnFocus,
+    notice = null,
     heading,
     children,
     footer
@@ -14,6 +16,7 @@
     titleId: string;
     onclose: () => void;
     returnFocus: () => HTMLElement | null | undefined;
+    notice?: Notice | null;
     heading: Snippet;
     children: Snippet;
     footer?: Snippet;
@@ -23,6 +26,8 @@
     'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex], [contenteditable]:not([contenteditable="false"])';
 
   let dialog = $state<HTMLDialogElement>();
+  let openedAt = $state(0);
+  const said = $derived(notice && notice.key > openedAt ? notice.text : '');
   let body = $state<HTMLDivElement>();
 
   const reachable = (element: HTMLElement) =>
@@ -177,6 +182,7 @@
     if (open && !dialog.open) {
       endDoublePress();
       lastPress = null;
+      openedAt = untrack(() => notice?.key ?? 0);
       dialog.showModal();
       if (body) body.scrollTop = 0;
     } else if (!open && dialog.open) {
@@ -231,6 +237,14 @@
   >
     {@render children()}
   </div>
+  <p
+    role="status"
+    aria-label="Messages"
+    class={said &&
+      'border-t border-border px-4 pt-3 text-[16px] leading-snug font-medium'}
+  >
+    {said}
+  </p>
   {#if footer}
     <footer
       class="flex flex-wrap gap-2 border-t border-border bg-card px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"

@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, storedCollections, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
+import { failStorage, injectStorageFaults } from './storage-faults';
 
 const gearTab = (page: Page) =>
   page.getByRole('button', { name: 'Gear', exact: true });
@@ -479,4 +480,41 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   await expect(released).toHaveValue('0');
   await page.keyboard.press('Escape');
   await expect(collectedRow(page, 'Pot 1')).toContainText('Nothing caught');
+});
+
+test('the open sheet says what Collect and End trip did in its own status, including a failed write, and stays open for another try', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const said = sheet.getByRole('status', { name: 'Messages' });
+  const collect = sheet.getByRole('button', { name: 'Collect', exact: true });
+
+  await injectStorageFaults(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await gearTab(page).click();
+  await inWaterRow(page, 'Pot 1').click();
+  await expect(said).toHaveText('');
+
+  await failStorage(page, 'writes');
+  await collect.click();
+  await expect(said).toHaveText("Couldn't collect");
+  await expect(collect).toBeVisible();
+
+  await failStorage(page, null);
+  await collect.click();
+  await expect(said).toHaveText('Pot 1 collected');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('button', { name: 'End trip' }).click();
+  await expect(said).toHaveText('');
+  await failStorage(page, 'writes');
+  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await expect(said).toHaveText("Couldn't end the trip");
+  await expect(sheet.getByRole('button', { name: 'End trip' })).toBeVisible();
 });
