@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+@custom-variant compact (@media (max-height: 26rem));
+@custom-variant short-map (@container map (max-height: 26rem));
+
 @theme inline {
   --font-sans:
     'Atkinson Hyperlegible Next', ui-sans-serif, system-ui, sans-serif;
@@ -137,6 +140,8 @@ body {
   color: var(--foreground);
 }
 
-.maplibregl-ctrl.maplibregl-ctrl-attrib a {
-  text-decoration: underline;
+@keyframes receipt-out {
+  to {
+    opacity: 0;
+  }
 }

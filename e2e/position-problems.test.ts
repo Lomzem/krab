@@ -36,20 +36,16 @@ test.describe('with location denied', () => {
     await page.getByRole('button', { name: 'Turn on location' }).click();
 
     const guidance = page.getByRole('region', { name: 'Location is off' });
-    await expect(guidance).toBeVisible();
-    const disclosure = guidance.getByRole('button', {
-      name: 'Show steps'
-    });
-    await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
-    await disclosure.click();
-    const hide = guidance.getByRole('button', { name: 'Hide steps' });
-    await expect(hide).toHaveAttribute('aria-expanded', 'true');
-    await expect(
-      page.locator(`#${String(await hide.getAttribute('aria-controls'))}`)
-    ).toContainText('Settings › Privacy & Security › Location Services');
+    const show = guidance.getByRole('button', { name: 'Show steps' });
+    await show.click();
+    const steps = page.getByRole('dialog', { name: 'Turn on location' });
+    await expect(steps).toContainText(
+      'Settings › Privacy & Security › Location Services'
+    );
     await expectAccessibleInBothThemes(page);
-    await hide.click();
-    await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+    await steps.getByRole('button', { name: 'Close' }).click();
+    await expect(steps).toBeHidden();
+    await expect(show).toBeFocused();
     await expectAccessibleInBothThemes(page);
 
     await page.getByRole('button', { name: 'Drop pot' }).click();
@@ -62,48 +58,30 @@ test.describe('with location denied', () => {
     ).toContainText('No position');
   });
 
-  test('Settings steps shown on one tab are folded away on every other tab, and open again when asked, never asking for location by themselves', async ({
+  test('Settings steps open from Map and Gear, return focus to Show steps on close, and never ask for location by themselves', async ({
     page
   }) => {
     await page.addInitScript(countAsks);
     await page.goto('/');
     await page.getByRole('button', { name: 'Turn on location' }).click();
-    const guidance = page.getByRole('region', { name: 'Location is off' });
-    const show = guidance.getByRole('button', {
-      name: 'Show steps'
-    });
-    const hide = guidance.getByRole('button', { name: 'Hide steps' });
-    const steps = page.getByText(
-      'Settings › Privacy & Security › Location Services'
-    );
+    const show = page
+      .getByRole('region', { name: 'Location is off' })
+      .getByRole('button', { name: 'Show steps' });
+    const steps = page.getByRole('dialog', { name: 'Turn on location' });
     await expect(show).toBeVisible();
     const askedAtStart = await asks(page);
 
-    for (const [from, ...away] of [
-      ['Map', 'Gear'],
-      ['Gear', 'Map'],
-      ['Map', 'Past trips', 'Map']
-    ] as const) {
-      await expect(
-        page.getByRole('button', { name: from, exact: true })
-      ).toHaveAttribute('aria-current', 'page');
+    for (const screen of ['Map', 'Gear', 'Map'] as const) {
+      await page.getByRole('button', { name: screen, exact: true }).click();
       await show.click();
-      await expect(hide).toBeFocused();
-      await expect(hide).toHaveAttribute('aria-expanded', 'true');
-      await expect(steps).toBeVisible();
-
-      for (const tab of away) {
-        await page.getByRole('button', { name: tab, exact: true }).click();
-      }
-      const route = [from, ...away].join(' to ');
-      await expect(show, `steps still open after ${route}`).toHaveAttribute(
-        'aria-expanded',
-        'false'
-      );
-      await expect(steps).toBeHidden();
-      await expect(hide).toHaveCount(0);
+      await expect(steps).toContainText('Reopen Krab');
+      await page.keyboard.press('Escape');
+      await expect(steps, `steps closed on ${screen}`).toBeHidden();
+      await expect(show).toBeFocused();
     }
-    await page.getByRole('button', { name: 'Drop pot' }).click();
+    await page
+      .getByRole('button', { name: 'Drop pot without position' })
+      .click();
     await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
     expect(await asks(page), 'location asked for again').toBe(askedAtStart);
   });
@@ -186,7 +164,7 @@ test('a stale fix shows as Last position with no distances, and Centre on my pos
   const map = page.getByRole('region', { name: 'Map' });
   const current = map.getByRole('img', { name: /^Current position/ });
   const last = map.getByRole('img', { name: 'Last position' });
-  const nearest = map.getByRole('heading', { name: /Nearest gear/ });
+  const nearest = page.getByRole('button', { name: /^Nearest gear: / });
   const centre = map.getByRole('button', { name: 'Centre on my position' });
   const away = { ...MADE_UP_SEA, latitude: MADE_UP_SEA.latitude + 0.001 };
   await holdFixes(page);
@@ -199,7 +177,10 @@ test('a stale fix shows as Last position with no distances, and Centre on my pos
   await deliverFix(page, MADE_UP_SEA, PAUSED);
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
-  await deliverFix(page, away, PAUSED);
+  await page.clock.runFor(8001);
+  await expect(toastOf(page)).toBeHidden();
+  const later = new Date(PAUSED.getTime() + 8001);
+  await deliverFix(page, away, later);
   await expect(current).toBeVisible();
   await expect(nearest).toBeVisible();
   await expect(centre).not.toHaveAttribute('aria-disabled');
@@ -223,7 +204,7 @@ test('a stale fix shows as Last position with no distances, and Centre on my pos
   await expect(row).not.toContainText('ft');
   await expect(row).not.toContainText('Waiting for location');
 
-  await deliverFix(page, away, new Date('2031-03-04T06:00:05.001Z'));
+  await deliverFix(page, away, new Date(later.getTime() + 5001));
   await expect(row).toContainText('ft');
   await page.getByRole('button', { name: 'Map', exact: true }).click();
   await expect(current).toBeVisible();
@@ -349,7 +330,7 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
   await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
 });
 
-test('a drop with a fresh fix shows saving feedback only once saving has taken half a second, a quick save leaves focus where it is, and End trip and the map stay in place but End trip waits while it saves', async ({
+test('a drop with a fresh fix shows saving feedback only once saving has taken half a second, a quick save leaves focus where it is, the map stays in place, and End trip on Gear waits while it saves', async ({
   page
 }) => {
   await holdFixes(page);
@@ -385,37 +366,39 @@ test('a drop with a fresh fix shows saving feedback only once saving has taken h
 
   const endTrip = page.getByRole('button', { name: 'End trip' });
   const mapView = page.getByRole('region', { name: 'Map view' });
-  const placed = async () => ({
-    endTrip: await endTrip.boundingBox(),
-    mapTop: (await mapView.boundingBox())?.y
-  });
+  const placed = () => mapView.boundingBox();
   const before = await placed();
-  expect(before.endTrip).not.toBeNull();
+  expect(before).not.toBeNull();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
   await dropPot.focus();
   await holdStorage(page);
   await page.keyboard.press('Enter');
   await page.clock.runFor(499);
   await expect(saving).toHaveCount(0);
   await expect(dropPot).toBeFocused();
-  await expect(endTrip).toHaveAttribute('aria-disabled', 'true');
   expect(await placed()).toEqual(before);
   await page.clock.runFor(1);
   await expect(saving).toBeFocused();
   await expect(dropPot).toHaveCount(0);
   await expect(toastOf(page)).not.toContainText('Pot 3');
   expect(await placed()).toEqual(before);
-  await endTrip.click({ force: true });
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-
   await releaseStorage(page);
   await expect(toastOf(page)).toContainText('Pot 3 dropped');
   await expect(dropPot).toBeFocused();
-  await expect(endTrip).not.toHaveAttribute('aria-disabled', 'true');
   expect(await placed()).toEqual(before);
+
+  await holdStorage(page);
+  await dropPot.click();
   await gearTab.click();
+  await expect(endTrip).toHaveAttribute('aria-disabled', 'true');
+  await endTrip.click({ force: true });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await releaseStorage(page);
+  await expect(toastOf(page)).toContainText('Pot 4 dropped');
+  await expect(endTrip).not.toHaveAttribute('aria-disabled', 'true');
   await expect(
     page.getByRole('main').getByRole('listitem').filter({ hasText: 'Pot' })
-  ).toHaveCount(3);
+  ).toHaveCount(4);
 });
 
 type Watching = { hidden: boolean; active: number[]; most: number };

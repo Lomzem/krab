@@ -39,6 +39,7 @@ const dropPotAt = async (page: Page, north: number, name: string) => {
 
 const endTheTrip = async (page: Page, outcome: string) => {
   const sheet = page.getByRole('dialog');
+  await tab(page, 'Gear').click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
   await expect(sheet).toContainText(outcome);
@@ -75,7 +76,10 @@ test('ending a mixed trip preserves collected and uncollected gear on the main m
   const mapArea = page.getByRole('region', { name: 'Map', exact: true });
 
   await startMixedTrip(page);
-  const endButton = mapArea.getByRole('button', { name: 'End trip' });
+  await tab(page, 'Gear').click();
+  const endButton = page.getByRole('main').getByRole('button', {
+    name: 'End trip'
+  });
   await endButton.click();
   await expect(sheet).toHaveAccessibleDescription('1 still in the water');
   await expect(
@@ -89,9 +93,10 @@ test('ending a mixed trip preserves collected and uncollected gear on the main m
   await expect(endButton).toBeFocused();
 
   await endTheTrip(page, '1 still in the water');
-  await expect(page.getByRole('button', { name: 'Drop net' })).toBeFocused();
+  await expect(
+    page.getByRole('heading', { name: 'Gear', level: 1 })
+  ).toBeFocused();
   await expect(endButton).toHaveCount(0);
-  await tab(page, 'Gear').click();
   await expect(page.getByRole('main')).toContainText('Nothing in the water');
   await tab(page, 'Map').click();
 

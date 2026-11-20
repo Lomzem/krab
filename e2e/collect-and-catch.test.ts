@@ -518,7 +518,6 @@ test('the open sheet says what Collect and End trip did in its own status, inclu
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await expect(said).toHaveText('');
   await failStorage(page, 'writes');

@@ -19,16 +19,14 @@
   const name = $derived(KIND_NAMES[kind].toLowerCase());
 </script>
 
-<div
-  class="flex flex-wrap items-stretch gap-2 border-t border-border bg-card px-3 py-2"
->
+<div class="flex flex-wrap items-stretch gap-2">
   <fieldset
-    class="flex grow flex-wrap gap-0.5 rounded-control border border-input p-0.75"
+    class="flex min-h-16 grow gap-1 rounded-control bg-muted p-1 compact:min-h-14"
   >
     <legend class="sr-only">Gear to drop</legend>
     {#each KINDS as option (option)}
       <label
-        class="flex min-h-11 min-w-16 grow cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-[0.3125rem] px-2 text-base font-medium whitespace-nowrap text-muted-foreground has-checked:bg-accent has-checked:text-accent-foreground {CHOICE_FOCUS_INSET}"
+        class="flex min-w-16 flex-1 cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-[0.3125rem] px-2 text-base font-medium whitespace-nowrap text-muted-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-sm {CHOICE_FOCUS_INSET}"
       >
         <input
           class="sr-only"
@@ -45,25 +43,20 @@
   <button
     bind:this={button}
     type="button"
-    class="flex min-h-13 grow-999 touch-manipulation items-center justify-center gap-2 rounded-control bg-action px-3 py-1 text-control leading-tight font-semibold text-action-foreground {FOCUS} {PRESS} active:brightness-95"
+    class="grid min-h-16 min-w-0 grow-999 basis-32 touch-manipulation rounded-control bg-action px-3 py-2 text-control leading-tight font-semibold text-action-foreground compact:min-h-14 compact:py-1 {FOCUS} {PRESS} active:brightness-95"
     onclick={ondrop}
   >
-    <GearIcon {kind} size={22} />
-    <span class="grid text-center">
+    {#each [false, true] as without (without)}
       <span
         class={[
-          'col-start-1 row-start-1 whitespace-nowrap',
-          denied && 'invisible'
+          'col-start-1 row-start-1 flex items-center gap-2 place-self-center text-left',
+          denied !== without && 'invisible'
         ]}
-        aria-hidden={denied}>Drop {name}</span
+        aria-hidden={denied !== without}
       >
-      <span
-        class={[
-          'col-start-1 row-start-1 w-0 min-w-full',
-          !denied && 'invisible'
-        ]}
-        aria-hidden={!denied}>Drop {name} without position</span
-      >
-    </span>
+        <GearIcon {kind} size={22} />
+        {without ? `Drop ${name} without position` : `Drop ${name}`}
+      </span>
+    {/each}
   </button>
 </div>

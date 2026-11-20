@@ -10,9 +10,7 @@ export const chartSource: RasterSourceSpecification = {
   tiles: [`${GRID}/xyz{z}/{y}/{x}.png`],
   tileSize: 256,
   minzoom: GRID_OFFSET,
-  maxzoom: 16,
-  attribution:
-    '<a href="https://nauticalcharts.noaa.gov/">NOAA chart</a>, not for navigation'
+  maxzoom: 16
 };
 
 export const chartTileUrl = (url: string) =>

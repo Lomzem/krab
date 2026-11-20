@@ -161,11 +161,14 @@ test('finding gear on the Map tab and from the Gear list', async ({
   await expect(
     map.getByRole('img', { name: /^Current position/ })
   ).toBeVisible();
-  await expect(map.getByRole('heading', { name: /Nearest gear/ })).toHaveText(
-    /Pot 1/
-  );
+  await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
+  await expect(
+    page.getByRole('button', { name: /^Nearest gear: Pot 1\b/ })
+  ).toBeVisible();
   await expect(map).toContainText('not for navigation');
-  log('Map shows Pot 1, my position, the nearest card and NOAA attribution');
+  log(
+    'Map shows Pot 1, my position and NOAA attribution; the nearest readout replaces the receipt'
+  );
   await capture('01-map');
 
   await pot.click();

@@ -214,7 +214,11 @@ test('visual inventory through a dense overnight trip', async ({
   await capture('13-map-filter');
   await checkFocus('filter');
   await sheet.getByRole('button', { name: 'Done' }).click();
-  await map.getByRole('button', { name: 'End trip' }).click();
+  await tab('Gear').click();
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: 'End trip' })
+    .click();
   await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
   await capture('14-end-confirmation');
   await checkFocus('end');
@@ -270,13 +274,13 @@ test('visual inventory with location denied', async ({
   await expect(page.getByRole('main')).toContainText('No position');
   await capture('03-no-position-gear');
   await page.getByRole('button', { name: 'Show steps' }).click();
-  const steps = page.getByText(
+  const steps = page.getByRole('dialog', { name: 'Turn on location' });
+  await expect(steps).toContainText(
     'Settings › Privacy & Security › Location Services'
   );
-  await expect(steps).toBeVisible();
-  await capture('04-location-steps-expanded');
-  await page.getByRole('button', { name: 'Hide steps' }).click();
-  await expect(steps).toHaveCount(0);
+  await capture('04-location-steps');
+  await steps.getByRole('button', { name: 'Close' }).click();
+  await expect(steps).toBeHidden();
   await page.mouse.move(0, 0);
   await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
   const row = page

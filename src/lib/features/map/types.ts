@@ -20,9 +20,3 @@ export type MyPosition = {
   courseDeg: number | null;
   label: string;
 };
-
-export type Lane = {
-  bottom: number;
-  room: number | null;
-  beside: { room: number; right: number } | null;
-};

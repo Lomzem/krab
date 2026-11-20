@@ -4,10 +4,9 @@ Save a pot's location during a trip and find the same pot in the Gear list after
 
 ## Sub-features
 
-- `drop-map`: place the first pot from Map.
-- `drop-gear`: place the first pot from Gear.
+- `drop-map`: place the first pot from Map. Drop and the kind picker show on Map only.
 - `drop-restore`: saved Pot 1 and its position survive reload.
-- `location-status`: above the Drop control the screen says `Finding position` or `Rough position, within about …`, and says nothing for a precise ready fix. It uses the same availability rule as Drop: denial wins over a cached fix, and a fix is ready for 5 s from its timestamp. After that it falls back to `Finding position`, rechecked at expiry, on a new fix and on resume.
+- `location-status`: the row above Drop says `Finding position` or `Rough position`, and shows the nearest gear or the count in the water for a precise ready fix. It uses the same availability rule as Drop: denial wins over a cached fix, and a fix is ready for 5 s from its timestamp. After that it falls back to `Finding position`, rechecked at expiry, on a new fix and on resume.
 - `drop-denied`: with location denied, `Location is off` guidance names Settings, and Drop pot without position saves Pot 1 without a position (reason `denied`).
 - `getting-position`: with no fix up to 5 s old, Drop opens a `Finding drop position` panel with Cancel and Save without position; only a fix taken within 5 s of the tap counts, and at tap + 5 s it saves without a position by itself.
 - `saving-drop`: after a fix arrives or Save without position is chosen, a focused `Saving drop` panel reading "Saving it now." replaces the Finding drop position panel at once. A drop with a fresh fix shows that panel only if the save is still pending 500 ms after the tap; a quicker save never shows it and leaves focus where it was. Once the save settles, Drop has focus again if a panel replaced it.
@@ -18,7 +17,6 @@ Save a pot's location during a trip and find the same pot in the Gear list after
 ## How to get to it (user POV)
 
 - Open Krab on Map, acknowledge the location explanation, then choose Drop pot.
-- Open Krab, acknowledge the explanation, choose Gear in the bottom navigation, then choose Drop pot.
 - With location denied: open Krab, choose Turn on location, decline. Read the `Location is off` guidance, then choose Drop pot without position.
 - Finding drop position: choose Drop pot before any fix arrives. Cancel or Save without position, or wait 5 s.
 
@@ -26,7 +24,7 @@ Save a pot's location during a trip and find the same pot in the Gear list after
 
 Run `bun scripts/verify-krab/run.ts` through the parent skill's bounded lifecycle. [placing-drop.ts](../../../../scripts/verify-krab/placing-drop.ts) owns the exact actions, assertions and evidence filenames.
 
-Covers placing a drop from Map and Gear, restoration with the same saved position, and saving without a position when location is denied. It also proves that reading evidence before first launch leaves IndexedDB absent.
+Covers placing a drop from Map, restoration with the same saved position, and saving without a position when location is denied. It also proves that reading evidence before first launch leaves IndexedDB absent.
 
 ## Gotchas
 

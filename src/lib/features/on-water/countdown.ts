@@ -23,6 +23,11 @@ export class Countdown {
     if (this.#holds.delete(reason) && this.#holds.size === 0) this.#run();
   }
 
+  remaining() {
+    const running = this.#holds.size === 0 ? Date.now() - this.#since : 0;
+    return Math.max(this.#left - running, 0);
+  }
+
   cancel() {
     clearTimeout(this.#timer);
   }

@@ -99,7 +99,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
   await expect(sheet).toBeHidden();
   await expect(
-    page.getByRole('button', { name: /^Drop (pot|net)$/ })
+    page.getByRole('heading', { name: 'Gear', level: 1 })
   ).toBeFocused();
   await expect(toastOf(page)).toContainText('Pot 1 deleted');
   await expect(pot1).toHaveCount(0);
@@ -216,7 +216,7 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
   await expect(page).toHaveURL('about:blank');
 });
 
-test('deleting a drop right after closing another gear sheet returns focus to Drop, not to the other gear', async ({
+test('deleting a drop right after closing another gear sheet returns focus to the Gear heading, not to the other gear', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -239,7 +239,9 @@ test('deleting a drop right after closing another gear sheet returns focus to Dr
   await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
   await expect(sheet).toBeHidden();
   await expect(toastOf(page)).toContainText('Pot 1 deleted');
-  await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
+  await expect(
+    page.getByRole('heading', { name: 'Gear', level: 1 })
+  ).toBeFocused();
 });
 
 test('deleting a drop already deleted in another tab closes the sheet without an error and drops its row', async ({
@@ -526,6 +528,21 @@ test('with the page zoomed up to 200% on 320 and 393 wide screens in both themes
 
 type Input = 'mouse' | 'touch';
 
+type Reached = Window & { reached?: number };
+
+function countClicksBeneath() {
+  const counted = window as Reached;
+  counted.reached = 0;
+  document.body.addEventListener('click', ({ target }) => {
+    if (target instanceof Element && target.closest('dialog')) return;
+    counted.reached = (counted.reached ?? 0) + 1;
+  });
+}
+
+function clicksBeneath() {
+  return (window as Reached).reached ?? 0;
+}
+
 const press = async (
   page: Page,
   input: Input,
@@ -614,6 +631,8 @@ test.describe('with the clock paused', () => {
         await page.emulateMedia({ colorScheme });
         await page.clock.install({ time: new Date('2031-03-04T05:00:00Z') });
         await page.goto('/');
+        await page.evaluate(countClicksBeneath);
+        const reached = () => page.evaluate(clicksBeneath);
         await page.getByRole('button', { name: 'Turn on location' }).click();
         await expect(
           page.getByRole('button', { name: 'Drop pot' })
@@ -624,6 +643,7 @@ test.describe('with the clock paused', () => {
         await tab('Gear').click();
 
         await gearRow(page, 'Pot 1').click();
+        let mark = await reached();
         await pressTwice(
           page,
           sheet.getByRole('button', { name: 'Delete drop' }),
@@ -632,18 +652,18 @@ test.describe('with the clock paused', () => {
         await expect(toastOf(page)).toContainText('Pot 1 deleted');
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
         await expect(
-          page.getByRole('button', {
-            name: /^Drop (pot|net)( without position)?$/
-          })
+          page.getByRole('heading', { name: 'Gear', level: 1 })
         ).toBeFocused();
         await expect(gearRow(page, 'Pot 1')).toHaveCount(0);
         expect(await storedDrops(page)).toBe(1);
+        expect(await reached()).toBe(mark);
 
         await gearRow(page, 'Pot 2').focus();
         await page.keyboard.press('Enter');
         await expect(
           sheet.getByRole('heading', { name: 'Pot 2' })
         ).toBeVisible();
+        mark = await reached();
         await pressTwice(
           page,
           sheet.getByRole('button', { name: 'Close' }),
@@ -651,6 +671,7 @@ test.describe('with the clock paused', () => {
         );
         await expect(sheet).toBeHidden();
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
+        expect(await reached()).toBe(mark);
 
         await toastOf(page).getByRole('button', { name: 'Undo' }).tap();
         await expect(toastOf(page)).toContainText('Pot 1 restored');
@@ -659,6 +680,7 @@ test.describe('with the clock paused', () => {
 
         await gearRow(page, 'Pot 2').click();
         await sheet.getByLabel('Label').fill('blue buoy');
+        mark = await reached();
         const saved = await pressTwice(
           page,
           sheet.getByRole('button', { name: 'Save' }),
@@ -669,36 +691,43 @@ test.describe('with the clock paused', () => {
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await expect(gearRow(page, 'Pot 2')).toContainText('blue buoy');
         expect(await storedDrops(page)).toBe(2);
+        expect(await reached()).toBe(mark);
 
         await page.clock.runFor(350);
+        mark = await reached();
         await press(page, 'touch', saved.x, saved.y, 1);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await tab('Gear').click();
         await gearRow(page, 'Pot 2').click();
         await pressToClose(page, 'mouse', saved.x, saved.y);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 1);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await tab('Gear').click();
         await gearRow(page, 'Pot 2').click();
         await pressToClose(page, 'mouse', saved.x, saved.y);
         await page.clock.runFor(500);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 2);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await tab('Gear').click();
         await gearRow(page, 'Pot 2').click();
         await pressToClose(page, 'mouse', saved.x, saved.y);
+        mark = await reached();
         await page.mouse.down({ clickCount: 2 });
         await page.clock.runFor(500);
         await page.mouse.up({ clickCount: 2 });
         await page.clock.runFor(0);
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        expect(await reached()).toBe(mark);
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(500);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 2);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         const saveLate = async (input: Input, label: string, ms: number) => {
           await tab('Gear').click();
@@ -711,26 +740,33 @@ test.describe('with the clock paused', () => {
         };
 
         await saveLate('touch', 'late float', 1000);
+        mark = await reached();
         await press(page, 'touch', saved.x, saved.y, 1);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await saveLate('touch', 'slow float', 200);
+        mark = await reached();
         await press(page, 'touch', saved.x, saved.y, 1);
         await page.clock.runFor(0);
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        expect(await reached()).toBe(mark);
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(150);
+        mark = await reached();
         await press(page, 'touch', saved.x, saved.y, 1);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await saveLate('mouse', 'slow buoy', 300);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 2);
         await page.clock.runFor(0);
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        expect(await reached()).toBe(mark);
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(200);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 2);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
       });
 });
 

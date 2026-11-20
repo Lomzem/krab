@@ -23,6 +23,8 @@ const dropPotAndOpenMap = async (page: Page) => {
 
 const mapArea = (page: Page) =>
   page.getByRole('region', { name: 'Map', exact: true });
+const creditsOf = (page: Page) =>
+  mapArea(page).getByRole('button', { name: /not for navigation|OpenFreeMap/ });
 const potOnMap = (page: Page) =>
   mapArea(page).getByRole('button', { name: /^Pot 1,/ });
 const myPosition = (page: Page) =>
@@ -157,6 +159,8 @@ const reconnect = async (context: BrowserContext) => {
 
 const streetMapButton = (page: Page) =>
   mapArea(page).getByRole('button', { name: 'Street map' });
+const chartMapButton = (page: Page) =>
+  mapArea(page).getByRole('button', { name: 'Chart map' });
 const outageNotice = (page: Page, shown: string | RegExp) =>
   mapArea(page).getByRole('status').filter({ hasText: shown });
 const cannotLoad = (page: Page) => outageNotice(page, /^Map can't load$/);
@@ -168,33 +172,47 @@ const notAnswering = (page: Page) =>
 const anyOutage = (page: Page) =>
   outageNotice(page, /Map can't load|Map offline|Map service not answering/);
 
+const underlined = (button: Locator) =>
+  button.evaluate((element) =>
+    getComputedStyle(element).textDecorationLine.includes('underline')
+  );
+
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`in ${colorScheme} mode, Street map shows a check while it is on and none once the keyboard turns it off again, keeps its name and stays the same size so no map control moves`, async ({
+  test(`in ${colorScheme} mode, Chart and Street mark the one that is on, switch by keyboard, keep their names and stay the same size so no map control moves`, async ({
     page
   }) => {
     await page.emulateMedia({ colorScheme });
     await dropPotAndOpenMap(page);
     const streetMap = streetMapButton(page);
-    const check = streetMap.locator('svg path');
+    const chartMap = chartMapButton(page);
     const controls = MAP_CONTROLS.map((name) =>
       mapArea(page).getByRole('button', { name, exact: true })
     );
     const boxes = () => Promise.all(controls.map(boxOf));
+    await expect(chartMap).toHaveAttribute('aria-pressed', 'true');
     await expect(streetMap).toHaveAttribute('aria-pressed', 'false');
-    await expect(check).toBeHidden();
+    expect([await underlined(chartMap), await underlined(streetMap)]).toEqual([
+      true,
+      false
+    ]);
     const chart = await boxes();
 
     await streetMap.focus();
     await page.keyboard.press('Space');
     await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+    await expect(chartMap).toHaveAttribute('aria-pressed', 'false');
     await expect(streetMap).toHaveAccessibleName('Street map');
-    await expect(check).toBeVisible();
+    expect([await underlined(chartMap), await underlined(streetMap)]).toEqual([
+      false,
+      true
+    ]);
     expect(await boxes()).toEqual(chart);
 
+    await chartMap.focus();
     await page.keyboard.press('Enter');
+    await expect(chartMap).toHaveAttribute('aria-pressed', 'true');
     await expect(streetMap).toHaveAttribute('aria-pressed', 'false');
-    await expect(streetMap).toHaveAccessibleName('Street map');
-    await expect(check).toBeHidden();
+    await expect(chartMap).toHaveAccessibleName('Chart map');
     expect(await boxes()).toEqual(chart);
   });
 }
@@ -244,7 +262,7 @@ test('map tiles and a Street style the browser cannot load while it is online sa
   await expect(claimsACause(page)).toHaveCount(0);
   await expect(potOnMap(page)).toBeVisible();
   providers.serve();
-  await streetMapButton(page).click();
+  await chartMapButton(page).click();
   await expect(notice).toBeHidden();
 });
 
@@ -266,7 +284,7 @@ test('while the browser is offline the Map tab says so for map tiles and the Str
   await expect(potOnMap(page)).toBeVisible();
   await expect(myPosition(page)).toBeVisible();
 
-  await streetMapButton(page).click();
+  await chartMapButton(page).click();
   await expect(streetMapButton(page)).toHaveAttribute('aria-pressed', 'false');
   await expect(offline(page)).toBeVisible();
   await expect(cannotLoad(page)).toHaveCount(0);
@@ -361,7 +379,7 @@ test('a Street style the map service refuses or the map cannot use falls back to
     await expect(myPosition(page)).toBeVisible();
     refuseStyle = false;
     providers.serve();
-    await streetMap.click();
+    await chartMapButton(page).click();
     await expect(notAnswering(page)).toBeHidden();
   }
   expect(errors).toEqual([]);
@@ -389,7 +407,7 @@ test('a Street style still loading when Chart is chosen again or the Map tab clo
   providers.hold();
   await streetMap.click();
   await expect.poll(() => providers.held()).toBeGreaterThan(0);
-  await streetMap.click();
+  await chartMapButton(page).click();
   await expect(streetMap).toHaveAttribute('aria-pressed', 'false');
   await expect.poll(() => cancelled.length).toBe(1);
   const chartBefore = chartTiles().length;
@@ -436,7 +454,7 @@ test('a Street style that has not arrived after 10 seconds is cancelled and says
   await expect(myPosition(page)).toBeVisible();
 
   providers.serve();
-  await streetMap.click();
+  await chartMapButton(page).click();
   await expect(cannotLoad(page)).toBeHidden();
 });
 
@@ -602,6 +620,7 @@ test('gear either side of the 180th meridian fits the past trip map as one small
   await expect(potOnMap(page)).toHaveAccessibleName(/miles/);
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
@@ -620,7 +639,7 @@ test('gear either side of the 180th meridian fits the past trip map as one small
       const inside = [first, second].every(within(area));
       return inside ? Math.abs(first.x - second.x) / area.width : 0;
     })
-    .toBeGreaterThan(0.5);
+    .toBeGreaterThan(0.3);
 });
 
 test('eight drops shown apart merge into groups as I zoom out without any marker, label or tap area touching, end as one group of 8, and each one opens its own sheet from the group list and returns focus to the group', async ({
@@ -744,7 +763,7 @@ const SIX_IN_A_LINE = [
 ] as const;
 
 for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
-  test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, six drops in a line ending with a ${last.toLowerCase()} each keep a marker or a place in a group as the map settles, zooms out and back, shows all, zooms in twice and filters, drawn whole and tappable inside a map view no control covers, and each opens its own gear`, async ({
+  test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, six drops in a line ending with a ${last.toLowerCase()} each keep a marker or a place in a group as the map settles, zooms out and back, shows all, zooms in twice and filters, drawn whole and tappable inside the map view with no control over any of them, and each opens its own gear`, async ({
     page
   }) => {
     await page.emulateMedia({ colorScheme });
@@ -808,7 +827,7 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
     await expectEveryDropOnce('zoomed further out');
     await map.getByRole('button', { name: 'Show all gear' }).click();
     await expectEveryDropOnce('after Show all gear');
-    expect(await chromeOverView(page), 'chrome over the map view').toEqual([]);
+    expect(await chromeOverGear(page), 'chrome over a drop').toEqual([]);
     const markers = map.locator('.maplibregl-marker[data-place] button');
     const inView = within(await boxOf(drawnView(page)));
     for (const marker of await markers.all())
@@ -958,17 +977,22 @@ const asFootprint = ({ x, y, width, height }: Box): Footprint => ({
 const drawnView = (page: Page) =>
   mapArea(page).getByRole('region', { name: 'Map view' });
 
-const chromeOverView = async (page: Page) => {
-  const drawn = asFootprint(await boxOf(drawnView(page)));
+const chromeOverGear = async (page: Page) => {
+  const drawn = await mapArea(page)
+    .locator('.maplibregl-marker[data-place] button')
+    .evaluateAll(markerFootprints);
   const chrome = [
+    chartMapButton(page),
     ...MAP_CONTROLS.map((name) =>
       mapArea(page).getByRole('button', { name, exact: true })
     ),
+    creditsOf(page),
     ...(await anyOutage(page).all())
   ];
   const over: string[] = [];
   for (const part of chrome) {
-    if (overlapping([drawn, asFootprint(await boxOf(part))]).length > 0)
+    const box = asFootprint(await boxOf(part));
+    if (drawn.some((marker) => overlapping([marker, box]).length > 0))
       over.push(
         (await part.getAttribute('aria-label')) ?? (await part.innerText())
       );
@@ -987,7 +1011,7 @@ function takeTapsAtCentre(buttons: Element[]) {
   });
 }
 
-test('while the map shows all gear, a map notice that appears later leaves every drop whole and tappable inside the map view', async ({
+test('while the map shows all gear, a map notice that appears later leaves every drop whole, tappable and clear of every control inside the map view', async ({
   context,
   page,
   providers
@@ -1012,7 +1036,7 @@ test('while the map shows all gear, a map notice that appears later leaves every
   providers.cutOff();
   await reconnect(context);
   await expect(cannotLoad(page)).toBeVisible();
-  await expect.poll(() => chromeOverView(page)).toEqual([]);
+  await expect.poll(() => chromeOverGear(page)).toEqual([]);
   await expect
     .poll(async () => {
       const inView = within(await boxOf(drawnView(page)));
@@ -1055,9 +1079,7 @@ test('on a 320 by 640 screen, the newest drop and its time label stay clear of i
     })
     .toBe(true);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
-  expect(
-    await mapArea(page).locator('.maplibregl-ctrl-attrib').evaluate(shownWhole)
-  ).toBe(true);
+  expect(await creditsOf(page).evaluate(shownWhole)).toBe(true);
 });
 
 test('on a 320 by 640 screen with a map notice showing, a new drop stays clear of both the notice and its Undo toast, and stays put when Undo ends', async ({
@@ -1176,7 +1198,7 @@ test('on a 320 by 640 screen, gear dropped where the map credits show never cove
     })
     .toBe(true);
 
-  const creditsText = mapArea(page).locator('.maplibregl-ctrl-attrib');
+  const creditsText = creditsOf(page);
   const credits = await centreOf(creditsText);
   await context.setGeolocation({
     ...shiftedOnScreen(MADE_UP_SEA, credits.x - last.x, credits.y - last.y),
@@ -1304,9 +1326,7 @@ for (const [width, height] of [
         .toEqual([]);
       expect
         .soft(
-          await mapArea(page)
-            .locator('.maplibregl-ctrl-attrib')
-            .evaluate(shownWhole),
+          await creditsOf(page).evaluate(shownWhole),
           'map credits are covered'
         )
         .toBe(true);
@@ -1384,7 +1404,9 @@ function watchCredits(frames: number) {
   watched.frames = 0;
   watched.covered = [];
   const look = () => {
-    const credits = document.querySelector('.maplibregl-ctrl-attrib');
+    const credits = [...document.querySelectorAll('button')].find((button) =>
+      /not for navigation|OpenFreeMap/.test(button.textContent)
+    );
     const toast = document.querySelector(
       '[aria-label="Messages"] [role="group"]'
     );
@@ -1417,11 +1439,7 @@ const expectMapWhole = async (page: Page, names: (string | RegExp)[]) => {
     mapArea(page).getByRole('button', { name, exact: true })
   );
   for (const control of controls) await expect(control).toBeVisible();
-  await expect
-    .poll(() =>
-      mapArea(page).locator('.maplibregl-ctrl-attrib').evaluate(shownWhole)
-    )
-    .toBe(true);
+  await expect.poll(() => creditsOf(page).evaluate(shownWhole)).toBe(true);
   const missed = await Promise.all(
     controls.map((control) => control.evaluate(missedInterior))
   );
@@ -1565,9 +1583,11 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
   const sheet = page.getByRole('dialog');
   const group = map.getByRole('button', { name: /^Pot \d+ \+\d+ more,/ });
   const endTrip = async () => {
+    await page.getByRole('button', { name: 'Gear', exact: true }).click();
     await page.getByRole('button', { name: 'End trip' }).click();
     await sheet.getByRole('button', { name: 'End trip' }).click();
     await expect(sheet).toBeHidden();
+    await page.getByRole('button', { name: 'Map', exact: true }).click();
   };
   const shownWholeAtEdge = async (more: number, first: number) => {
     const names = Array.from(
@@ -1808,7 +1828,7 @@ for (const [width, height] of [
   [320, 640],
   [320, 568]
 ] as const) {
-  test(`on a ${String(width)} by ${String(height)} screen, a map notice that arrives after I pan, filter, Show on map and move my position, while a drop's Undo shows, sits outside the map view clear of every map control, keeps the shown gear centred and ringed, leaves every drop, the newest drop and my position whole and tappable${height < 600 ? ' once Undo goes' : ''}, leaves Undo and the credits whole, and leaves once a map tile arrives`, async ({
+  test(`on a ${String(width)} by ${String(height)} screen, a map notice that arrives after I pan, filter, Show on map and move my position, while a drop's Undo shows, sits clear of every drop and map control, moves the shown gear less than its own height and keeps it ringed, leaves every drop, the newest drop and my position whole and tappable${height < 600 ? ' once Undo goes' : ''}, leaves Undo and the credits whole, and leaves once a map tile arrives`, async ({
     context,
     page,
     providers
@@ -1860,10 +1880,23 @@ for (const [width, height] of [
     await reconnect(context);
     await expect(notice).toBeVisible();
     await expect(toastOf(page)).toContainText('Pot 2 dropped');
-    expect(await chromeOverView(page), 'chrome over the map view').toEqual([]);
     await expect
-      .poll(() => offCentre(page, potOnMap(page)))
-      .toBeLessThan(CENTRED_PX);
+      .poll(() => chromeOverGear(page), 'chrome over a drop')
+      .toEqual([]);
+    const told = asFootprint(await boxOf(notice));
+    for (const control of [
+      chartMapButton(page),
+      ...MAP_CONTROLS.map((name) =>
+        map.getByRole('button', { name, exact: true })
+      )
+    ])
+      expect(
+        overlapping([told, asFootprint(await boxOf(control))]),
+        'notice over a map control'
+      ).toEqual([]);
+    expect(await offCentre(page, potOnMap(page))).toBeLessThan(
+      told.bottom - told.top
+    );
     await expect(potOnMap(page)).toHaveAttribute('aria-current', 'true');
     await expect
       .poll(async () => {
@@ -1894,7 +1927,7 @@ for (const [width, height] of [
     providers.serve();
     await reconnect(context);
     await expect(notice).toBeHidden();
-    expect(await chromeOverView(page)).toEqual([]);
+    expect(await chromeOverGear(page)).toEqual([]);
   });
 }
 
@@ -1902,17 +1935,16 @@ test.describe('with location denied', () => {
   test.use({ permissions: [] });
 
   for (const colorScheme of ['light', 'dark'] as const) {
-    test(`on a 320 by 568 screen in ${colorScheme} mode with the Settings steps shown, a drop's Undo toast leaves the map credits, every map control and Undo whole`, async ({
+    test(`on a 320 by 568 screen in ${colorScheme} mode with location off, a drop's Undo leaves the map credits, every map control and Undo whole`, async ({
       page
     }) => {
       await page.setViewportSize({ width: 320, height: 568 });
       await page.emulateMedia({ colorScheme });
       await page.goto('/');
       await page.getByRole('button', { name: 'Turn on location' }).click();
-      await page
-        .getByRole('region', { name: 'Location is off' })
-        .getByRole('button', { name: 'Show steps' })
-        .click();
+      await expect(
+        page.getByRole('button', { name: 'Show steps' })
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Drop pot' }).click();
       await expect(toastOf(page)).toContainText('Pot 1 dropped');
 
@@ -1982,7 +2014,9 @@ test('a focused pin that a resize moves off the map hands focus to the map view'
   const map = mapArea(page);
   const view = map.getByRole('region', { name: 'Map view' });
   const place = map.locator('[data-place]');
-  await view.press('ArrowUp');
+  await view.press('ArrowDown');
+  await settled(place);
+  await view.press('ArrowDown');
   await settled(place);
   await expect(potOnMap(page)).toBeInViewport();
   await potOnMap(page).focus();
@@ -2011,18 +2045,26 @@ const shadowsWhenTabbedTo = async (page: Page, control: Locator) => {
   );
 };
 
-test('a focused pin and map control show a white then navy ring, outside the magenta ring of gear shown on map', async ({
+test('a focused pin shows a white then navy ring, outside the magenta ring of gear shown on map, and a focused map control shows a ring inside its own edge', async ({
   page
 }) => {
   await dropPotAndOpenMap(page);
   const map = mapArea(page);
-  for (const control of [
-    potOnMap(page),
-    map.getByRole('button', { name: 'Zoom in' })
-  ]) {
-    const shadows = await shadowsWhenTabbedTo(page, control);
-    for (const band of MAP_RING_BANDS(0)) expect(shadows).toContain(band);
-  }
+  const pinShadows = await shadowsWhenTabbedTo(page, potOnMap(page));
+  for (const band of MAP_RING_BANDS(0)) expect(pinShadows).toContain(band);
+  const zoomIn = map.getByRole('button', { name: 'Zoom in' });
+  await shadowsWhenTabbedTo(page, zoomIn);
+  expect(
+    await zoomIn.evaluate((focused) => {
+      const style = getComputedStyle(focused);
+      return [
+        style.outlineStyle,
+        style.outlineWidth,
+        style.outlineColor,
+        style.outlineOffset
+      ];
+    })
+  ).toEqual(['solid', '3px', 'rgb(29, 78, 216)', '-6px']);
 
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();

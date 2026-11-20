@@ -14,7 +14,7 @@ Use accessible roles and names. Pair every action with its observable outcome an
 
 ## Features
 
-- [Placing a drop](placing-drop.md): fully driven from both Map and Gear, including restoration, plus a drop with location denied.
+- [Placing a drop](placing-drop.md): fully driven from Map, including restoration, plus a drop with location denied.
 - [Drop details](drop-details.md): driven by `drop-details.ts`, except the kind-locked refusal.
 - [Finding gear](finding-gear.md): Map tab, gear sheets from the map, Show on map, street toggle and NOAA chart alignment driven by `finding-gear.ts`.
 - [Days and the Map filter](days-and-map-filter.md): overnight grouping, day markers, the Map filter and Show on map restoring hidden gear, driven by `days-and-filter.ts`.

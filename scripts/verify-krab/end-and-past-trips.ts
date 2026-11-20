@@ -57,7 +57,9 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   const { log, capture, keep } = recorder(page, info, 'ending-trip', 'Map');
   const sheet = page.getByRole('dialog');
   const mapArea = page.getByRole('region', { name: 'Map', exact: true });
-  const endButton = mapArea.getByRole('button', { name: 'End trip' });
+  const endButton = page
+    .getByRole('main')
+    .getByRole('button', { name: 'End trip' });
 
   keep('doctor.json', doctor());
   log('doctor passed: our preview process owns 4173');
@@ -68,11 +70,12 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
     'made-up mid-ocean fix at a fixed June morning; drop Pot 1 and Net 1; collect Pot 1 with 2 kept and Save'
   );
 
-  await tab(page, 'Map').click();
-  await expect(mapArea).toContainText('1 in the water');
-  await expect(endButton).toBeVisible();
+  await tab(page, 'Gear').click();
+  await expect(page.getByRole('main')).toContainText('1 in the water');
+  await endButton.scrollIntoViewIfNeeded();
+  await expect(endButton).toBeInViewport();
   keep('indexeddb-before.json', await readTrips(page));
-  log('Map shows the running trip bar with End trip');
+  log('Gear ends with End trip under the running trip');
   await capture('01-trip-running');
 
   await endButton.click();
@@ -89,9 +92,10 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
 
   await endButton.click();
   await confirmEnd(page);
-  await expect(page.getByRole('button', { name: 'Drop net' })).toBeFocused();
+  await expect(
+    page.getByRole('heading', { name: 'Gear', level: 1 })
+  ).toBeFocused();
   await expect(endButton).toHaveCount(0);
-  await tab(page, 'Gear').click();
   await expect(page.getByRole('main')).toContainText('Nothing in the water');
   await tab(page, 'Map').click();
   const ended = await readTrips(page);
@@ -103,7 +107,7 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   ]);
   keep('indexeddb-ended.json', ended);
   log(
-    'End trip in the sheet; toast Trip ended; focus on Drop net; Gear says Nothing in the water; stored endedAt set, Net 1 still uncollected'
+    'End trip in the sheet; toast Trip ended; focus on the Gear heading; Gear says Nothing in the water; stored endedAt set, Net 1 still uncollected'
   );
   await capture('03-ended');
 
@@ -181,15 +185,15 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await fishOneMorning(page);
-  await tab(page, 'Map').click();
+  await tab(page, 'Gear').click();
   await page
-    .getByRole('region', { name: 'Map', exact: true })
+    .getByRole('main')
     .getByRole('button', { name: 'End trip' })
     .click();
   await expect(page.getByRole('dialog')).toContainText(STILL_IN);
   await confirmEnd(page);
   log(
-    'made-up fix; drop Pot 1 and Net 1, collect Pot 1 with 2 kept, End trip from the Map and confirm'
+    'made-up fix; drop Pot 1 and Net 1, collect Pot 1 with 2 kept, End trip from Gear and confirm'
   );
 
   await tab(page, 'Past trips').click();

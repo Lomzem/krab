@@ -12,24 +12,24 @@
 </script>
 
 <section
-  class="grid gap-3 border-t border-border bg-card p-4"
+  class="grid content-center gap-1"
   aria-labelledby="finding-drop-position-title"
 >
-  <div class="flex items-center gap-3">
+  <div class="flex min-h-5 items-center gap-2">
     <span
-      class="size-4.5 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent motion-reduce:animate-none"
+      class="size-4 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent motion-reduce:animate-none"
       aria-hidden="true"
     ></span>
     <h2
       id="finding-drop-position-title"
       bind:this={heading}
       tabindex="-1"
-      class="text-control font-semibold {FOCUS}"
+      class="text-base leading-5 font-semibold {FOCUS}"
     >
       Finding drop position
     </h2>
   </div>
-  <div class="grid grid-cols-2 gap-2">
+  <div class="grid grid-cols-[auto_1fr] gap-2">
     <button type="button" class={QUIET_BUTTON} onclick={oncancel}>Cancel</button
     >
     <button type="button" class={ACTION_BUTTON} onclick={onskip}

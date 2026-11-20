@@ -1,6 +1,10 @@
 <script lang="ts">
   import Icon from '#lib/icon/Icon.svelte';
-  import { MAP_FOCUS, PRESS } from '#lib/features/on-water/controls.js';
+  import {
+    FOCUS,
+    FOCUS_INSET,
+    PRESS
+  } from '#lib/features/on-water/controls.js';
   import {
     Map as MapLibre,
     Marker,
@@ -27,7 +31,8 @@
   } from './base-style';
   import { chartTileUrl } from './chart-tiles';
   import { MAX_ZOOM, spotsAt, zoomToSeparate, type Spot } from './groups';
-  import type { Camera, Lane, MapPlace, MyPosition } from './types';
+  import { CREDITS } from './credits';
+  import type { Camera, MapPlace, MyPosition } from './types';
 
   const SHOW_ZOOM = 15;
   const MY_EXTENT = { left: 30, right: 30, up: 30, down: 30 };
@@ -40,8 +45,9 @@
   };
   const MIN_ZOOM = 0;
   const MIN_FIT_SPAN = 48;
-  const CREDITS_RESERVE = 40;
-  const LANE_GAP = 8;
+  const CLEAR_GAP = 8;
+  const ICON_BUTTON = `flex h-11 w-full touch-manipulation items-center justify-center ${FOCUS_INSET} ${PRESS} active:bg-muted`;
+  const CREDIT_LINK = `flex min-h-11 items-center px-3 text-base underline underline-offset-3 ${FOCUS_INSET}`;
   const SAFE_EDGE_SLACK = 1 + 1e-6;
   const OUTAGE_NOTICE: Record<Outage, string> = {
     offline: 'Map offline',
@@ -60,9 +66,7 @@
     pin,
     group,
     controls,
-    onlane,
-    keepClear = null,
-    cover = 0
+    keepClear = null
   }: {
     base?: Base;
     camera?: Camera | null;
@@ -76,9 +80,7 @@
       [lead: string, ids: string[], apart: boolean, selected: boolean]
     >;
     controls?: Snippet;
-    onlane?: (lane: Lane | null) => void;
     keepClear?: string | null;
-    cover?: number;
   } = $props();
 
   let container = $state<HTMLDivElement>();
@@ -93,10 +95,13 @@
   let zoom = $state(camera?.zoom ?? 2);
   let overview = untrack(() => camera === null);
   let framePending = false;
-  let creditsHeight = $state(0);
-  let viewHeight = $state(0);
-  let railWidth = $state(0);
-  let railReach = $state(0);
+  let capsule = $state<HTMLDivElement>();
+  let notice = $state<HTMLParagraphElement>();
+  let chip = $state<HTMLButtonElement>();
+  let creditsPanel = $state<HTMLDivElement>();
+  let creditsOpen = $state(false);
+  let rendered = $state<Base | null>(null);
+  const credit = $derived(CREDITS[rendered ?? base]);
   let selected = $state<string | null>(null);
   const isSelected = (ids: string[]) =>
     selected !== null && ids.includes(selected);
@@ -169,25 +174,26 @@
     return [near.cover * scale, far.cover * scale] as const;
   };
 
-  const safeArea = (band = cover) => {
+  const safeArea = () => {
     const area = container?.getBoundingClientRect();
     if (!area) return 0;
-    const credits = container
-      ?.querySelector('.maplibregl-ctrl-bottom-right')
-      ?.getBoundingClientRect();
+    const credits = chip?.getBoundingClientRect();
+    const controls = capsule?.getBoundingClientRect();
+    const told = notice?.getBoundingClientRect();
     const [up, down] = squeeze(
-      { cover: 0, reach: reach.up },
+      { cover: told ? told.bottom - area.top + CLEAR_GAP : 0, reach: reach.up },
       {
-        cover:
-          Math.max(credits ? area.bottom - credits.top : 0, CREDITS_RESERVE) +
-          band,
+        cover: credits ? area.bottom - credits.top + CLEAR_GAP : 0,
         reach: reach.down
       },
       area.height
     );
     const [left, right] = squeeze(
       { cover: 0, reach: reach.side },
-      { cover: 0, reach: reach.side },
+      {
+        cover: controls ? area.right - controls.left + CLEAR_GAP : 0,
+        reach: reach.side
+      },
       area.width
     );
     return { top: up, bottom: down, left, right };
@@ -248,20 +254,21 @@
 
   type Rect = { left: number; right: number; top: number; bottom: number };
 
-  const coversIn = (area: DOMRect, toast: number): Rect[] => {
-    const credits = container
-      ?.querySelector('.maplibregl-ctrl-bottom-right')
-      ?.getBoundingClientRect();
-    const band = (credits ? area.bottom - credits.top : 0) + toast;
-    return [
-      {
-        left: 0,
-        right: area.width,
-        top: area.height - band,
-        bottom: area.height
-      }
-    ];
-  };
+  const coversIn = (area: DOMRect, without?: HTMLElement): Rect[] =>
+    [chip, capsule, notice].flatMap((element) => {
+      const box =
+        element === without ? undefined : element?.getBoundingClientRect();
+      return box
+        ? [
+            {
+              left: box.left - area.left - CLEAR_GAP,
+              right: box.right - area.left + CLEAR_GAP,
+              top: box.top - area.top - CLEAR_GAP,
+              bottom: box.bottom - area.top + CLEAR_GAP
+            }
+          ]
+        : [];
+    });
 
   const drawnOf = ({ at, box }: Pick<Spot, 'at' | 'box'>): Rect | null => {
     if (!map) return null;
@@ -282,17 +289,8 @@
     Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
     Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
 
-  const clearShift = (
-    drawn: Rect[],
-    area: DOMRect,
-    band: number,
-    across: boolean
-  ) => {
-    const view = { left: 0, right: area.width, top: 0, bottom: area.height };
-    const shown = drawn.filter((box) => overlapOf(box, view) > 0);
-    if (shown.length === 0) return null;
-    const covers = coversIn(area, band);
-    const hiddenAt = (dx: number, dy: number) =>
+  const hiddenOf =
+    (shown: Rect[], view: Rect, covers: Rect[]) => (dx: number, dy: number) =>
       shown.reduce((sum, at) => {
         const box = {
           left: at.left + dx,
@@ -307,8 +305,23 @@
           covers.reduce((all, block) => all + overlapOf(box, block), 0)
         );
       }, 0);
+
+  const clearShift = (
+    drawn: Rect[],
+    area: DOMRect,
+    across: boolean,
+    without?: HTMLElement
+  ) => {
+    const view = { left: 0, right: area.width, top: 0, bottom: area.height };
+    const shown = drawn.filter((box) => overlapOf(box, view) > 0);
+    if (shown.length === 0) return null;
+    const covers = coversIn(area);
+    const hiddenAt = hiddenOf(shown, view, covers);
     const still = hiddenAt(0, 0);
     if (still === 0) return { dx: 0, dy: 0, hidden: 0 };
+    const enough = without
+      ? hiddenOf(shown, view, coversIn(area, without))(0, 0)
+      : 0;
     const blocks = [...covers, view];
     const xs = across
       ? [
@@ -330,13 +343,38 @@
         ])
       )
     ];
-    const best = xs
-      .flatMap((dx) => ys.map((dy) => ({ dx, dy, hidden: hiddenAt(dx, dy) })))
-      .sort(
-        (a, b) =>
-          a.hidden - b.hidden || a.dx ** 2 + a.dy ** 2 - (b.dx ** 2 + b.dy ** 2)
-      )[0];
+    const length = ({ dx, dy }: { dx: number; dy: number }) =>
+      dx ** 2 + dy ** 2;
+    const tried = xs.flatMap((dx) =>
+      ys.map((dy) => ({ dx, dy, hidden: hiddenAt(dx, dy) }))
+    );
+    const best =
+      tried
+        .filter(({ hidden }) => hidden <= enough + 1)
+        .sort((a, b) => length(a) - length(b))[0] ??
+      tried.sort((a, b) => a.hidden - b.hidden || length(a) - length(b))[0];
     return best.hidden < still ? best : { dx: 0, dy: 0, hidden: still };
+  };
+
+  const clearOf = (cover: HTMLElement) => {
+    const area = container?.getBoundingClientRect();
+    if (!area) return;
+    const box = cover.getBoundingClientRect();
+    const block = {
+      left: box.left - area.left - CLEAR_GAP,
+      right: box.right - area.left + CLEAR_GAP,
+      top: box.top - area.top - CLEAR_GAP,
+      bottom: box.bottom - area.top + CLEAR_GAP
+    };
+    const drawn = [
+      ...spots,
+      ...(me ? [{ at: me.at, box: MY_EXTENT }] : [])
+    ].flatMap((spot) => {
+      const shown = drawnOf(spot);
+      return shown ? [shown] : [];
+    });
+    if (drawn.every((shown) => overlapOf(shown, block) === 0)) return;
+    shiftBy(clearShift(drawn, area, false, cover));
   };
 
   const separate = (id: string) => {
@@ -379,25 +417,53 @@
     const area = container?.getBoundingClientRect();
     if (!area) return;
     const drawn = spots.map(drawnOf).filter((box) => box !== null);
-    shiftBy(clearShift(drawn, area, cover, false));
+    shiftBy(clearShift(drawn, area, false));
   };
 
-  const revealDrawn = (drawn: Rect | null, band = cover) => {
+  const revealDrawn = (drawn: Rect | null) => {
     const area = container?.getBoundingClientRect();
     if (!area || !drawn) return false;
-    const shift = clearShift([drawn], area, band, true);
+    const shift = clearShift([drawn], area, true);
     shiftBy(shift);
     return shift?.hidden === 0;
   };
 
-  const reveal = (id: string, band = cover) => {
+  const reveal = (id: string) => {
     const spot = spotOf.get(id);
-    return revealDrawn(spot ? drawnOf(spot) : null, band);
+    return revealDrawn(spot ? drawnOf(spot) : null);
   };
 
-  const revealSoon = async (id: string, band: number) => {
+  const revealSoon = async (id: string) => {
     await tick();
-    reveal(id, band);
+    reveal(id);
+  };
+
+  const closeCredits = (refocus: boolean) => {
+    if (!creditsOpen) return;
+    creditsOpen = false;
+    if (refocus) chip?.focus();
+  };
+
+  const toggleCredits = async () => {
+    if (creditsOpen) {
+      closeCredits(true);
+      return;
+    }
+    creditsOpen = true;
+    await tick();
+    creditsPanel?.querySelector<HTMLElement>('a')?.focus();
+  };
+
+  const outsideCredits = (event: PointerEvent) => {
+    const target = event.target as Node | null;
+    if (
+      !creditsOpen ||
+      chip?.contains(target) ||
+      creditsPanel?.contains(target)
+    ) {
+      return;
+    }
+    closeCredits(true);
   };
 
   const leaveOverview = () => {
@@ -437,6 +503,7 @@
     if (!map || current !== generation) return;
     request = null;
     map.setStyle(next.style, { diff: false });
+    rendered = wanted;
     awaitingStyle = true;
     baseSources = new Set(
       Object.keys(next.style.sources).filter((id) => !isOverlay(id))
@@ -447,6 +514,7 @@
   const fallBack = () => {
     startGeneration();
     map?.setStyle(noBaseStyle(latest), { diff: false });
+    rendered = null;
     availability = 'not-answering';
   };
 
@@ -515,7 +583,7 @@
               touchPitch: false,
               pitchWithRotate: false,
               rollEnabled: false,
-              attributionControl: { compact: false },
+              attributionControl: false,
               locale: { 'Map.Title': 'Map view' },
               transformRequest: (url) => ({ url: chartTileUrl(url) })
             })
@@ -568,26 +636,11 @@
       const center = created.getCenter();
       camera = { center: { lat: center.lat, lon: center.lng }, zoom };
     });
-    const credits = host.querySelector<HTMLElement>(
-      '.maplibregl-ctrl-bottom-right'
-    );
-    if (credits) {
-      credits.style.zIndex = String(
-        Math.max(...Object.values(LAYER_ORDER)) + 1
-      );
-    }
-    let measuring = 0;
-    const measureCredits = new ResizeObserver(() => {
-      cancelAnimationFrame(measuring);
-      measuring = requestAnimationFrame(() => {
-        creditsHeight = credits?.getBoundingClientRect().height ?? 0;
-      });
-    });
-    if (credits) measureCredits.observe(credits);
     const refit = new ResizeObserver(() => {
       if (overview) void frameSoon();
     });
-    if (credits) refit.observe(credits);
+    if (chip) refit.observe(chip);
+    if (capsule) refit.observe(capsule);
     const reconnect = () => {
       void apply(base);
     };
@@ -596,26 +649,12 @@
     ready = true;
     return () => {
       startGeneration();
-      cancelAnimationFrame(measuring);
-      measureCredits.disconnect();
       refit.disconnect();
-      onlane?.(null);
       window.removeEventListener('online', reconnect);
       markers.clear();
       created.remove();
       map = null;
     };
-  });
-
-  $effect(() => {
-    if (!ready) return;
-    const below =
-      viewHeight > 0 ? viewHeight - creditsHeight - LANE_GAP : -Infinity;
-    onlane?.({
-      bottom: creditsHeight,
-      room: below - railReach,
-      beside: { room: below, right: railWidth + LANE_GAP }
-    });
   });
 
   $effect(() => {
@@ -632,12 +671,11 @@
 
   $effect(() => {
     const drawn = places;
-    const band = cover;
     if (!ready || (!me && drawn.length === 0)) return;
     untrack(() => {
       if (
         framePending ||
-        (overview && drawn.some(outsideSafeArea(safeArea(band))))
+        (overview && drawn.some(outsideSafeArea(safeArea())))
       ) {
         framePending = false;
         void frameSoon();
@@ -646,11 +684,24 @@
   });
 
   $effect(() => {
+    const shown = notice;
+    if (!shown) return;
+    const watch = new ResizeObserver(() => {
+      if (overview) void frameSoon();
+      else clearOf(shown);
+    });
+    watch.observe(shown);
+    return () => {
+      watch.disconnect();
+      if (overview) void frameSoon();
+    };
+  });
+
+  $effect(() => {
     const id = keepClear;
-    const band = cover;
     if (!ready || !id) return;
     untrack(() => {
-      if (overview) void revealSoon(id, band);
+      if (overview) void revealSoon(id);
     });
   });
 
@@ -668,245 +719,299 @@
   });
 </script>
 
-<div class="chart-map flex h-full flex-col bg-card">
-  {#if !failed}
-    <div
-      class="flex flex-none flex-wrap items-center gap-1 border-b border-border px-1.5 py-0.5"
+<svelte:document onpointerdown={outsideCredits} />
+
+{#snippet baseChoice(choice: Base, text: string)}
+  <button
+    type="button"
+    class="flex min-h-11 w-full touch-manipulation items-center justify-center px-2.5 text-sm font-medium text-muted-foreground {FOCUS_INSET} {PRESS} active:bg-muted aria-pressed:text-foreground aria-pressed:underline aria-pressed:decoration-2 aria-pressed:underline-offset-4"
+    aria-label="{text} map"
+    aria-pressed={base === choice}
+    onclick={() => {
+      base = choice;
+    }}>{text}</button
+  >
+{/snippet}
+
+<div
+  class="chart-map relative isolate grid min-h-56 flex-1 grid-rows-[auto_1fr] overflow-hidden bg-map-sea [container:map/size] compact:min-h-40"
+>
+  <div class="absolute inset-0">
+    <div bind:this={container} class="size-full"></div>
+  </div>
+
+  {#if failed}
+    <p
+      class="relative col-start-1 row-start-1 m-3 self-start rounded-control border border-input bg-card px-4 py-3 text-base"
     >
-      {@render controls?.()}
-      <button
-        type="button"
-        class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-foreground hover:bg-muted active:bg-muted {MAP_FOCUS} {PRESS} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
-        aria-label="Street map"
-        aria-pressed={base === 'street'}
-        onclick={() => {
-          base = base === 'chart' ? 'street' : 'chart';
-        }}
-      >
-        <Icon
-          name={base === 'street' ? 'box-checked' : 'box'}
-          size={20}
-        />Street
-      </button>
-      {#if places.length > 0}
-        <button
-          type="button"
-          class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted active:bg-muted {MAP_FOCUS} {PRESS}"
-          aria-label="Show all gear"
-          onclick={showAll}
+      This phone can't show maps
+    </p>
+  {/if}
+
+  {#if ready}
+    {#each spots as spot (spot.key)}
+      <div class="contents">
+        <div
+          data-place={spot.key}
+          style:z-index={LAYER_ORDER[spot.layer]}
+          use:marker={spot.at}
         >
-          <Icon name="show-all" />
-        </button>
-      {/if}
-      <button
-        type="button"
-        class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted active:bg-muted {MAP_FOCUS} {PRESS} aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent aria-disabled:active:bg-transparent"
-        aria-label="Centre on my position"
-        aria-disabled={me?.current ? undefined : 'true'}
-        onclick={() => {
-          if (!me?.current) return;
-          centreOn(me.at);
-          revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
-        }}
-      >
-        <Icon name="centre" />
-      </button>
-    </div>
+          {#if spot.ids.length === 1}
+            {@render pin(spot.key, isSelected(spot.ids))}
+          {:else}
+            {@render group(
+              spot.lead,
+              spot.ids,
+              spot.apart,
+              isSelected(spot.ids)
+            )}
+          {/if}
+        </div>
+      </div>
+    {/each}
+
+    {#if me}
+      <div class="contents">
+        <div
+          class="pointer-events-none size-15"
+          style:z-index={ME_ORDER}
+          role="img"
+          aria-label={me.label}
+          use:marker={me.at}
+        >
+          <svg width="60" height="60" viewBox="-8 -8 60 60" aria-hidden="true">
+            {#if headingDeg !== null}
+              <defs>
+                <radialGradient
+                  id="heading-cone"
+                  cx="22"
+                  cy="22"
+                  r="21"
+                  gradientUnits="userSpaceOnUse"
+                >
+                  <stop
+                    offset="0.3"
+                    style:stop-color="var(--position)"
+                    stop-opacity="0.4"
+                  />
+                  <stop
+                    offset="1"
+                    style:stop-color="var(--position)"
+                    stop-opacity="0"
+                  />
+                </radialGradient>
+              </defs>
+              <path
+                d="M22 22 11.5 3.8a21 21 0 0 1 21 0Z"
+                fill="url(#heading-cone)"
+                style:transform={`rotate(${String(headingDeg)}deg)`}
+                style:transform-origin="22px 22px"
+              />
+            {/if}
+            {#if me.courseDeg !== null}
+              <path
+                d="M22 22 13 2a20 20 0 0 1 18 0Z"
+                class="fill-position"
+                fill-opacity="0.35"
+                style:transform={`rotate(${String(Math.round(me.courseDeg))}deg)`}
+                style:transform-origin="22px 22px"
+              />
+            {/if}
+            {#if me.current}
+              <circle
+                cx="22"
+                cy="22"
+                r="27"
+                fill="none"
+                class="stroke-map-paper"
+                stroke-width="5"
+              />
+              <circle
+                cx="22"
+                cy="22"
+                r="27"
+                fill="none"
+                class="stroke-position"
+                stroke-width="2.5"
+              />
+              <circle
+                cx="22"
+                cy="22"
+                r="8"
+                class="fill-position stroke-map-paper"
+                stroke-width="3"
+              />
+            {:else}
+              <circle
+                cx="22"
+                cy="22"
+                r="8"
+                fill="none"
+                class="stroke-map-paper"
+                stroke-width="7"
+              />
+              <circle
+                cx="22"
+                cy="22"
+                r="8"
+                fill="none"
+                class="stroke-position"
+                stroke-width="3"
+              />
+            {/if}
+          </svg>
+        </div>
+      </div>
+    {/if}
+  {/if}
+
+  {#if !failed}
     {#if availability !== 'available'}
       <p
-        class="flex-none border-b border-border bg-card px-3 py-1.5 text-sm leading-tight text-foreground"
+        bind:this={notice}
+        class="z-10 col-start-1 row-start-1 m-3 self-start justify-self-start rounded-control border border-input bg-card px-2.5 py-1.5 text-sm leading-tight font-medium text-foreground"
         role="status"
       >
         {OUTAGE_NOTICE[availability]}
       </p>
     {/if}
-  {/if}
 
-  <div class="flex min-h-0 flex-1">
     <div
-      class="relative isolate min-w-0 flex-1 overflow-hidden bg-map-sea"
-      bind:clientHeight={viewHeight}
+      bind:this={capsule}
+      class="z-10 col-start-1 row-start-1 m-3 mb-0 flex min-w-11 flex-col self-start justify-self-end rounded-xl border border-input bg-card text-foreground shadow-sm short-map:flex-row"
     >
-      <div class="absolute inset-0">
-        <div bind:this={container} class="size-full"></div>
-      </div>
-
-      {#if failed}
-        <p
-          class="absolute inset-x-3 top-3 rounded-control border border-border bg-card px-4 py-3 text-base"
-        >
-          This phone can't show maps
-        </p>
-      {/if}
-
-      {#if ready}
-        {#each spots as spot (spot.key)}
-          <div class="contents">
-            <div
-              data-place={spot.key}
-              style:z-index={LAYER_ORDER[spot.layer]}
-              use:marker={spot.at}
-            >
-              {#if spot.ids.length === 1}
-                {@render pin(spot.key, isSelected(spot.ids))}
-              {:else}
-                {@render group(
-                  spot.lead,
-                  spot.ids,
-                  spot.apart,
-                  isSelected(spot.ids)
-                )}
-              {/if}
-            </div>
-          </div>
-        {/each}
-
-        {#if me}
-          <div class="contents">
-            <div
-              class="pointer-events-none size-15"
-              style:z-index={ME_ORDER}
-              role="img"
-              aria-label={me.label}
-              use:marker={me.at}
-            >
-              <svg
-                width="60"
-                height="60"
-                viewBox="-8 -8 60 60"
-                aria-hidden="true"
-              >
-                {#if headingDeg !== null}
-                  <defs>
-                    <radialGradient
-                      id="heading-cone"
-                      cx="22"
-                      cy="22"
-                      r="21"
-                      gradientUnits="userSpaceOnUse"
-                    >
-                      <stop
-                        offset="0.3"
-                        style:stop-color="var(--position)"
-                        stop-opacity="0.4"
-                      />
-                      <stop
-                        offset="1"
-                        style:stop-color="var(--position)"
-                        stop-opacity="0"
-                      />
-                    </radialGradient>
-                  </defs>
-                  <path
-                    d="M22 22 11.5 3.8a21 21 0 0 1 21 0Z"
-                    fill="url(#heading-cone)"
-                    style:transform={`rotate(${String(headingDeg)}deg)`}
-                    style:transform-origin="22px 22px"
-                  />
-                {/if}
-                {#if me.courseDeg !== null}
-                  <path
-                    d="M22 22 13 2a20 20 0 0 1 18 0Z"
-                    class="fill-position"
-                    fill-opacity="0.35"
-                    style:transform={`rotate(${String(Math.round(me.courseDeg))}deg)`}
-                    style:transform-origin="22px 22px"
-                  />
-                {/if}
-                {#if me.current}
-                  <circle
-                    cx="22"
-                    cy="22"
-                    r="27"
-                    fill="none"
-                    class="stroke-map-paper"
-                    stroke-width="5"
-                  />
-                  <circle
-                    cx="22"
-                    cy="22"
-                    r="27"
-                    fill="none"
-                    class="stroke-position"
-                    stroke-width="2.5"
-                  />
-                  <circle
-                    cx="22"
-                    cy="22"
-                    r="8"
-                    class="fill-position stroke-map-paper"
-                    stroke-width="3"
-                  />
-                {:else}
-                  <circle
-                    cx="22"
-                    cy="22"
-                    r="8"
-                    fill="none"
-                    class="stroke-map-paper"
-                    stroke-width="7"
-                  />
-                  <circle
-                    cx="22"
-                    cy="22"
-                    r="8"
-                    fill="none"
-                    class="stroke-position"
-                    stroke-width="3"
-                  />
-                {/if}
-              </svg>
-            </div>
-          </div>
+      <div class="flex min-w-11 flex-col">
+        {@render baseChoice('chart', 'Chart')}
+        {@render baseChoice('street', 'Street')}
+        {#if controls}
+          <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
+          {@render controls()}
         {/if}
-      {/if}
+      </div>
+      <span
+        class="mx-2 h-px bg-border short-map:mx-0 short-map:my-2 short-map:h-auto short-map:w-px"
+        aria-hidden="true"
+      ></span>
+      <div class="flex min-w-11 flex-col">
+        {#if places.length > 0}
+          <button
+            type="button"
+            class={ICON_BUTTON}
+            aria-label="Show all gear"
+            onclick={showAll}
+          >
+            <Icon name="show-all" />
+          </button>
+        {/if}
+        <button
+          type="button"
+          class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
+          aria-label="Centre on my position"
+          aria-disabled={me?.current ? undefined : 'true'}
+          onclick={() => {
+            if (!me?.current) return;
+            centreOn(me.at);
+            revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
+          }}
+        >
+          <Icon name="centre" />
+        </button>
+        <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
+        <button
+          type="button"
+          class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
+          aria-label="Zoom in"
+          aria-disabled={zoom >= MAX_ZOOM}
+          onclick={() => {
+            leaveOverview();
+            if (zoom < MAX_ZOOM) map?.zoomIn();
+          }}
+        >
+          <Icon name="plus" size={20} />
+        </button>
+        <button
+          type="button"
+          class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
+          aria-label="Zoom out"
+          aria-disabled={zoom <= MIN_ZOOM}
+          onclick={() => {
+            leaveOverview();
+            if (zoom > MIN_ZOOM) map?.zoomOut();
+          }}
+        >
+          <Icon name="minus" size={20} />
+        </button>
+      </div>
     </div>
 
-    {#if !failed}
-      <div
-        class="flex-none border-l border-border px-1.5"
-        bind:offsetWidth={railWidth}
-      >
-        <div class="flex flex-col pt-1" bind:offsetHeight={railReach}>
-          <button
-            type="button"
-            class="relative flex size-11 touch-manipulation items-center justify-center rounded-t-control border border-border bg-card text-foreground focus-visible:z-10 active:bg-muted {MAP_FOCUS} {PRESS} aria-disabled:active:bg-card"
-            aria-label="Zoom in"
-            aria-disabled={zoom >= MAX_ZOOM}
-            onclick={() => {
-              leaveOverview();
-              if (zoom < MAX_ZOOM) map?.zoomIn();
-            }}
-          >
-            <Icon name="plus" size={20} />
-          </button>
-          <button
-            type="button"
-            class="relative -mt-px flex size-11 touch-manipulation items-center justify-center rounded-b-control border border-border bg-card text-foreground focus-visible:z-10 active:bg-muted {MAP_FOCUS} {PRESS} aria-disabled:active:bg-card"
-            aria-label="Zoom out"
-            aria-disabled={zoom <= MIN_ZOOM}
-            onclick={() => {
-              leaveOverview();
-              if (zoom > MIN_ZOOM) map?.zoomOut();
-            }}
-          >
-            <Icon name="minus" size={20} />
-          </button>
+    <div
+      class="relative z-10 col-start-1 row-span-2 row-start-1 m-3 max-w-[calc(100%-5.5rem)] self-end justify-self-start short-map:max-w-[calc(100%-8.5rem)]"
+    >
+      {#if creditsOpen}
+        <div
+          bind:this={creditsPanel}
+          role="dialog"
+          aria-label="Map credits"
+          tabindex="-1"
+          class="absolute bottom-full left-0 mb-2 w-max max-w-[calc(100vw-1.5rem)] rounded-control border border-input bg-card py-1 text-foreground shadow-sm transition-opacity duration-120 ease-out motion-reduce:transition-none starting:opacity-0"
+          onkeydown={(event) => {
+            if (event.key !== 'Escape') return;
+            event.stopPropagation();
+            closeCredits(true);
+          }}
+        >
+          <ul>
+            {#if (rendered ?? base) === 'chart'}
+              <li>
+                <a
+                  class={CREDIT_LINK}
+                  href="https://nauticalcharts.noaa.gov/"
+                  target="_blank"
+                  rel="noreferrer">NOAA chart</a
+                >
+              </li>
+              <li
+                class="flex min-h-11 items-center px-3 text-base text-muted-foreground"
+              >
+                Not for navigation
+              </li>
+            {:else}
+              <li>
+                <a
+                  class={CREDIT_LINK}
+                  href="https://openfreemap.org/"
+                  target="_blank"
+                  rel="noreferrer">OpenFreeMap</a
+                >
+              </li>
+              <li>
+                <a
+                  class={CREDIT_LINK}
+                  href="https://www.openmaptiles.org/"
+                  target="_blank"
+                  rel="noreferrer">© OpenMapTiles</a
+                >
+              </li>
+              <li>
+                <a
+                  class={CREDIT_LINK}
+                  href="https://www.openstreetmap.org/copyright"
+                  target="_blank"
+                  rel="noreferrer">© OpenStreetMap contributors</a
+                >
+              </li>
+            {/if}
+          </ul>
         </div>
-      </div>
-    {/if}
-  </div>
+      {/if}
+      <button
+        bind:this={chip}
+        type="button"
+        class="min-h-11 min-w-11 touch-manipulation rounded-[6px] border border-input bg-card px-2 py-1 text-left text-sm leading-[1.3] font-medium text-muted-foreground {FOCUS} {PRESS} active:bg-muted"
+        aria-haspopup="dialog"
+        aria-expanded={creditsOpen}
+        onclick={() => void toggleCredits()}>{credit}</button
+      >
+    </div>
+  {/if}
 </div>
-
-<style>
-  .chart-map :global(.maplibregl-ctrl-attrib) {
-    line-height: 16px;
-    background-color: var(--card);
-    color: var(--foreground);
-  }
-
-  .chart-map :global(.maplibregl-ctrl-attrib a) {
-    color: inherit;
-    text-decoration: underline;
-  }
-</style>

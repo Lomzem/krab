@@ -4,13 +4,18 @@
 </script>
 
 <section
-  class="grid gap-3 border-t border-border bg-card p-4"
+  class="flex flex-wrap items-center gap-x-3 gap-y-1"
   aria-labelledby="location-intro-title"
 >
-  <h2 id="location-intro-title" class="text-control font-semibold">
+  <h2
+    id="location-intro-title"
+    class="min-w-0 flex-1 basis-32 text-control font-semibold"
+  >
     Krab needs location
   </h2>
-  <button type="button" class="w-full {ACTION_BUTTON}" onclick={onallow}
-    >Turn on location</button
+  <button
+    type="button"
+    class="min-h-16 grow basis-40 compact:min-h-14 {ACTION_BUTTON}"
+    onclick={onallow}>Turn on location</button
   >
 </section>

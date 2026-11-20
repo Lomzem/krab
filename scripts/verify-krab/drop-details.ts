@@ -130,12 +130,12 @@ test('drop details stay a draft until Save, refuse a bad depth, save and survive
   await sheet.getByRole('button', { name: 'Delete drop' }).click();
   await expect(sheet).toBeHidden();
   await expect(
-    page.getByRole('button', { name: /^Drop (pot|net)$/ })
+    page.getByRole('heading', { name: 'Gear', level: 1 })
   ).toBeFocused();
   await expect(toastOf(page)).toContainText('Pot 1 deleted');
   await expect(pot1).toHaveCount(0);
   log(
-    'open Pot 1, Delete drop; row gone, Drop button focused, toast Pot 1 deleted'
+    'open Pot 1, Delete drop; row gone, Gear heading focused, toast Pot 1 deleted'
   );
   await capture('07-deleted');
 

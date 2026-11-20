@@ -10,10 +10,11 @@
     PositionWatch,
     readiness as watchReadiness
   } from '#lib/features/location/index.js';
-  import type { Base, Camera, Lane } from '#lib/features/map/index.js';
+  import type { Base, Camera } from '#lib/features/map/index.js';
   import {
     canUndoCollect,
     gearInWater,
+    nearestGear,
     type Drop,
     type DropAttempt,
     type DropEdit,
@@ -22,9 +23,12 @@
   import {
     DESTRUCTIVE_TEXT_BUTTON,
     FOCUS_INSET,
+    PRESS,
     QUIET_BUTTON
   } from './controls';
   import DirectionCue from './DirectionCue.svelte';
+  import DockRow from './DockRow.svelte';
+  import DockStatus from './DockStatus.svelte';
   import DropControl from './DropControl.svelte';
   import EndTripSheet from './EndTripSheet.svelte';
   import GearList from './GearList.svelte';
@@ -38,7 +42,7 @@
   import SavingDrop from './SavingDrop.svelte';
   import LocationIntro from './LocationIntro.svelte';
   import LoadFailed from './LoadFailed.svelte';
-  import LocationStatus from './LocationStatus.svelte';
+  import LocationSteps from './LocationSteps.svelte';
   import { DEFAULT_MAP_FILTER, filterToShow } from './map-filter';
   import MapTab from './MapTab.svelte';
   import PastTrips from './PastTrips.svelte';
@@ -54,9 +58,7 @@
     saveKind,
     savedKind
   } from './preferences';
-  import TabIcon from './TabIcon.svelte';
   import { TABS, type Tab } from './tabs';
-  import UndoToast from './UndoToast.svelte';
 
   const TICK_MS = 15_000;
   const SAVING_SHOWN_AFTER_MS = 500;
@@ -81,8 +83,11 @@
   let sheet = $state.raw<SheetOrigin | null>(null);
   let base = $state<Base>('chart');
   let camera = $state.raw<Camera | null>(null);
-  let lane = $state<Lane | null>(null);
-  let toastHeight = $state(0);
+  let main = $state<HTMLElement>();
+  const scrolls: Record<Tab, number> = { map: 0, gear: 0, trips: 0 };
+  let gearHeading = $state<HTMLHeadingElement>();
+  let stepsOpen = $state(false);
+  let stepsOpener: HTMLElement | null = null;
   let showOnMap = $state<string | null>(null);
   let mapFilter = $state({ ...DEFAULT_MAP_FILTER });
   let mapTabButton = $state<HTMLButtonElement>();
@@ -114,6 +119,15 @@
     operation?.sheet === sheet ? operation : null
   );
   const busy = $derived(sheetOperation?.pending ?? false);
+  const rowStatus = $derived(explained ? readiness.status : null);
+  const nearest = $derived(
+    water.trip ? nearestGear(gearInWater(water.trip, readiness.fix, now)) : null
+  );
+  const rowShown = $derived(
+    tab === 'map' ||
+      water.notice !== null ||
+      (tab === 'gear' && rowStatus?.kind === 'denied')
+  );
   const sheetDirection = $derived(
     subject && water.trip
       ? (gearInWater(water.trip, readiness.fix, now).find(
@@ -168,6 +182,14 @@
 
   const reload = () => water.reload();
 
+  const switchTo = async (next: Tab) => {
+    if (next === tab) return;
+    if (main) scrolls[tab] = main.scrollTop;
+    tab = next;
+    await tick();
+    if (main) main.scrollTop = scrolls[next];
+  };
+
   const toggleCompass = () => {
     compass.toggle();
   };
@@ -189,11 +211,15 @@
     void water.drop(kind).then(focusDropAfterSave);
   };
 
-  const restingFocus = () => (tab === 'trips' ? pastHeading : dropButton);
+  const restingFocus = () => {
+    if (tab === 'trips') return pastHeading;
+    if (tab === 'gear') return gearHeading;
+    return dropButton;
+  };
 
   const retry = (target: Retry) => {
     void water.retry(target).then(() => {
-      dropButton?.focus();
+      restingFocus()?.focus();
     });
   };
 
@@ -332,7 +358,30 @@
 </script>
 
 <div class="flex h-dvh flex-col bg-background font-sans text-foreground">
-  <main class="min-h-0 flex-1 overflow-y-auto">
+  <nav
+    class="border-b border-border bg-card pt-[env(safe-area-inset-top,0px)]"
+    aria-label="Screens"
+  >
+    <ul class="grid grid-cols-3">
+      {#each TABS as item (item.tab)}
+        <li class="flex">
+          <button
+            type="button"
+            {@attach (node: HTMLButtonElement) => {
+              if (item.tab === 'map') mapTabButton = node;
+            }}
+            class="relative flex min-h-12 w-full touch-manipulation items-center justify-center px-2 py-1 text-center text-control font-medium text-muted-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.75 after:bg-foreground after:opacity-0 compact:min-h-11 {FOCUS_INSET} {PRESS} active:bg-muted aria-[current=page]:font-semibold aria-[current=page]:text-foreground aria-[current=page]:after:opacity-100"
+            aria-current={tab === item.tab ? 'page' : undefined}
+            onclick={() => void switchTo(item.tab)}
+          >
+            {item.name}
+          </button>
+        </li>
+      {/each}
+    </ul>
+  </nav>
+
+  <main bind:this={main} class="flex min-h-0 flex-1 flex-col overflow-y-auto">
     {#if tab === 'map'}
       {#if water.load === 'failed'}
         <section aria-labelledby="map-title">
@@ -343,11 +392,6 @@
         <MapTab
           trip={water.trip}
           past={water.past}
-          canEnd={water.pending === null}
-          onend={() => {
-            endOpen = true;
-          }}
-          bind:endButton
           fix={readiness.fix}
           lastFix={readiness.lastFix}
           courseDeg={watch.courseDeg}
@@ -356,9 +400,6 @@
           {now}
           bind:base
           bind:camera
-          onlane={(next: Lane | null) => {
-            lane = next;
-          }}
           bind:filter={mapFilter}
           show={showOnMap}
           onshown={() => {
@@ -368,7 +409,6 @@
           newest={water.notice?.offer.action === 'undo-drop'
             ? water.notice.offer.dropId
             : null}
-          cover={toastHeight}
         />
       {/if}
     {:else if tab === 'gear'}
@@ -384,6 +424,12 @@
           compass={$compass}
           {now}
           onopen={opensFrom('list')}
+          canEnd={water.pending === null}
+          onend={() => {
+            endOpen = true;
+          }}
+          bind:endButton
+          bind:heading={gearHeading}
         />
       {/if}
     {:else if water.load !== 'opening'}
@@ -476,69 +522,72 @@
     notice={water.notice}
   />
 
-  <UndoToast
-    notice={water.notice}
-    onundo={undo}
-    blocked={water.undoBlocked}
-    onretry={retry}
-    ondismiss={(key: number) => {
-      water.dismiss(key);
-    }}
-    overlay={tab === 'map'
-      ? (lane ?? { bottom: 0, room: null, beside: null })
-      : null}
-    bind:cover={toastHeight}
-  />
-
-  {#if water.pending?.phase === 'acquiring'}
-    {@const { attempt } = water.pending}
-    <GettingPosition
-      oncancel={attempt.cancel}
-      onskip={attempt.saveWithoutPosition}
-    />
-  {:else if savingShown}
-    <SavingDrop />
-  {:else if tab !== 'trips'}
-    {#if explained}
-      <section aria-label="Drop gear">
-        {#key tab}
-          <LocationStatus status={readiness.status} />
-        {/key}
-        <DropControl
-          bind:kind
-          bind:button={dropButton}
-          denied={readiness.status.kind === 'denied'}
-          ondrop={drop}
-        />
-      </section>
-    {:else}
-      <LocationIntro onallow={allowLocation} />
-    {/if}
-  {/if}
-
-  <nav
-    class="border-t border-border bg-card pb-[env(safe-area-inset-bottom)] text-muted-foreground"
-    aria-label="Screens"
+  <div
+    class={[
+      'grid grid-cols-1 border-t border-border bg-card',
+      !rowShown && 'hidden',
+      tab !== 'map' && 'pb-[env(safe-area-inset-bottom,0px)]'
+    ]}
   >
-    <ul class="grid grid-cols-3">
-      {#each TABS as item (item.tab)}
-        <li>
-          <button
-            type="button"
-            {@attach (node: HTMLButtonElement) => {
-              if (item.tab === 'map') mapTabButton = node;
+    {#if tab === 'map'}
+      <div
+        class="row-start-2 grid min-h-20 content-center px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] compact:min-h-18 compact:py-1 compact:pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]"
+      >
+        {#if water.pending?.phase === 'acquiring'}
+          {@const { attempt } = water.pending}
+          <GettingPosition
+            oncancel={attempt.cancel}
+            onskip={attempt.saveWithoutPosition}
+          />
+        {:else if savingShown}
+          <SavingDrop />
+        {:else if explained}
+          <section aria-label="Drop gear">
+            <DropControl
+              bind:kind
+              bind:button={dropButton}
+              denied={readiness.status.kind === 'denied'}
+              ondrop={drop}
+            />
+          </section>
+        {:else}
+          <LocationIntro onallow={allowLocation} />
+        {/if}
+      </div>
+    {/if}
+    <div class={['row-start-1', tab === 'map' && 'border-b border-border']}>
+      <DockRow
+        notice={water.notice}
+        onundo={undo}
+        blocked={water.undoBlocked}
+        onretry={retry}
+        ondismiss={(key: number) => {
+          water.dismiss(key);
+        }}
+      >
+        {#if tab !== 'trips'}
+          <DockStatus
+            screen={tab}
+            status={rowStatus}
+            trip={water.trip}
+            {nearest}
+            compass={$compass}
+            onopen={opensFrom('map')}
+            onsteps={(opener: HTMLElement) => {
+              stepsOpener = opener;
+              stepsOpen = true;
             }}
-            class="relative flex min-h-13 w-full touch-manipulation flex-col items-center justify-center gap-0.5 text-sm font-medium before:absolute before:inset-x-6 before:top-0 before:h-0.75 before:rounded-b-sm before:bg-foreground before:opacity-0 {FOCUS_INSET} aria-[current=page]:font-semibold aria-[current=page]:text-foreground aria-[current=page]:before:opacity-100"
-            aria-current={tab === item.tab ? 'page' : undefined}
-            onclick={() => {
-              tab = item.tab;
-            }}
-          >
-            <TabIcon tab={item.tab} />
-            {item.name}
-          </button>
-        </li>
-      {/each}
-    </ul>
-  </nav>
+          />
+        {/if}
+      </DockRow>
+    </div>
+  </div>
 </div>
+
+<LocationSteps
+  open={stepsOpen}
+  onclose={() => {
+    stepsOpen = false;
+  }}
+  returnFocus={() => (stepsOpener?.isConnected ? stepsOpener : restingFocus())}
+/>

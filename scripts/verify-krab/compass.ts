@@ -35,22 +35,21 @@ test('the compass toggle without an iPhone compass stays north-up', async ({
   keep('sensor.json', sensor);
   log(`this WebKit's compass API: ${JSON.stringify(sensor)}`);
 
-  const toggle = page.getByRole('button', {
-    name: /^Compass off, gear to the /
-  });
+  const toggle = page
+    .getByRole('region', { name: 'Map', exact: true })
+    .getByRole('button', { name: 'Compass', exact: true });
   await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(toggle).toHaveAccessibleDescription('Compass off');
   const box = await toggle.boundingBox();
   expect(box?.width).toBeGreaterThanOrEqual(TOUCH_TARGET_PX);
   expect(box?.height).toBeGreaterThanOrEqual(TOUCH_TARGET_PX);
-  log(`nearest card toggle reads Compass off, ${JSON.stringify(box)}`);
+  log(`capsule chip Compass, not pressed, ${JSON.stringify(box)}`);
   await capture('01-compass-off');
 
   await toggle.click();
-  const unavailable = page.getByRole('button', {
-    name: /^Compass unavailable, gear to the /
-  });
-  await expect(unavailable).toBeVisible();
-  await expect(page.getByText('Compass needs calibrating')).toHaveCount(0);
+  await expect(toggle).toHaveAccessibleDescription('Compass unavailable');
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   const remembered = await page.evaluate(() =>
     localStorage.getItem('krab.compass')
   );
@@ -59,9 +58,7 @@ test('the compass toggle without an iPhone compass stays north-up', async ({
   await capture('02-compass-unavailable');
 
   await page.reload();
-  await expect(
-    page.getByRole('button', { name: /^Compass off, gear to the / })
-  ).toBeVisible();
+  await expect(toggle).toHaveAccessibleDescription('Compass off');
   log('reload: Compass off again, Krab did not ask on its own');
 
   keep('requests.json', requested);

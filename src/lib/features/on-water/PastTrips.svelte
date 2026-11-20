@@ -243,7 +243,7 @@
       </p>
     </div>
 
-    <div class="h-[45dvh]">
+    <div class="flex h-[45dvh] flex-col">
       {#await import('#lib/features/map/ChartMap.svelte')}
         <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
       {:then { default: ChartMap }}

@@ -1,21 +1,14 @@
 <script lang="ts">
   import Icon from '#lib/icon/Icon.svelte';
-  import { FOCUS, MAP_FOCUS, PRESS } from './controls';
+  import { FOCUS_INSET, PRESS } from './controls';
   import type { CompassState } from '#lib/features/compass/index.js';
-  import type {
-    Base,
-    Camera,
-    Lane,
-    MapPlace
-  } from '#lib/features/map/index.js';
+  import type { Base, Camera, MapPlace } from '#lib/features/map/index.js';
   import {
     collectedGear,
     compassPoint,
     dropsInDays,
-    gearCounts,
     gearInWater,
     isMultiDay,
-    nearestGear,
     pastDrops,
     roughness,
     tripDates,
@@ -25,10 +18,8 @@
     type PastDropRow,
     type Trip
   } from '#lib/features/trip/index.js';
-  import DirectionCue from './DirectionCue.svelte';
   import GearHere from './GearHere.svelte';
   import { inListOrder, type HereItem } from './gear-here';
-  import GearIcon from './GearIcon.svelte';
   import GroupPin from './GroupPin.svelte';
   import { DEFAULT_MAP_FILTER, type MapFilter } from './map-filter';
   import MapFilterSheet from './MapFilterSheet.svelte';
@@ -38,9 +29,6 @@
   let {
     trip,
     past,
-    canEnd,
-    onend,
-    endButton = $bindable(),
     fix,
     lastFix,
     courseDeg,
@@ -53,15 +41,10 @@
     show,
     onshown,
     onopen,
-    onlane,
-    newest,
-    cover
+    newest
   }: {
     trip: Trip | null;
     past: readonly Trip[];
-    canEnd: boolean;
-    onend: () => void;
-    endButton?: HTMLButtonElement;
     fix: Fix | null;
     lastFix: Fix | null;
     courseDeg: number | null;
@@ -74,15 +57,21 @@
     show: string | null;
     onshown: () => void;
     onopen: (dropId: string, opener: HTMLElement) => void;
-    onlane: (lane: Lane | null) => void;
     newest: string | null;
-    cover: number;
   } = $props();
 
-  const READOUT =
-    'flex min-h-[calc(3.25rem+16px)] items-center gap-3 border-b border-border bg-card px-4 py-1';
+  const CAPSULE_BUTTON = `flex h-11 w-full touch-manipulation items-center justify-center ${FOCUS_INSET} ${PRESS} active:bg-muted`;
+  const COMPASS_STATES: Record<
+    Exclude<CompassState['kind'], 'unavailable'>,
+    string
+  > = {
+    off: 'Compass off',
+    waiting: 'Compass paused',
+    starting: 'Compass starting',
+    calibrating: 'Compass needs calibrating',
+    usable: 'Compass on'
+  };
   const rows = $derived(trip ? gearInWater(trip, fix, now) : []);
-  const nearest = $derived(nearestGear(rows));
   const rowsById = $derived(new Map(rows.map((row) => [row.drop.id, row])));
   const multiDay = $derived(trip !== null && isMultiDay(trip));
   const inDays = $derived(
@@ -123,6 +112,16 @@
       .filter(Boolean)
       .join(', ')
   );
+
+  const compassOn = $derived(
+    compass.kind !== 'off' && compass.kind !== 'unavailable'
+  );
+  const compassState = $derived.by(() => {
+    if (compass.kind !== 'unavailable') return COMPASS_STATES[compass.kind];
+    return compass.reason === 'denied'
+      ? 'Motion access off'
+      : 'Compass unavailable';
+  });
 
   let filterOpen = $state(false);
   let filterButton = $state<HTMLButtonElement>();
@@ -276,46 +275,9 @@
   };
 </script>
 
-<section class="flex h-full flex-col" aria-labelledby="map-title">
+<section class="flex flex-1 flex-col" aria-labelledby="map-title">
   <h1 id="map-title" class="sr-only">Map</h1>
-  {#if trip}
-    <div
-      class="flex min-h-12 items-center gap-3 border-b border-border bg-card py-0.5 pr-2 pl-4"
-    >
-      <p class="min-w-0 flex-1 text-sm text-muted-foreground">
-        {gearCounts(trip).inWater}
-      </p>
-      <button
-        bind:this={endButton}
-        type="button"
-        class="min-h-11 touch-manipulation rounded-control px-3 text-base font-semibold text-destructive underline-offset-3 transition-opacity duration-0 {FOCUS} aria-disabled:opacity-60 aria-disabled:delay-500"
-        aria-haspopup="dialog"
-        aria-disabled={!canEnd}
-        onclick={() => {
-          if (canEnd) onend();
-        }}>End trip</button
-      >
-    </div>
-  {/if}
-  {#if trip && nearest?.direction}
-    {@const direction = nearest.direction}
-    <section class={READOUT} aria-labelledby="nearest-title">
-      <span class="text-primary"
-        ><GearIcon kind={nearest.gear.kind} size={24} /></span
-      >
-      <div class="min-w-0 flex-1">
-        <h2 id="nearest-title" class="text-control leading-snug font-semibold">
-          <span class="sr-only">Nearest gear: </span>{nearest.name}
-        </h2>
-        <p class="text-sm text-muted-foreground" aria-hidden="true">Nearest</p>
-      </div>
-      <DirectionCue {direction} {compass} ontoggle={oncompass} />
-    </section>
-  {:else if rows.some(({ drop }) => drop.position)}
-    <div class={READOUT}></div>
-  {/if}
-
-  <div class="min-h-0 flex-1">
+  <div class="flex flex-1 flex-col">
     {#await import('#lib/features/map/ChartMap.svelte')}
       <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
     {:then { default: ChartMap }}
@@ -327,25 +289,36 @@
         headingDeg={fix ? headingDeg : null}
         {show}
         {onshown}
-        {onlane}
         keepClear={newest}
-        {cover}
       >
         {#snippet controls()}
           {#if trip || past.length > 0}
             <button
               bind:this={filterButton}
               type="button"
-              class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-foreground hover:bg-muted active:bg-muted {MAP_FOCUS} {PRESS}"
+              class={CAPSULE_BUTTON}
               aria-haspopup="dialog"
               aria-label="Filter, showing {filterSummary}"
               onclick={() => {
                 filterOpen = true;
               }}
             >
-              <Icon name="filter" size={20} />Filter
+              <Icon name="filter" />
             </button>
           {/if}
+          <button
+            type="button"
+            class="{CAPSULE_BUTTON} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+            aria-label="Compass"
+            aria-pressed={compassOn}
+            aria-describedby="compass-state"
+            onclick={oncompass}
+          >
+            <Icon
+              name={compass.kind === 'unavailable' ? 'compass-off' : 'compass'}
+            />
+          </button>
+          <span id="compass-state" class="sr-only">{compassState}</span>
         {/snippet}
         {#snippet pin(id: string, selected: boolean)}
           {#each itemOf(id) as item (item.id)}

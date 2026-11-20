@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FOCUS_INSET, PRESS } from './controls';
+  import { DESTRUCTIVE_BUTTON, FOCUS, FOCUS_INSET, PRESS } from './controls';
   import {
     arrowDeg,
     BearingArrow,
@@ -23,13 +23,21 @@
     from,
     compass,
     now,
-    onopen
+    onopen,
+    canEnd,
+    onend,
+    endButton = $bindable(),
+    heading = $bindable()
   }: {
     trip: Trip | null;
     from: LatLon | null;
     compass: CompassState;
     now: number;
     onopen: (dropId: string, opener: HTMLElement) => void;
+    canEnd: boolean;
+    onend: () => void;
+    endButton?: HTMLButtonElement;
+    heading?: HTMLHeadingElement;
   } = $props();
 
   const rows = $derived(trip ? gearInWater(trip, from, now) : []);
@@ -42,7 +50,13 @@
 </script>
 
 <header class="px-4 pt-3 pb-2">
-  <h1 class="text-display font-semibold">Gear</h1>
+  <h1
+    bind:this={heading}
+    tabindex="-1"
+    class="rounded-control text-display font-semibold {FOCUS}"
+  >
+    Gear
+  </h1>
   {#if counts}
     <p class="text-sm text-muted-foreground">
       {counts.inWater}<span aria-hidden="true">&nbsp;·</span><span
@@ -199,6 +213,18 @@
       {/if}
     </section>
   {/if}
+  <div class="mx-4 mt-8 mb-6 border-t border-border pt-8">
+    <button
+      bind:this={endButton}
+      type="button"
+      class="w-full {DESTRUCTIVE_BUTTON} transition-opacity duration-0 aria-disabled:delay-500"
+      aria-haspopup="dialog"
+      aria-disabled={!canEnd}
+      onclick={() => {
+        if (canEnd) onend();
+      }}>End trip</button
+    >
+  </div>
 {:else}
   <p class="px-4 text-base">Nothing in the water</p>
 {/if}
