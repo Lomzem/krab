@@ -47,12 +47,7 @@
   import { DEFAULT_MAP_FILTER, filterToShow } from './map-filter';
   import MapTab from './MapTab.svelte';
   import PastTrips from './PastTrips.svelte';
-  import {
-    OnWater,
-    type Retry,
-    type SaveProblem,
-    type Undo
-  } from './on-water.svelte';
+  import { OnWater, type SaveProblem, type Undo } from './on-water.svelte';
   import {
     locationExplained,
     rememberLocationExplained,
@@ -223,8 +218,8 @@
     return dropButton;
   };
 
-  const retry = (target: Retry) => {
-    void water.retry(target).then(() => {
+  const retry = (key: number) => {
+    void water.retry(key).then(() => {
       restingFocus()?.focus();
     });
   };

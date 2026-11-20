@@ -133,7 +133,14 @@ export const releaseStorage = (page: Page) =>
 type StoredCatch = { kept: number; released: number } | null;
 
 type StoredTrip = {
-  drops: { collectedAt: number | null; catch: StoredCatch }[];
+  gear: { id: string; kind: string }[];
+  drops: {
+    gearId: string;
+    placedAt: number;
+    position: { lat: number } | null;
+    collectedAt: number | null;
+    catch: StoredCatch;
+  }[];
 };
 
 const storedTrips = (page: Page) =>
@@ -180,3 +187,15 @@ export const storedCollections = async (page: Page) =>
       catch: drop.catch
     }))
   );
+
+const placementsOf = (trip: StoredTrip) => {
+  const kinds = new Map(trip.gear.map((gear) => [gear.id, gear.kind]));
+  return trip.drops.map((drop) => ({
+    kind: kinds.get(drop.gearId),
+    placedAt: drop.placedAt,
+    lat: drop.position?.lat ?? null
+  }));
+};
+
+export const storedPlacements = async (page: Page) =>
+  (await storedTrips(page)).flatMap(placementsOf);

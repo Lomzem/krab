@@ -56,6 +56,13 @@ export type PendingDrop = {
   waited: boolean;
 };
 
+type Unsaved = { key: number; retry: Retry };
+
+const unsavedText = (count: number) =>
+  count === 1
+    ? "Couldn't save the drop"
+    : `Couldn't save ${String(count)} drops`;
+
 export type Load = 'opening' | 'ready' | 'failed';
 
 export type SaveProblem =
@@ -130,7 +137,18 @@ const askToPersist = () => {
 export class OnWater {
   #trips = $state.raw<Trips>({ active: null, past: [] });
   load = $state<Load>('opening');
-  notice = $state.raw<Notice | null>(null);
+  #notice = $state.raw<Notice | null>(null);
+  #unsaved = $state.raw<readonly Unsaved[]>([]);
+  readonly notice = $derived.by((): Notice | null => {
+    if (this.#notice) return this.#notice;
+    const oldest = this.#unsaved.at(0);
+    if (!oldest) return null;
+    return {
+      key: oldest.key,
+      text: unsavedText(this.#unsaved.length),
+      offer: { action: 'retry', retry: oldest.retry }
+    };
+  });
   pending = $state.raw<PendingDrop | null>(null);
   #saving = $state.raw<readonly string[]>([]);
   readonly #book: TripBook;
@@ -186,12 +204,14 @@ export class OnWater {
     return true;
   }
 
-  async retry(retry: Retry) {
-    this.notice = null;
-    this.#settle(await Effect.runPromise(Effect.result(retry)));
+  async retry(key: number) {
+    const entry = this.#unsaved.find((unsaved) => unsaved.key === key);
+    if (!entry) return;
+    this.#unsaved = this.#unsaved.filter((unsaved) => unsaved !== entry);
+    this.#settle(await Effect.runPromise(Effect.result(entry.retry)), true);
   }
 
-  #settle(outcome: Result.Result<PlacedDrop, DropFailure>) {
+  #settle(outcome: Result.Result<PlacedDrop, DropFailure>, retried = false) {
     if (Result.isFailure(outcome)) {
       const failure = outcome.failure;
       if (failure._tag === 'DropCancelled') {
@@ -202,10 +222,12 @@ export class OnWater {
         this.#say("Couldn't drop that gear again");
         return;
       }
-      this.#say("Couldn't save the drop", {
-        action: 'retry',
-        retry: failure.retry
-      });
+      this.#noticeKey += 1;
+      const entry = { key: this.#noticeKey, retry: failure.retry };
+      this.#notice = null;
+      this.#unsaved = retried
+        ? [entry, ...this.#unsaved]
+        : [...this.#unsaved, entry];
       return;
     }
     const placed = outcome.success;
@@ -311,9 +333,9 @@ export class OnWater {
   }
 
   #retireCollectUndo(dropId: string) {
-    const offer = this.notice?.offer;
+    const offer = this.#notice?.offer;
     if (offer?.action === 'undo-collect' && offer.dropId === dropId) {
-      this.notice = null;
+      this.#notice = null;
     }
   }
 
@@ -360,7 +382,8 @@ export class OnWater {
   }
 
   dismiss(key: number) {
-    if (this.notice?.key === key) this.notice = null;
+    if (this.#notice?.key === key) this.#notice = null;
+    this.#unsaved = this.#unsaved.filter((unsaved) => unsaved.key !== key);
   }
 
   async reload() {
@@ -371,6 +394,6 @@ export class OnWater {
 
   #say(text: string, offer: Offer = { action: 'none' }) {
     this.#noticeKey += 1;
-    this.notice = { key: this.#noticeKey, text, offer };
+    this.#notice = { key: this.#noticeKey, text, offer };
   }
 }

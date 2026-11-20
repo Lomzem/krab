@@ -5,9 +5,11 @@ import {
   releaseStorage,
   storedCollections,
   storedDrops,
+  storedPlacements,
   test,
   toastOf
 } from './fixtures';
+import { deliverFix, holdFixes } from './held-geolocation';
 import { failStorage, injectStorageFaults } from './storage-faults';
 
 const START = new Date('2031-03-04T05:00:00Z');
@@ -717,4 +719,104 @@ test('a drop that stops on an unexpected storage error offers Retry with Drop us
     errors,
     'The handled storage error must not reach the page as an unhandled error.'
   ).toEqual([]);
+});
+
+const FIRST_FIX = { latitude: 10.5, longitude: -150.25 };
+const SECOND_FIX = { latitude: 10.501, longitude: -150.25 };
+
+const shownOnceStored = async (page: Page, toast: Locator) => {
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(0);
+      return toast.count();
+    })
+    .toBe(1);
+  await page.mouse.move(0, 0);
+};
+
+const openWithHeldFixesAndFaults = async (page: Page) => {
+  await injectStorageFaults(page);
+  await holdFixes(page);
+  await openWithPausedClock(page);
+  await deliverFix(page, FIRST_FIX, PAUSED);
+};
+
+test("a failed drop's Retry comes back after a later drop's toast ends, and Retry saves it once at its own tap time and position", async ({
+  page
+}) => {
+  const failedSave = toastOf(page).filter({
+    hasText: "Couldn't save the drop"
+  });
+  await openWithHeldFixesAndFaults(page);
+
+  await failStorage(page, 'writes');
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await shownOnceStored(page, failedSave);
+
+  await failStorage(page, null);
+  await page.clock.runFor(2000);
+  await deliverFix(page, SECOND_FIX, new Date(PAUSED.getTime() + 2000));
+  await page
+    .getByRole('group', { name: 'Gear to drop' })
+    .getByText('Net', { exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Drop net' }).click();
+  await shownOnceStored(
+    page,
+    toastOf(page).filter({ hasText: 'Net 1 dropped' })
+  );
+  await expect(failedSave).toHaveCount(0);
+
+  await page.clock.runFor(8000);
+  await failedSave.getByRole('button', { name: 'Retry' }).click();
+  await shownOnceStored(
+    page,
+    toastOf(page).filter({ hasText: 'Pot 1 dropped' })
+  );
+
+  const placements = await storedPlacements(page);
+  expect(placements).toHaveLength(2);
+  expect(placements).toContainEqual({
+    kind: 'pot',
+    placedAt: PAUSED.getTime(),
+    lat: FIRST_FIX.latitude
+  });
+  expect(placements).toContainEqual({
+    kind: 'net',
+    placedAt: PAUSED.getTime() + 2000,
+    lat: SECOND_FIX.latitude
+  });
+});
+
+test('two failed drops share one Retry that saves the oldest, then offers the other', async ({
+  page
+}) => {
+  const failedSave = (text: string) => toastOf(page).filter({ hasText: text });
+  await openWithHeldFixesAndFaults(page);
+
+  await failStorage(page, 'writes');
+  const dropPot = page.getByRole('button', { name: 'Drop pot' });
+  await dropPot.click();
+  await shownOnceStored(page, failedSave("Couldn't save the drop"));
+  await page.clock.runFor(1000);
+  await dropPot.click();
+  await shownOnceStored(page, failedSave("Couldn't save 2 drops"));
+
+  await failStorage(page, null);
+  await failedSave("Couldn't save 2 drops")
+    .getByRole('button', { name: 'Retry' })
+    .focus();
+  await page.keyboard.press('Enter');
+  await shownOnceStored(page, failedSave('Pot 1 dropped'));
+  expect(await storedPlacements(page)).toEqual([
+    { kind: 'pot', placedAt: PAUSED.getTime(), lat: FIRST_FIX.latitude }
+  ]);
+
+  await page.clock.runFor(8000);
+  await expect(failedSave("Couldn't save the drop")).toBeVisible();
+  await failedSave("Couldn't save the drop")
+    .getByRole('button', { name: 'Dismiss' })
+    .click();
+  await expect(toastOf(page)).toBeHidden();
+  expect(await storedDrops(page)).toBe(1);
 });
