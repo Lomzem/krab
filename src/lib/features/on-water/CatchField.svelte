@@ -11,15 +11,10 @@
     ['released', 'Released']
   ];
   const NOTHING: CatchDraft = { kept: '0', released: '0' };
-  const COUNT_FONT_PX = { most: 22, least: 16, digitsFitAtOne: 95 };
-  const countFont = (text: string) =>
-    Math.max(
-      COUNT_FONT_PX.least,
-      Math.min(
-        COUNT_FONT_PX.most,
-        Math.floor(COUNT_FONT_PX.digitsFitAtOne / text.length)
-      )
-    );
+  const countSize = (text: string) => {
+    if (text.length <= 4) return 'text-title';
+    return text.length === 5 ? 'text-control' : 'text-base';
+  };
 
   let {
     value,
@@ -149,8 +144,9 @@
           ? 'true'
           : undefined}
         aria-describedby={noteId}
-        style:font-size="{countFont(text ?? '')}px"
-        class="h-12 w-full min-w-0 rounded-control border border-input bg-card px-1 text-center font-semibold text-foreground tabular-nums {FOCUS} aria-invalid:border-2 aria-invalid:border-destructive"
+        class="h-12 w-full min-w-0 rounded-control border border-input bg-card px-1 text-center {countSize(
+          text ?? ''
+        )} font-semibold text-foreground tabular-nums {FOCUS} aria-invalid:border-2 aria-invalid:border-destructive"
         oninput={(event) => {
           set(side, event.currentTarget.value);
         }}
