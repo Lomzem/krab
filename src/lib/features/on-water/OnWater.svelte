@@ -120,6 +120,11 @@
   );
   const busy = $derived(sheetOperation?.pending ?? false);
   const rowStatus = $derived(explained ? readiness.status : null);
+  const dockStatus = $derived(
+    water.pending?.phase === 'acquiring' && rowStatus?.kind === 'finding'
+      ? null
+      : rowStatus
+  );
   const nearest = $derived(
     water.trip ? nearestGear(gearInWater(water.trip, readiness.fix, now)) : null
   );
@@ -568,7 +573,7 @@
         {#if tab !== 'trips'}
           <DockStatus
             screen={tab}
-            status={rowStatus}
+            status={dockStatus}
             trip={water.trip}
             {nearest}
             compass={$compass}

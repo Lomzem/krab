@@ -87,7 +87,7 @@ test.describe('with location denied', () => {
   });
 });
 
-test('while getting a position, Cancel and Save without position are reachable 44 px targets', async ({
+test('while getting a position, Cancel and Save without position are reachable 44 px targets and the row above stops repeating Finding position', async ({
   page
 }) => {
   await page.addInitScript(() => {
@@ -102,6 +102,7 @@ test('while getting a position, Cancel and Save without position are reachable 4
   await expect(
     page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeFocused();
+  await expect(page.getByText('Finding position')).toBeHidden();
   const cancel = page.getByRole('button', { name: 'Cancel' });
   const save = page.getByRole('button', { name: 'Save without position' });
   await expectTouchTarget(cancel);
