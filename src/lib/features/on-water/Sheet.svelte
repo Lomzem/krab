@@ -41,6 +41,7 @@
   const reachable = (element: HTMLElement) =>
     element.tabIndex >= 0 &&
     !element.matches(':disabled') &&
+    !element.closest('[inert]') &&
     element.getClientRects().length > 0 &&
     getComputedStyle(element).visibility !== 'hidden';
 

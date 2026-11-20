@@ -158,6 +158,14 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
   await expect(keepEditing).toBeFocused();
   await expect(save).toBeHidden();
   await expect(form).toHaveJSProperty('inert', true);
+  await page.keyboard.press('Tab');
+  await expect(discard).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(discard).not.toBeFocused();
+  await keepEditing.focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(keepEditing).not.toBeFocused();
+  await keepEditing.focus();
   await tapBackdrop();
   await keepEditing.click();
   await expect(unsaved).toBeHidden();
@@ -183,6 +191,7 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await releaseStorage(page);
+  await expect(pot1).toContainText('red float');
   await pot1.click();
   await expect(label).toHaveValue('red float');
   await page.keyboard.press('Escape');
