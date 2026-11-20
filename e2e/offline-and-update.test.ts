@@ -203,7 +203,7 @@ test('an update whose shell redirects never installs, and the previous app still
   page
 }) => {
   const previous = versionOf(PREVIOUS_BUILD);
-  const site = openSite(4178);
+  const site = openSite(4179);
   await site.deploy(PREVIOUS_BUILD);
   await page.goto(site.origin);
   await dropPot(page);

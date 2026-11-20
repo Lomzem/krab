@@ -9,6 +9,7 @@ export default defineConfig({
   outputDir: 'test-results',
   reporter: 'list',
   forbidOnly: Boolean(process.env.CI),
+  fullyParallel: true,
   use: { baseURL: origin, trace: 'off', screenshot: 'off', video: 'off' },
   projects: [
     {
