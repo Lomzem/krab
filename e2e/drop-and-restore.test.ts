@@ -45,7 +45,7 @@ test('a pot dropped with a granted fix is listed under Gear and survives a reloa
 
   await page.reload();
   await gearTab.click();
-  await expect(gearRow).toContainText('0 ft');
+  await expect(gearRow).toContainText('At gear');
 
   exposed.push(page.url());
   expect(exposed.filter(mentionsCoordinates)).toEqual([]);

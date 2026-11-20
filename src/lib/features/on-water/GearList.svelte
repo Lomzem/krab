@@ -123,20 +123,30 @@
         {/if}
       </div>
       {#if row.direction}
-        <div class="flex items-center gap-2 @max-2xs:ml-10">
-          <BearingArrow degrees={arrowDeg(row.direction.bearingDeg, compass)} />
-          <div class="text-right" aria-hidden="true">
-            <p class="text-title font-semibold whitespace-nowrap tabular-nums">
-              {row.direction.distance}
-            </p>
-            <p class="text-sm font-medium text-muted-foreground">
-              {row.direction.pointShort}
-            </p>
+        {#if row.direction.atGear}
+          <p class="text-title font-semibold whitespace-nowrap @max-2xs:ml-10">
+            At gear
+          </p>
+        {:else}
+          <div class="flex items-center gap-2 @max-2xs:ml-10">
+            <BearingArrow
+              degrees={arrowDeg(row.direction.bearingDeg, compass)}
+            />
+            <div class="text-right" aria-hidden="true">
+              <p
+                class="text-title font-semibold whitespace-nowrap tabular-nums"
+              >
+                {row.direction.distance}
+              </p>
+              <p class="text-sm font-medium text-muted-foreground">
+                {row.direction.pointShort}
+              </p>
+            </div>
+            <span class="sr-only"
+              >{row.direction.distanceSpoken} {row.direction.point}</span
+            >
           </div>
-          <span class="sr-only"
-            >{row.direction.distanceSpoken} {row.direction.point}</span
-          >
-        </div>
+        {/if}
       {:else if !row.drop.position}
         <p class="text-sm text-muted-foreground @max-[22rem]:ml-10">
           No position

@@ -763,6 +763,27 @@ it('sorts by great-circle distance with bearing, compass point and distance text
   expect(rows[2]?.direction?.feet).toBeCloseTo(392.9, 1);
 });
 
+it('marks gear under 0.5 ft away as at gear with no bearing', async () => {
+  const { state, open } = harness();
+  const book = await open();
+  await dropAt(book, state, 'pot', { north: 0, east: 0 });
+  await dropAt(book, state, 'pot', { north: 0.000001, east: 0 });
+  const last = await dropAt(book, state, 'net', { north: 0.000002, east: 0 });
+
+  const rows = gearInWater(last.trip, SEA, state.now);
+
+  expect(rows[0]?.direction).toMatchObject({ atGear: true, bearingDeg: null });
+  expect(rows[1]?.direction).toMatchObject({ atGear: true, bearingDeg: null });
+  expect(rows[1]?.direction?.feet).toBeLessThan(0.5);
+  expect(rows[2]?.direction?.feet).toBeGreaterThanOrEqual(0.5);
+  expect(rows[2]?.direction).toMatchObject({
+    atGear: false,
+    distance: '1 ft',
+    point: 'north'
+  });
+  expect(rows[2]?.direction?.bearingDeg).toBeCloseTo(0, 3);
+});
+
 it('finds the nearest gear in the water with a position, skipping a closer collected drop even once its gear is dropped again, or none without my position', async () => {
   const { state, open } = harness();
   const book = await open();

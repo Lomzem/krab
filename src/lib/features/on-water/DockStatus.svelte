@@ -99,7 +99,7 @@
         <span class={LINE_2} aria-hidden="true">Nearest</span>
       {/if}
     </span>
-    {#if Math.round(direction.feet) === 0}
+    {#if direction.atGear}
       <span class="flex-none text-title font-semibold whitespace-nowrap"
         ><span class="sr-only">, </span>At gear</span
       >

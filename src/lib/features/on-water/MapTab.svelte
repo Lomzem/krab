@@ -171,7 +171,10 @@
   const pinDetails = (row: GearRow) =>
     present([
       row.day?.text,
-      row.direction && `${row.direction.distanceSpoken} ${row.direction.point}`,
+      row.direction &&
+        (row.direction.atGear
+          ? 'At gear'
+          : `${row.direction.distanceSpoken} ${row.direction.point}`),
       `in the water for ${row.timeInWater.spoken}`,
       row.rough && `rough position, within about ${row.rough.spoken}`
     ]);
@@ -179,7 +182,10 @@
   const pinSummary = (row: GearRow) =>
     present([
       row.day?.text,
-      row.direction && `${row.direction.distance} ${row.direction.pointShort}`,
+      row.direction &&
+        (row.direction.atGear
+          ? 'At gear'
+          : `${row.direction.distance} ${row.direction.pointShort}`),
       `${row.timeInWater.short} in the water`,
       row.rough && `rough, within ${row.rough.short}`
     ]).join(', ');
