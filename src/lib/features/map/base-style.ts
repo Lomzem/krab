@@ -22,7 +22,7 @@ export const ACCURACY_SOURCE = 'krab-accuracy';
 const STREET_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const SEA = '#d5e2e0';
 const STEADY = '#1a2e2b';
-const ROUGH = '#b3261e';
+const ROUGH = '#805300';
 
 const background: LayerSpecification = {
   id: 'krab-sea',
