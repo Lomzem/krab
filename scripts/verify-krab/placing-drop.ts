@@ -93,9 +93,11 @@ test('placing a drop with location denied saves it without a position', async ({
   log('Location is off guidance names Settings');
   await capture('01-location-off');
   keep('indexeddb-before.json', await readTrips(page));
-  await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Drop pot without position', exact: true })
+    .click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
-  log('tap Drop pot; toast says saved without a position');
+  log('tap Drop pot without position; toast says saved without a position');
   await capture('02-dropped');
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await expect(

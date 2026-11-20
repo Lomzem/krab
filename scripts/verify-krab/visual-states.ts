@@ -261,7 +261,9 @@ test('visual inventory with location denied', async ({
     page.getByRole('region', { name: 'Location is off' })
   ).toBeVisible();
   await capture('01-location-denied');
-  await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Drop pot without position', exact: true })
+    .click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
   await capture('02-no-position-toast');
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
