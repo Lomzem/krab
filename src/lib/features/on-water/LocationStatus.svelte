@@ -66,23 +66,25 @@
       </ol>
     {/if}
   </section>
-{:else if status.kind === 'finding' || rough}
+{:else}
   <p
     class={[
       'flex items-center gap-2 border-t border-border bg-card px-4 pt-2 text-[15px] font-medium',
       status.kind === 'finding' ? 'text-muted-foreground' : 'text-foreground'
     ]}
   >
-    <span
-      class={[
-        'size-2 shrink-0 rounded-full border-2',
-        status.kind === 'finding'
-          ? 'border-muted-foreground'
-          : 'border-action bg-action'
-      ]}
-      aria-hidden="true"
-    ></span>
-    <span>
+    {#if status.kind === 'finding' || rough}
+      <span
+        class={[
+          'size-2 shrink-0 rounded-full border-2',
+          status.kind === 'finding'
+            ? 'border-muted-foreground'
+            : 'border-action bg-action'
+        ]}
+        aria-hidden="true"
+      ></span>
+    {/if}
+    <span class="min-h-lh">
       {#if status.kind === 'finding'}
         Finding position
       {:else if rough}

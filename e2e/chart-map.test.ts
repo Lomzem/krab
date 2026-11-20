@@ -1102,6 +1102,55 @@ test('on a 320 by 640 screen with a map notice showing, a new drop stays clear o
   await expect.poll(() => newest.evaluateAll(takeTapsAtCentre)).toEqual([true]);
 });
 
+for (const [width, height] of [
+  [402, 681],
+  [320, 640]
+] as const) {
+  test(`on a ${String(width)} by ${String(height)} screen with Street chosen while offline, a new drop stays put through its Undo as my position goes stale`, async ({
+    context,
+    page,
+    providers
+  }) => {
+    await holdFixes(page);
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Turn on location' }).click();
+    await deliverFix(page, MADE_UP_SEA);
+    await expect(page.getByText('Finding position')).toBeHidden();
+    await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
+    await expect(toastOf(page)).toContainText('Pot 1 dropped');
+    await expect(drawnView(page)).toBeVisible();
+    providers.cutOff();
+    await context.setOffline(true);
+    await streetMapButton(page).click();
+    await expect(offline(page)).toBeVisible();
+    await deliverFix(page, {
+      ...MADE_UP_SEA,
+      latitude: MADE_UP_SEA.latitude - 0.02
+    });
+    await expect(page.getByText('Finding position')).toBeHidden();
+    await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
+    await expect(toastOf(page)).toContainText('Pot 2 dropped');
+    const newest = mapArea(page).getByRole('button', { name: /^Pot 2[ ,]/ });
+    const footprint = async () => {
+      const [marker] = await newest.evaluateAll(markerFootprints);
+      return marker;
+    };
+    let during = await footprint();
+    await expect
+      .poll(async () => {
+        const now = await footprint();
+        const still = JSON.stringify(now) === JSON.stringify(during);
+        during = now;
+        return still;
+      })
+      .toBe(true);
+    await expect(toastOf(page)).toContainText('Pot 2 dropped');
+    await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
+    expect(await footprint()).toEqual(during);
+  });
+}
+
 test('on a 320 by 640 screen, gear dropped where the map credits show never covers them, and with a map notice showing Centre on my position puts me clear of every map control, the notice and the credits', async ({
   context,
   page,
