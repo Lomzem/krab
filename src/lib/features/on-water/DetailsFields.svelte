@@ -5,22 +5,18 @@
     type DetailsDraft
   } from './details-draft';
 
-  const DEPTH_PROBLEM = 'Enter feet, 0 or more';
+  const DEPTH_PROBLEM = 'Enter 0 or more feet';
 
   let {
     draft = $bindable(emptyDraft()),
-    idPrefix,
-    refused
+    idPrefix
   }: {
     draft?: DetailsDraft;
     idPrefix: string;
-    refused: boolean;
   } = $props();
 
-  let left = $state(false);
-
   const depthError = $derived(
-    !depthAccepted(draft.depth) && (refused || left) ? DEPTH_PROBLEM : null
+    depthAccepted(draft.depth) ? null : DEPTH_PROBLEM
   );
 
   const field =
@@ -38,12 +34,6 @@
         id="{idPrefix}-depth"
         class="{field} max-w-36 tabular-nums"
         bind:value={draft.depth}
-        oninput={() => {
-          if (depthAccepted(draft.depth)) left = false;
-        }}
-        onblur={() => {
-          left = !depthAccepted(draft.depth);
-        }}
         inputmode="decimal"
         autocomplete="off"
         enterkeyhint="next"

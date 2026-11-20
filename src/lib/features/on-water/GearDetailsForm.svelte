@@ -170,5 +170,5 @@
     locked={!canChangeKind(subject.trip, drop.gearId)}
     {idPrefix}
   />
-  <DetailsFields bind:draft {idPrefix} refused={problem === 'depth'} />
+  <DetailsFields bind:draft {idPrefix} />
 </form>

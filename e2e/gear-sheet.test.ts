@@ -56,10 +56,10 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
 
   await label.fill('red float');
   await depth.fill('-3');
-  await expect(depth).not.toHaveAttribute('aria-invalid');
+  await expect(depth).toHaveAttribute('aria-invalid', 'true');
+  await expect(depth).toHaveAccessibleDescription('Enter 0 or more feet');
   await depth.press('Tab');
   await expect(depth).toHaveAttribute('aria-invalid', 'true');
-  await expect(depth).not.toHaveAccessibleDescription('');
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(depth).toBeFocused();
   await expect(depth).toHaveAttribute('aria-invalid', 'true');
