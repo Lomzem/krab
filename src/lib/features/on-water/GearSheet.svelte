@@ -57,6 +57,7 @@
     onsave,
     oncollect,
     ondropagain,
+    denied = false,
     returnFocus,
     notice,
     actions,
@@ -70,6 +71,7 @@
     onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     oncollect?: (dropId: string) => void;
     ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
+    denied?: boolean;
     returnFocus: () => HTMLElement | null | undefined;
     notice: Notice | null;
     actions?: Snippet<[Drop, (exit: () => void) => void]>;
@@ -247,6 +249,7 @@
         onsave={storing(onsave)}
         {oncollect}
         ondropagain={ondropagain && storing(ondropagain)}
+        {denied}
         {direction}
       >
         {@render actions?.(subject.drop, leave)}

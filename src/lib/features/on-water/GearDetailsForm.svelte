@@ -31,6 +31,7 @@
     onsave,
     oncollect,
     ondropagain,
+    denied = false,
     direction,
     ondirty,
     inert = false,
@@ -43,6 +44,7 @@
     onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     oncollect?: (dropId: string) => void;
     ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
+    denied?: boolean;
     direction?: Snippet<[Drop]>;
     ondirty?: (dirty: boolean) => void;
     inert?: boolean;
@@ -168,8 +170,14 @@
         aria-disabled={busy}
         onclick={() => {
           save(ondropagain);
-        }}>Drop {KIND_NAMES[stored].toLowerCase()} again here</button
+        }}
       >
+        {#if denied}
+          Drop {KIND_NAMES[stored].toLowerCase()} again without position
+        {:else}
+          Drop {KIND_NAMES[stored].toLowerCase()} again here
+        {/if}
+      </button>
     {/if}
   {/if}
   {@render children?.()}

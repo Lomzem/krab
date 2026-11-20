@@ -36,6 +36,7 @@ export class DropNotSaved extends Data.TaggedError('DropNotSaved')<{
 export type DropPhase = 'acquiring' | 'saving' | 'settled';
 
 export type DropAttempt = {
+  readonly deadline: number;
   readonly phase: () => DropPhase;
   readonly subscribe: (listener: () => void) => () => void;
   readonly saveWithoutPosition: () => void;
@@ -130,6 +131,7 @@ export const startDrop = (
   target: DropTarget
 ): DropAttempt => {
   const tapAt = deps.clock.now();
+  const deadline = dropDeadline(tapAt);
   const command = dropCommand(target, tapAt);
   const atTap = settledAt(deps.positions, tapAt, tapAt);
   const choice = Deferred.makeUnsafe<Located, DropCancelled>();
@@ -138,7 +140,7 @@ export const startDrop = (
   const unsubscribe = atTap ? () => undefined : listen(deps, tapAt, choice);
   const where = Effect.raceFirst(
     Deferred.await(choice),
-    Effect.as(deps.clock.sleepUntil(dropDeadline(tapAt)), NO_FIX)
+    Effect.as(deps.clock.sleepUntil(deadline), NO_FIX)
   ).pipe(
     Effect.ensuring(
       Effect.sync(() => {
@@ -153,6 +155,7 @@ export const startDrop = (
   );
   const fiber = Effect.runFork(work);
   return {
+    deadline,
     phase: phase.current,
     subscribe: phase.subscribe,
     saveWithoutPosition: () => {

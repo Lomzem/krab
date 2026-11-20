@@ -85,6 +85,38 @@ test.describe('with location denied', () => {
     await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
     expect(await asks(page), 'location asked for again').toBe(askedAtStart);
   });
+
+  test('Drop again while location is off says it saves without position', async ({
+    page
+  }) => {
+    const sheet = page.getByRole('dialog');
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Turn on location' }).click();
+    await page
+      .getByRole('button', { name: 'Drop pot without position' })
+      .click();
+    await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
+
+    await page.getByRole('button', { name: 'Gear', exact: true }).click();
+    await page
+      .getByRole('main')
+      .getByRole('button')
+      .filter({ hasText: 'Pot 1' })
+      .click();
+    await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+
+    const dropAgain = sheet.getByRole('button', {
+      name: 'Drop pot again without position'
+    });
+    await expect(dropAgain).toBeVisible();
+    await expect(
+      sheet.getByRole('button', { name: 'Drop pot again here' })
+    ).toHaveCount(0);
+    await dropAgain.click();
+    await expect(sheet).toBeHidden();
+    await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
+  });
 });
 
 test('while getting a position, Cancel and Save without position are reachable 44 px targets the row above stops repeating Finding position, and the map keeps its size', async ({
@@ -264,7 +296,14 @@ test('a drop with no fix within 5 seconds saves without a position by itself, an
 
   await dropPot.click();
   await expect(waiting).toBeFocused();
-  await page.clock.runFor(4999);
+  await expect(waiting).toHaveAccessibleDescription(
+    'Saves without position soon'
+  );
+  await expect(page.getByText('Saves without position in 5s')).toBeVisible();
+  await page.clock.runFor(2000);
+  await expect(page.getByText('Saves without position in 3s')).toBeVisible();
+  await page.clock.runFor(2999);
+  await expect(page.getByText('Saves without position in 1s')).toBeVisible();
   await expect(waiting).toBeVisible();
   await expect(toastOf(page)).toBeHidden();
 

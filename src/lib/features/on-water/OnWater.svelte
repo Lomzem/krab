@@ -75,6 +75,7 @@
   let kind = $state(savedKind());
   let explained = $state(locationExplained());
   let now = $state(Date.now());
+  let acquireNow = $state(Date.now());
   let dropButton = $state<HTMLButtonElement>();
   let sheet = $state.raw<SheetOrigin | null>(null);
   let base = $state<Base>('chart');
@@ -141,6 +142,17 @@
     const timer = setInterval(() => {
       now = Date.now();
     }, TICK_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  });
+
+  $effect(() => {
+    if (water.pending?.phase !== 'acquiring') return;
+    acquireNow = Date.now();
+    const timer = setInterval(() => {
+      acquireNow = Date.now();
+    }, 1000);
     return () => {
       clearInterval(timer);
     };
@@ -476,6 +488,7 @@
     onsave={save}
     oncollect={collect}
     ondropagain={dropAgain}
+    denied={readiness.status.kind === 'denied'}
     returnFocus={sheetReturnFocus}
     notice={water.notice}
   >
@@ -566,6 +579,8 @@
         {#if water.pending?.phase === 'acquiring'}
           {@const { attempt } = water.pending}
           <GettingPosition
+            deadline={attempt.deadline}
+            now={acquireNow}
             oncancel={attempt.cancel}
             onskip={attempt.saveWithoutPosition}
           />
