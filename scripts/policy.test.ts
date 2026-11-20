@@ -521,6 +521,26 @@ const cases: PolicyCase[] = [
     risk: 'Chained jobs add their limits past 5 minutes'
   },
   {
+    name: 'CI job queued behind a concurrency group',
+    file: '.github/workflows/ci.yml',
+    valid: workflow('    timeout-minutes: 5\n'),
+    invalid: workflow('    timeout-minutes: 5\n    concurrency: shared\n'),
+    command: 'lint',
+    diagnostic: 'Job b waits for another job',
+    risk: 'Jobs in one group run one after another'
+  },
+  {
+    name: 'CI matrix that limits parallel jobs',
+    file: '.github/workflows/ci.yml',
+    valid: workflow('    timeout-minutes: 5\n'),
+    invalid: workflow(
+      '    timeout-minutes: 5\n    strategy:\n      max-parallel: 1\n      matrix:\n        shard: [1, 2]\n'
+    ),
+    command: 'lint',
+    diagnostic: 'Job b waits for another job',
+    risk: 'Matrix shards run one after another'
+  },
+  {
     name: 'non-mutating formatting',
     file: 'probe.json',
     valid: '{\n  "value": 1\n}\n',

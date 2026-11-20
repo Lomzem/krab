@@ -27,9 +27,14 @@ const checkJob = (context: Rule.RuleContext, job: AST.YAMLPair) => {
   const minutes = timeout === null ? null : getStaticYAMLValue(timeout);
   if (typeof minutes !== 'number' || minutes > CI_MINUTES)
     context.report({ loc: job.loc, messageId: 'timeout', data });
-  const needs = valueAt(job.value, 'needs');
-  if (needs !== null)
-    context.report({ loc: needs.loc, messageId: 'needs', data });
+  const waits = [
+    valueAt(job.value, 'needs'),
+    valueAt(job.value, 'concurrency'),
+    valueAt(valueAt(job.value, 'strategy')?.value ?? null, 'max-parallel')
+  ];
+  for (const wait of waits)
+    if (wait !== null)
+      context.report({ loc: wait.loc, messageId: 'needs', data });
 };
 
 export const ciTimeLimit: Rule.RuleModule = {
