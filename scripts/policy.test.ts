@@ -541,6 +541,15 @@ const cases: PolicyCase[] = [
     risk: 'Matrix shards run one after another'
   },
   {
+    name: 'CI matrix that limits parallel jobs through an alias',
+    file: '.github/workflows/ci.yml',
+    valid: workflow('    timeout-minutes: 5\n'),
+    invalid: `on: push\nx-strategy: &serial\n  max-parallel: 1\n  matrix:\n    shard: [1, 2]\njobs:\n  b:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    strategy: *serial\n    steps:\n      - run: true\n`,
+    command: 'lint',
+    diagnostic: 'Job b waits for another job',
+    risk: 'An aliased strategy hides max-parallel from the rule'
+  },
+  {
     name: 'non-mutating formatting',
     file: 'probe.json',
     valid: '{\n  "value": 1\n}\n',

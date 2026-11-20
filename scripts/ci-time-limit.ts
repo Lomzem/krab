@@ -14,8 +14,10 @@ const pairsOf = (node: YamlNode): AST.YAMLPair[] => {
 const keyOf = (pair: AST.YAMLPair) =>
   pair.key === null ? null : getStaticYAMLValue(pair.key);
 
-const valueAt = (node: YamlNode, key: string) =>
-  pairsOf(node).find((pair) => keyOf(pair) === key) ?? null;
+const fieldOf = (value: unknown, key: string): unknown =>
+  typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
 
 const checkJob = (context: Rule.RuleContext, job: AST.YAMLPair) => {
   const name = keyOf(job);
@@ -23,18 +25,17 @@ const checkJob = (context: Rule.RuleContext, job: AST.YAMLPair) => {
     job: typeof name === 'string' ? name : 'unnamed',
     minutes: String(CI_MINUTES)
   };
-  const timeout = valueAt(job.value, 'timeout-minutes')?.value ?? null;
-  const minutes = timeout === null ? null : getStaticYAMLValue(timeout);
+  const settings = job.value === null ? null : getStaticYAMLValue(job.value);
+  const minutes = fieldOf(settings, 'timeout-minutes');
   if (typeof minutes !== 'number' || minutes > CI_MINUTES)
     context.report({ loc: job.loc, messageId: 'timeout', data });
   const waits = [
-    valueAt(job.value, 'needs'),
-    valueAt(job.value, 'concurrency'),
-    valueAt(valueAt(job.value, 'strategy')?.value ?? null, 'max-parallel')
+    fieldOf(settings, 'needs'),
+    fieldOf(settings, 'concurrency'),
+    fieldOf(fieldOf(settings, 'strategy'), 'max-parallel')
   ];
-  for (const wait of waits)
-    if (wait !== null)
-      context.report({ loc: wait.loc, messageId: 'needs', data });
+  if (waits.some((wait) => wait !== undefined))
+    context.report({ loc: job.loc, messageId: 'needs', data });
 };
 
 export const ciTimeLimit: Rule.RuleModule = {
@@ -51,7 +52,8 @@ export const ciTimeLimit: Rule.RuleModule = {
       const program = node as unknown as AST.YAMLProgram;
       for (const document of program.body)
         for (const job of pairsOf(
-          valueAt(document.content, 'jobs')?.value ?? null
+          pairsOf(document.content).find((pair) => keyOf(pair) === 'jobs')
+            ?.value ?? null
         ))
           checkJob(context, job);
     }
