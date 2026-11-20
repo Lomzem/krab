@@ -33,6 +33,7 @@
     lastFix,
     courseDeg,
     compass,
+    compassShown,
     oncompass,
     now,
     base = $bindable('chart'),
@@ -49,6 +50,7 @@
     lastFix: Fix | null;
     courseDeg: number | null;
     compass: CompassState;
+    compassShown: boolean;
     oncompass: () => void;
     now: number;
     base?: Base;
@@ -306,19 +308,23 @@
               <Icon name="filter" />
             </button>
           {/if}
-          <button
-            type="button"
-            class="{CAPSULE_BUTTON} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
-            aria-label="Compass"
-            aria-pressed={compassOn}
-            aria-describedby="compass-state"
-            onclick={oncompass}
-          >
-            <Icon
-              name={compass.kind === 'unavailable' ? 'compass-off' : 'compass'}
-            />
-          </button>
-          <span id="compass-state" class="sr-only">{compassState}</span>
+          {#if compassShown}
+            <button
+              type="button"
+              class="{CAPSULE_BUTTON} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+              aria-label="Compass"
+              aria-pressed={compassOn}
+              aria-describedby="compass-state"
+              onclick={oncompass}
+            >
+              <Icon
+                name={compass.kind === 'unavailable'
+                  ? 'compass-off'
+                  : 'compass'}
+              />
+            </button>
+            <span id="compass-state" class="sr-only">{compassState}</span>
+          {/if}
         {/snippet}
         {#snippet pin(id: string, selected: boolean)}
           {#each itemOf(id) as item (item.id)}

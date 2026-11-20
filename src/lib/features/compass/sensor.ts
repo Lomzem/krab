@@ -26,6 +26,16 @@ const readingOf = (event: CompassEvent): Reading => ({
   at: event.timeStamp
 });
 
+export const compassSupported = () => {
+  if (typeof DeviceOrientationEvent === 'undefined') return false;
+  const asking = DeviceOrientationEvent as AskingEvent;
+  return (
+    typeof asking.requestPermission === 'function' &&
+    'webkitCompassHeading' in DeviceOrientationEvent.prototype &&
+    'webkitCompassAccuracy' in DeviceOrientationEvent.prototype
+  );
+};
+
 const request = (): Promise<Access> => {
   if (typeof DeviceOrientationEvent === 'undefined') {
     return Promise.resolve('unsupported');

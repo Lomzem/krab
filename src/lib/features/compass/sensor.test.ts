@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { Compass } from './compass';
-import { deviceCompass } from './sensor';
+import { compassSupported, deviceCompass } from './sensor';
 import type { CompassState } from './types';
 
 const NOAA_ARCTIC = { lat: 80, lon: 0 };
@@ -121,6 +121,38 @@ test('starting while the page is hidden listens once it becomes visible', () => 
   expect(heard.readings).toBe(1);
   stop();
 });
+
+const iPhoneEvent = ({
+  asks = true,
+  heading = true
+}: { asks?: boolean; heading?: boolean } = {}) =>
+  Object.assign(function DeviceOrientationEvent() {}, {
+    prototype: heading
+      ? { webkitCompassHeading: null, webkitCompassAccuracy: null }
+      : {},
+    ...(asks ? { requestPermission: () => Promise.resolve('granted') } : {})
+  });
+
+test.each([
+  { how: 'has the iPhone compass', event: iPhoneEvent(), shown: true },
+  {
+    how: 'has orientation events without a heading',
+    event: iPhoneEvent({ heading: false }),
+    shown: false
+  },
+  {
+    how: 'has no permission request',
+    event: iPhoneEvent({ asks: false }),
+    shown: false
+  },
+  { how: 'has no orientation events', event: undefined, shown: false }
+])(
+  'when the phone $how, the compass is offered: $shown',
+  ({ event, shown }) => {
+    if (event) vi.stubGlobal('DeviceOrientationEvent', event);
+    expect(compassSupported()).toBe(shown);
+  }
+);
 
 test.each<{ how: string; permission: Permission; state: CompassState }>([
   {

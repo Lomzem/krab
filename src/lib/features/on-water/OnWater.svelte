@@ -4,6 +4,7 @@
   import {
     Compass,
     compassChoice,
+    compassSupported,
     deviceCompass
   } from '#lib/features/compass/index.js';
   import {
@@ -401,6 +402,7 @@
           lastFix={readiness.lastFix}
           courseDeg={watch.courseDeg}
           compass={$compass}
+          compassShown={compassSupported()}
           oncompass={toggleCompass}
           {now}
           bind:base

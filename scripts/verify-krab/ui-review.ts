@@ -324,11 +324,10 @@ test('supplemental UI review with live maps and accessibility observations', asy
   for (const spot of overview)
     expect(spot.uncovered, spot.name ?? '').toBe(true);
   await capture('01-live-dense-chart');
-  const compass = map.getByRole('button', { name: 'Compass', exact: true });
-  await expect(compass).toHaveAccessibleDescription('Compass off');
-  await compass.click();
-  await expect(compass).toHaveAccessibleDescription('Compass unavailable');
-  await capture('02-compass-unavailable');
+  await expect(
+    map.getByRole('button', { name: 'Compass', exact: true })
+  ).toHaveCount(0);
+  await capture('02-no-compass-chip');
   const axeMap = await new AxeBuilder({ page }).analyze();
   keep('axe-map.json', axeMap);
   expect(axeMap.violations).toEqual([]);
