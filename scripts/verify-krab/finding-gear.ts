@@ -147,8 +147,8 @@ test('finding gear on the Map tab and from the Gear list', async ({
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
-  log('fresh context; made-up mid-ocean fix; Position ready');
+  await expect(page.getByText('Finding position')).toBeHidden();
+  log('fresh context; made-up mid-ocean fix; Finding position clears');
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   log('tap Drop pot on the Map tab; saved toast visible');
@@ -156,11 +156,13 @@ test('finding gear on the Map tab and from the Gear list', async ({
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const pot = map.getByRole('button', { name: /^Pot 1,/ });
   await expect(pot).toBeVisible();
-  await expect(map.getByRole('img', { name: /^Your position/ })).toBeVisible();
+  await expect(
+    map.getByRole('img', { name: /^Current position/ })
+  ).toBeVisible();
   await expect(map.getByRole('heading', { name: /Nearest gear/ })).toHaveText(
     /Pot 1/
   );
-  await expect(map).toContainText('Not to be used for navigation');
+  await expect(map).toContainText('not for navigation');
   log('Map shows Pot 1, my position, the nearest card and NOAA attribution');
   await capture('01-map');
 

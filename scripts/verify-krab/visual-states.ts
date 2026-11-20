@@ -40,11 +40,11 @@ test('visual inventory through a dense overnight trip', async ({
   await page.clock.pauseAt(EVENING);
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: 'Krab needs your location' })
+    page.getByRole('heading', { name: 'Krab needs location' })
   ).toBeVisible();
   await capture('01-location-explanation');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Finding your position')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeVisible();
   await capture('02-finding-position');
   const tab = (name: string) => page.getByRole('button', { name, exact: true });
   const sheet = page.getByRole('dialog');
@@ -69,7 +69,7 @@ test('visual inventory through a dense overnight trip', async ({
   await tab('Gear').click();
   await capture('03-empty-gear');
   await tab('Past trips').click();
-  await expect(page.getByText('No past trips yet.')).toBeVisible();
+  await expect(page.getByText('No past trips')).toBeVisible();
   await capture('04-empty-past-trips');
   await tab('Map').click();
   await capture('05-empty-map');
@@ -92,7 +92,7 @@ test('visual inventory through a dense overnight trip', async ({
       latitude: MADE_UP_SEA.latitude + number * 0.001,
       longitude: MADE_UP_SEA.longitude
     });
-    await expect(page.getByText('Position ready')).toBeVisible();
+    await expect(page.getByText('Finding position')).toBeHidden();
     await tab('Drop pot').click();
     await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
     if (number === 1) await capture('06-drop-toast');
@@ -264,18 +264,19 @@ test('visual inventory with location denied', async ({
   ).toBeVisible();
   await capture('01-location-denied');
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-  await expect(toastOf(page)).toContainText('Pot 1 dropped without a position');
+  await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
   await capture('02-no-position-toast');
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await expect(page.getByRole('main')).toContainText('No position');
   await capture('03-no-position-gear');
-  await page
-    .getByRole('button', { name: 'How to turn on in Settings' })
-    .click();
-  await expect(page.getByText(/Open Settings, then Privacy/)).toBeVisible();
+  await page.getByRole('button', { name: 'Show steps' }).click();
+  const steps = page.getByText(
+    'Settings › Privacy & Security › Location Services'
+  );
+  await expect(steps).toBeVisible();
   await capture('04-location-steps-expanded');
   await page.getByRole('button', { name: 'Hide steps' }).click();
-  await expect(page.getByText(/Open Settings, then Privacy/)).toHaveCount(0);
+  await expect(steps).toHaveCount(0);
   await page.mouse.move(0, 0);
   await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
   const row = page

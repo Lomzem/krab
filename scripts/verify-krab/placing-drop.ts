@@ -26,7 +26,7 @@ for (const entry of ['Map', 'Gear']) {
     }
     await page.goto('/');
     await expect(
-      page.getByRole('heading', { name: 'Krab needs your location' })
+      page.getByRole('heading', { name: 'Krab needs location' })
     ).toBeVisible();
     await capture('01-location-explanation');
     log(
@@ -36,8 +36,8 @@ for (const entry of ['Map', 'Gear']) {
     await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
     await page.getByRole('button', { name: 'Turn on location' }).click();
     log('acknowledge location explanation');
-    await expect(page.getByText('Position ready')).toBeVisible();
-    log('location status shows Position ready');
+    await expect(page.getByText('Finding position')).toBeHidden();
+    log('Finding position clears');
     if (entry === 'Gear')
       await page.getByRole('button', { name: 'Gear', exact: true }).click();
     await capture('02-before-drop');
@@ -85,12 +85,16 @@ test('placing a drop with location denied saves it without a position', async ({
   await page.getByRole('button', { name: 'Turn on location' }).click();
   log('acknowledge location explanation');
   const off = page.getByRole('region', { name: 'Location is off' });
-  await expect(off).toContainText('Settings');
+  await off.getByRole('button', { name: 'Show steps' }).click();
+  await expect(off).toContainText(
+    'Settings › Privacy & Security › Location Services'
+  );
+  await off.getByRole('button', { name: 'Hide steps' }).click();
   log('Location is off guidance names Settings');
   await capture('01-location-off');
   keep('indexeddb-before.json', await readTrips(page));
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-  await expect(toastOf(page)).toContainText('Pot 1 dropped without a position');
+  await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
   log('tap Drop pot; toast says saved without a position');
   await capture('02-dropped');
   await page.getByRole('button', { name: 'Gear', exact: true }).click();

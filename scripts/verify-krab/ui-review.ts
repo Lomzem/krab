@@ -278,7 +278,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
       latitude: MADE_UP_SEA.latitude + number * 0.001,
       accuracy: 8
     });
-    await expect(page.getByText('Position ready')).toBeVisible();
+    await expect(page.getByText('Finding position')).toBeHidden();
     await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
     await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
   }
@@ -332,7 +332,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
   expect(chartCredits.parts.length).toBeGreaterThan(0);
   for (const part of chartCredits.parts)
     expect(part.ratio, part.text).toBeGreaterThanOrEqual(4.5);
-  const group = map.getByRole('button', { name: /\. 8 gear in this area: / });
+  const group = map.getByRole('button', { name: /, 8 gear in this area: / });
   const zoomOut = map.getByRole('button', { name: 'Zoom out', exact: true });
   let outs = 0;
   await expect(async () => {
@@ -486,7 +486,7 @@ test('Street controls after switching from Chart, right away, settled and after 
       ];
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   const map = page.getByRole('region', { name: 'Map', exact: true });
@@ -645,23 +645,21 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   await page.setViewportSize(size);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  const ready = page.getByText('Position ready');
+  const finding = page.getByText('Finding position');
   await deliverFix(page, MADE_UP_SEA);
-  await expect(ready).toBeVisible();
+  await expect(finding).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(map.getByRole('region', { name: 'Map view' })).toBeVisible();
   await context.setOffline(true);
   await map.getByRole('button', { name: 'Street map', exact: true }).click();
-  const notice = map
-    .getByRole('status')
-    .filter({ hasText: "Offline. The map can't load." });
+  const notice = map.getByRole('status').filter({ hasText: 'Map offline' });
   await expect(notice).toBeVisible({ timeout: 15000 });
   await deliverFix(page, {
     ...MADE_UP_SEA,
     latitude: MADE_UP_SEA.latitude - 0.02
   });
-  await expect(ready).toBeVisible();
+  await expect(finding).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
   const newest = map.getByRole('button', {
@@ -725,7 +723,7 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
   await page.setViewportSize(size);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   const pin = map.getByRole('button', { name: /^Pot 1,/ });
@@ -794,14 +792,14 @@ test('Trip ended leaves on its own with the real clock running', async ({
   await context.setGeolocation(MADE_UP_SEA);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.getByRole('button', { name: 'End trip' }).click();
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
-  const ended = toastOf(page).getByText('Trip ended. It is under Past trips.');
+  const ended = toastOf(page).getByText('Trip ended');
   await expect(ended).toBeVisible();
   const shownAt = Date.now();
   await capture('1-trip-ended-shown');
@@ -881,7 +879,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await holdFixes(page);
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const sheet = page.getByRole('dialog');
-  const ready = page.getByText('Position ready');
+  const finding = page.getByText('Finding position');
   const names = ['Pot 1', 'Pot 2', 'Pot 3', 'Pot 4', 'Pot 5', 'Net 1'];
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -890,7 +888,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
       latitude: MADE_UP_SEA.latitude + index * 0.0012,
       longitude: MADE_UP_SEA.longitude + index * 0.0004
     });
-    await expect(ready).toBeVisible();
+    await expect(finding).toBeHidden();
     const kind = name.startsWith('Net') ? 'Net' : 'Pot';
     await page
       .getByRole('group', { name: 'Gear to drop' })
@@ -953,7 +951,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await capture('selected-2-single-focus-moved');
 
   await deliverFix(page, MADE_UP_SEA);
-  await expect(ready).toBeVisible();
+  await expect(finding).toBeHidden();
   await page
     .getByRole('group', { name: 'Gear to drop' })
     .getByText('Pot', { exact: true })

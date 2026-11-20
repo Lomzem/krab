@@ -20,7 +20,7 @@ test('the compass toggle without an iPhone compass stays north-up', async ({
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   log('fresh context; made-up mid-ocean fix; Pot 1 dropped');

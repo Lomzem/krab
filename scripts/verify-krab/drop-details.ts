@@ -26,7 +26,7 @@ test('drop details stay a draft until Save, refuse a bad depth, save and survive
       .getByRole('group', { name: 'Gear to drop' })
       .getByText(kind, { exact: true })
       .click();
-    await expect(page.getByText('Position ready')).toBeVisible();
+    await expect(page.getByText('Finding position')).toBeHidden();
     await page
       .getByRole('button', { name: `Drop ${kind.toLowerCase()}`, exact: true })
       .click();
