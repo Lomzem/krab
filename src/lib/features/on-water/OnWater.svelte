@@ -502,15 +502,26 @@
         />
       {/if}
     {/snippet}
-    {#snippet endAction(target: Drop)}
+    {#snippet endAction(
+      target: Drop,
+      leave: (exit: () => void) => void,
+      confirmCatchLoss: (exit: () => void) => void
+    )}
       {#if subject && canUndoCollect(subject.trip, target)}
         {@const { name } = subject}
+        {@const putBack = () => {
+          undoCollect(target.id, name);
+        }}
         <button
           type="button"
           class="grow {QUIET_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
-            undoCollect(target.id, name);
+            if (busy) return;
+            leave(() => {
+              if (target.catch) confirmCatchLoss(putBack);
+              else putBack();
+            });
           }}>Undo collect</button
         >
       {:else}
@@ -519,7 +530,10 @@
           class="grow {DESTRUCTIVE_TEXT_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
-            deleteDrop(target.id);
+            if (busy) return;
+            leave(() => {
+              deleteDrop(target.id);
+            });
           }}>Delete drop</button
         >
       {/if}

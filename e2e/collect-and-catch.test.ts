@@ -158,6 +158,7 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await sheet.getByRole('button', { name: 'Nothing caught' }).click();
   await sheet.getByRole('button', { name: 'Undo collect' }).click();
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
 
   await expect(
     sheet.getByRole('button', { name: 'Collect', exact: true })
@@ -168,6 +169,41 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await expect(page.getByRole('region', { name: 'Collected' })).toContainText(
     'Pot 1'
   );
+});
+
+test('Undo collect on gear with a saved catch asks first and Keep catch keeps it', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const loss = sheet.getByRole('group', { name: 'Clears the catch' });
+  const keepCatch = loss.getByRole('button', { name: 'Keep catch' });
+  const undoCollect = sheet.getByRole('button', { name: 'Undo collect' });
+
+  await collectPot(page);
+  await sheet.getByRole('button', { name: 'Nothing caught' }).click();
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  await collectedRow(page, 'Pot 1').click();
+
+  await undoCollect.click();
+  await expect(keepCatch).toBeFocused();
+  await expectAccessibleInBothThemes(page);
+  await keepCatch.click();
+  await expect(loss).toBeHidden();
+  await expect(undoCollect).toBeFocused();
+  expect(await storedCollections(page)).toEqual([
+    { collected: true, catch: { kept: 0, released: 0 } }
+  ]);
+
+  await undoCollect.click();
+  await loss.getByRole('button', { name: 'Undo collect' }).click();
+  await expect(
+    sheet.getByRole('button', { name: 'Collect', exact: true })
+  ).toBeFocused();
+  await expect(toastOf(page)).toContainText('Pot 1 back in, catch cleared');
+  expect(await storedCollections(page)).toEqual([
+    { collected: false, catch: null }
+  ]);
 });
 
 const collectPot = async (page: Page) => {

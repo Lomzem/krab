@@ -13,6 +13,7 @@
     notice = null,
     describedBy,
     initialFocus,
+    bodyInert = false,
     heading,
     children,
     footer
@@ -25,6 +26,7 @@
     notice?: Notice | null;
     describedBy?: string;
     initialFocus?: () => HTMLElement | null | undefined;
+    bodyInert?: boolean;
     heading: Snippet;
     children: Snippet;
     footer?: Snippet;
@@ -235,7 +237,11 @@
   </header>
   <div
     bind:this={body}
-    class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 [&_:focus]:scroll-my-4"
+    inert={bodyInert || undefined}
+    class={[
+      'min-h-0 flex-1 overscroll-contain px-4 py-4 [&_:focus]:scroll-my-4',
+      bodyInert ? 'overflow-hidden' : 'overflow-y-auto'
+    ]}
     onfocusin={revealFocused}
   >
     {@render children()}

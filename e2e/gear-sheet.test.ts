@@ -109,7 +109,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(label).toHaveValue('red float');
 });
 
-test('a gear sheet with unsaved changes ignores a backdrop tap and asks before Close, Escape, Back or Show on map discard them', async ({
+test('a gear sheet with unsaved changes ignores a backdrop tap and asks before Close, Escape, Back, Show on map, Delete drop or Undo collect discard them', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -197,18 +197,46 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
+  const deleteDrop = sheet.getByRole('button', { name: 'Delete drop' });
+  const undoCollect = sheet.getByRole('button', { name: 'Undo collect' });
   await gearRow(page, 'Pot 2').click();
   await label.fill('spare');
   await holdStorage(page);
-  await sheet.getByRole('button', { name: 'Delete drop' }).click();
+  await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await expect(save).toHaveAttribute('aria-disabled', 'true');
   await page.keyboard.press('Escape');
   await settle();
   await expect(sheet).toBeVisible();
   await expect(unsaved).toBeHidden();
   await releaseStorage(page);
+  await expect(keepEditing).toBeFocused();
+  await keepEditing.click();
+
+  await undoCollect.click();
+  await expect(keepEditing).toBeFocused();
+  await keepEditing.click();
+  await expect(undoCollect).toBeFocused();
+  await expect(sheet.getByRole('heading', { name: 'Catch' })).toBeVisible();
+  await undoCollect.click();
+  await discard.click();
+  await expect(
+    sheet.getByRole('button', { name: 'Collect', exact: true })
+  ).toBeFocused();
+  await expect(label).toHaveValue('');
+
+  await label.fill('spare');
+  await deleteDrop.click();
+  await expect(keepEditing).toBeFocused();
+  await keepEditing.click();
+  await expect(label).toHaveValue('spare');
+  await expect(gearRow(page, 'Pot 2')).toHaveCount(1);
+  await deleteDrop.click();
+  await discard.click();
   await expect(sheet).toBeHidden();
   await expect(toastOf(page)).toContainText('Pot 2 deleted');
+  await expect(
+    toastOf(page).getByRole('button', { name: 'Undo' })
+  ).toBeVisible();
 
   await pot1.click();
 

@@ -332,6 +332,10 @@ test("saving a recorded catch retires that gear's Collect Undo so it cannot clea
   ).toBeHidden();
   await collectedRow(page, 'Pot 4').click();
   await sheet.getByRole('button', { name: 'Undo collect' }).click();
+  await sheet
+    .getByRole('group', { name: 'Clears the catch' })
+    .getByRole('button', { name: 'Undo collect' })
+    .click();
   await expect(toastOf(page)).toContainText('Pot 4 back in, catch cleared');
   await closeSheet(page, 'Escape');
 
