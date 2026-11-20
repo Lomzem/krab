@@ -7,7 +7,9 @@ const finished = async () => {
       (animation) =>
         animation.effect?.getComputedTiming().iterations !== Infinity
     );
-  for (const animation of finite) await animation.finished.catch(() => null);
+  await Promise.all(
+    finite.map((animation) => animation.finished.catch(() => null))
+  );
 };
 
 export const animationsSettled = (page: Page) => page.evaluate(finished);
