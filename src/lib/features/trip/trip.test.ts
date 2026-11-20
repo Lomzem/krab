@@ -200,14 +200,14 @@ const dropAt = async (
   return place(book, kind);
 };
 
-it('waits for a late fix and stores it with the tap time', async () => {
+it('stores a fix taken just inside 5 s after the tap with the tap time', async () => {
   const { state, open, advance, report } = harness();
   state.fix = null;
   const book = await open();
 
   const attempt = book.placeDrop({ kind: 'pot' });
   const phaseAtTap = attempt.phase();
-  advance(12_000);
+  advance(4999);
   report({ lat: 0.0001, lon: -140, accuracyM: 9, at: state.now });
   const placed = await run(attempt.result);
 
@@ -222,6 +222,30 @@ it('waits for a late fix and stores it with the tap time', async () => {
   expect(placed.drop.noPosition).toBeNull();
 });
 
+it.each<[string, number, number]>([
+  ['a fix taken just after 5 s', 5001, 5001],
+  ['a fix seen only on resume after 5 s', 6000, 4000],
+  ['a fix seen exactly at 5 s', 5000, 5000]
+])(
+  'saves without a position and ignores %s, even before the wait timer fires',
+  async (_, seenAfter, takenAfter) => {
+    const { state, open, advance, report } = harness();
+    state.fix = null;
+    const book = await open();
+
+    const attempt = book.placeDrop({ kind: 'pot' });
+    state.now = T0 + seenAfter;
+    report({ ...SEA, accuracyM: 5, at: T0 + takenAfter });
+    advance(0);
+    const placed = await run(attempt.result);
+    const active = await run(activeIn(book));
+
+    expect(placed.drop.placedAt).toBe(T0);
+    expect(placed.drop.noPosition).toBe('no-fix');
+    expect(active?.drops).toMatchObject([{ position: null }]);
+  }
+);
+
 type Waiting = Harness & { attempt: ReturnType<TripBook['placeDrop']> };
 
 it.each<[string, (waiting: Waiting) => void]>([
@@ -232,9 +256,9 @@ it.each<[string, (waiting: Waiting) => void]>([
     }
   ],
   [
-    'the 20 s wait running out',
+    'the 5 s wait running out',
     ({ advance }) => {
-      advance(20_000);
+      advance(5000);
     }
   ],
   [
@@ -300,13 +324,13 @@ it('keeps a committed drop saved and reports it when showing the stored trips th
   expect(String(reported.at(-1))).toContain(broken.message);
 });
 
-it('saves nothing until 20 s after the tap, then saves without a position', async () => {
+it('saves nothing until 5 s after the tap, then saves without a position', async () => {
   const { state, open, advance } = harness();
   state.fix = null;
   const book = await open();
 
   const attempt = book.placeDrop({ kind: 'net' });
-  advance(19_999);
+  advance(4999);
   await drain();
   expect(await run(activeIn(book))).toBeNull();
 
@@ -332,7 +356,7 @@ it('stores nothing when the wait is cancelled, even if a fix arrives later', asy
   attempt.cancel();
   const failure = await run(Effect.flip(attempt.result));
   report({ ...SEA, accuracyM: 5, at: state.now });
-  advance(20_000);
+  advance(5000);
   const active = await run(activeIn(book));
 
   expect(failure._tag).toBe('DropCancelled');

@@ -15,6 +15,7 @@
   import {
     catchDraftOf,
     countOf,
+    draftChanged,
     draftOf,
     editOf,
     type CatchDraft
@@ -31,6 +32,8 @@
     oncollect,
     ondropagain,
     direction,
+    ondirty,
+    inert = false,
     children
   }: {
     subject: SheetSubject;
@@ -41,6 +44,8 @@
     oncollect?: (dropId: string) => void;
     ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     direction?: Snippet<[Drop]>;
+    ondirty?: (dirty: boolean) => void;
+    inert?: boolean;
     children?: Snippet;
   } = $props();
 
@@ -64,6 +69,10 @@
   let wasCollected = initial().collected;
   let collectButton = $state<HTMLButtonElement>();
   let catchHeading = $state<HTMLHeadingElement>();
+
+  $effect(() => {
+    ondirty?.(kind !== stored || draftChanged(drop, draft, catchDraft));
+  });
 
   $effect(() => {
     const collected = collectedAt !== null;
@@ -116,15 +125,15 @@
   };
 </script>
 
-<form id={formId} class="grid gap-5" onsubmit={submit} novalidate>
+<form id={formId} class="grid gap-5" {inert} onsubmit={submit} novalidate>
   {#if collectedAt === null && subject.trip.endedAt !== null}
-    <p class="text-[16px] font-medium">Uncollected</p>
+    <p class="text-base font-medium">Uncollected</p>
   {:else if collectedAt === null}
     <div class="grid gap-3">
       <div
         class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2"
       >
-        <p class="text-[15px] text-muted-foreground">
+        <p class="text-sm text-muted-foreground">
           <span aria-hidden="true">{inWater.short} in the water</span>
           <span class="sr-only">In the water for {inWater.spoken}</span>
         </p>
@@ -134,7 +143,7 @@
         <button
           bind:this={collectButton}
           type="button"
-          class="w-full {ACTION_BUTTON} active:brightness-95"
+          class="w-full {ACTION_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
             oncollect(drop.id);
@@ -155,7 +164,7 @@
     {#if ondropagain && canDropAgain(subject.trip, drop)}
       <button
         type="button"
-        class="w-full {PRIMARY_BUTTON} active:bg-muted"
+        class="w-full {PRIMARY_BUTTON}"
         aria-disabled={busy}
         onclick={() => {
           save(ondropagain);
@@ -170,5 +179,5 @@
     locked={!canChangeKind(subject.trip, drop.gearId)}
     {idPrefix}
   />
-  <DetailsFields bind:draft {idPrefix} refused={problem === 'depth'} />
+  <DetailsFields bind:draft {idPrefix} />
 </form>

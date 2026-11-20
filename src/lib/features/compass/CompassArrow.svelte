@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FOCUS } from '#lib/features/on-water/controls.js';
   import type { Snippet } from 'svelte';
   import BearingArrow from './BearingArrow.svelte';
   import { arrowDeg } from './heading';
@@ -57,7 +58,7 @@
   <button
     type="button"
     class={[
-      'grid size-11 touch-manipulation place-items-center rounded-full border focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring',
+      `grid size-11 touch-manipulation place-items-center rounded-full border ${FOCUS}`,
       compass.kind === 'usable'
         ? 'border-primary bg-accent text-accent-foreground'
         : 'border-input bg-card'
@@ -70,7 +71,7 @@
   {@render beside?.()}
   <span
     class={[
-      'text-center text-[12px] leading-tight font-medium text-muted-foreground',
+      'text-center text-xs leading-tight font-medium text-muted-foreground',
       beside ? 'col-span-2 max-w-36 justify-self-center' : 'max-w-24'
     ]}
     aria-hidden="true">{CAPTIONS[compass.kind]}</span

@@ -1,11 +1,18 @@
 <script lang="ts">
-  import { tick, type Snippet } from 'svelte';
+  import Icon from '#lib/icon/Icon.svelte';
+  import { FOCUS } from './controls';
+  import { tick, untrack, type Snippet } from 'svelte';
+  import type { Notice } from './on-water.svelte';
 
   let {
     open,
     titleId,
     onclose,
+    onbackdrop,
     returnFocus,
+    notice = null,
+    describedBy,
+    initialFocus,
     heading,
     children,
     footer
@@ -13,7 +20,11 @@
     open: boolean;
     titleId: string;
     onclose: () => void;
+    onbackdrop?: () => void;
     returnFocus: () => HTMLElement | null | undefined;
+    notice?: Notice | null;
+    describedBy?: string;
+    initialFocus?: () => HTMLElement | null | undefined;
     heading: Snippet;
     children: Snippet;
     footer?: Snippet;
@@ -23,11 +34,14 @@
     'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex], [contenteditable]:not([contenteditable="false"])';
 
   let dialog = $state<HTMLDialogElement>();
+  let openedAt = $state(0);
+  const said = $derived(notice && notice.key > openedAt ? notice.text : '');
   let body = $state<HTMLDivElement>();
 
   const reachable = (element: HTMLElement) =>
     element.tabIndex >= 0 &&
     !element.matches(':disabled') &&
+    !element.closest('[inert]') &&
     element.getClientRects().length > 0 &&
     getComputedStyle(element).visibility !== 'hidden';
 
@@ -177,7 +191,9 @@
     if (open && !dialog.open) {
       endDoublePress();
       lastPress = null;
+      openedAt = untrack(() => notice?.key ?? 0);
       dialog.showModal();
+      untrack(() => initialFocus?.())?.focus();
       if (body) body.scrollTop = 0;
     } else if (!open && dialog.open) {
       endDoublePress();
@@ -194,7 +210,8 @@
 <dialog
   bind:this={dialog}
   aria-labelledby={titleId}
-  class="m-0 mt-auto max-h-[88dvh] w-full max-w-none flex-col overflow-hidden rounded-t-2xl bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40 open:flex"
+  aria-describedby={describedBy}
+  class="m-0 mt-auto max-h-[88dvh] w-full max-w-none flex-col overflow-hidden rounded-t-2xl bg-card p-0 text-foreground shadow-xl transition-[translate] duration-(--motion-sheet-in) ease-out backdrop:bg-black/40 open:flex starting:open:[translate:0_100%]"
   onpointerdown={notePress}
   onkeydown={noteKey}
   oncancel={(event) => {
@@ -202,25 +219,17 @@
     onclose();
   }}
   onclick={(event) => {
-    if (event.target === dialog) onclose();
+    if (event.target === dialog) (onbackdrop ?? onclose)();
   }}
 >
   <header class="flex items-center gap-3 border-b border-border py-2 pr-2 pl-4">
     <div class="min-w-0 flex-1">{@render heading()}</div>
     <button
       type="button"
-      class="flex size-11 flex-none touch-manipulation items-center justify-center rounded-control text-muted-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      class="flex size-11 flex-none touch-manipulation items-center justify-center rounded-control text-muted-foreground {FOCUS}"
       onclick={onclose}
     >
-      <svg
-        class="size-5.5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.9"
-        stroke-linecap="round"
-        aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg
-      >
+      <Icon name="close" />
       <span class="sr-only">Close</span>
     </button>
   </header>
@@ -231,6 +240,14 @@
   >
     {@render children()}
   </div>
+  <p
+    role="status"
+    aria-label="Messages"
+    class={said &&
+      'border-t border-border px-4 pt-3 text-base leading-snug font-medium'}
+  >
+    {said}
+  </p>
   {#if footer}
     <footer
       class="flex flex-wrap gap-2 border-t border-border bg-card px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"

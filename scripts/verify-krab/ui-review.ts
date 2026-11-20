@@ -43,7 +43,9 @@ function measureCredits() {
       if (node.nodeType === 3) text += node.textContent ?? '';
     return text.trim();
   }
-  const strip = document.querySelector('.maplibregl-ctrl-attrib');
+  const strip = [...document.querySelectorAll('button')].find((button) =>
+    /not for navigation|OpenFreeMap/.test(button.textContent)
+  );
   const parts = [];
   if (strip) {
     for (const element of [strip, ...strip.querySelectorAll('*')]) {
@@ -65,7 +67,7 @@ function measureCredits() {
       });
     }
   }
-  return { found: strip !== null, parts };
+  return { found: strip !== undefined, parts };
 }
 
 const creditsContrast = (page: Page) => page.evaluate(measureCredits);
@@ -284,7 +286,9 @@ test('supplemental UI review with live maps and accessibility observations', asy
     await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
     await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
   }
-  const credits = page.locator('.maplibregl-ctrl-attrib');
+  const credits = page.getByRole('button', {
+    name: /not for navigation|OpenFreeMap/
+  });
   const toastBox = await toastOf(page).boundingBox();
   const creditsBox = await credits.boundingBox();
   keep('toast-and-credits.json', {
@@ -320,12 +324,10 @@ test('supplemental UI review with live maps and accessibility observations', asy
   for (const spot of overview)
     expect(spot.uncovered, spot.name ?? '').toBe(true);
   await capture('01-live-dense-chart');
-  const compass = page.getByRole('button', { name: /^Compass off,/ });
-  await compass.click();
   await expect(
-    page.getByRole('button', { name: /^Compass unavailable,/ })
-  ).toBeVisible();
-  await capture('02-compass-unavailable');
+    map.getByRole('button', { name: 'Compass', exact: true })
+  ).toHaveCount(0);
+  await capture('02-no-compass-chip');
   const axeMap = await new AxeBuilder({ page }).analyze();
   keep('axe-map.json', axeMap);
   expect(axeMap.violations).toEqual([]);
@@ -517,7 +519,7 @@ test('Street controls after switching from Chart, right away, settled and after 
     const tag = `${String(size.width)}x${String(size.height)}`;
     const street = map.getByRole('button', { name: 'Street map', exact: true });
     if ((await street.getAttribute('aria-pressed')) === 'true') {
-      await street.click();
+      await map.getByRole('button', { name: 'Chart map', exact: true }).click();
       await expect(street).toHaveAttribute('aria-pressed', 'false');
       if (liveProviders) await expect(map).not.toContainText('OpenStreetMap');
     }
@@ -675,7 +677,9 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   const covers = {
     toast: await rectOf(toastOf(page)),
     notice: await rectOf(notice),
-    credits: await rectOf(page.locator('.maplibregl-ctrl-attrib'))
+    credits: await rectOf(
+      page.getByRole('button', { name: /not for navigation|OpenFreeMap/ })
+    )
   };
   const view = await rectOf(map.getByRole('region', { name: 'Map view' }));
   await capture(`newest-${tag}-1-during-undo-and-notice`);
@@ -740,7 +744,9 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
     pin: await pin.evaluate(footprintOf),
     label: await rectOf(pin.locator('xpath=..').getByText(/\bmin\b|\bh\b|now/)),
     toast: await rectOf(toastOf(page)),
-    credits: await rectOf(page.locator('.maplibregl-ctrl-attrib'))
+    credits: await rectOf(
+      page.getByRole('button', { name: /not for navigation|OpenFreeMap/ })
+    )
   });
   await settledObservation(() => pin.evaluate(footprintOf));
   const chart = await measure();
@@ -802,10 +808,12 @@ test('Trip ended leaves on its own with the real clock running', async ({
   await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
+  await page.mouse.move(0, 0);
   const ended = toastOf(page).getByText('Trip ended');
   await expect(ended).toBeVisible();
   const shownAt = Date.now();

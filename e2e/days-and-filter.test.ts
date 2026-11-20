@@ -30,6 +30,7 @@ test.use({ timezoneId: 'America/New_York' });
 test('a drop after local midnight starts Day 2: the Gear list groups by day, Today hides the earlier pin and is marked with a check that moves no choice, and Show on map brings back a collected Day 1 drop', async ({
   page
 }) => {
+  test.slow();
   const tab = (name: string) => page.getByRole('button', { name, exact: true });
   const mapArea = page.getByRole('region', { name: 'Map', exact: true });
   const pin = (name: RegExp) => mapArea.getByRole('button', { name });

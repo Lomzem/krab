@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '#lib/icon/Icon.svelte';
   import { tick } from 'svelte';
   import type { MapPlace } from '#lib/features/map/index.js';
   import {
@@ -16,7 +17,14 @@
   import DayMarker from './DayMarker.svelte';
   import GearHere from './GearHere.svelte';
   import { inListOrder, type HereItem } from './gear-here';
-  import { DAY_CHOICE, DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
+  import {
+    DAY_CHOICE,
+    DESTRUCTIVE_BUTTON,
+    FOCUS,
+    FOCUS_INSET,
+    PRESS,
+    PRIMARY_BUTTON
+  } from './controls';
   import GearIcon from './GearIcon.svelte';
   import GroupPin from './GroupPin.svelte';
   import LoadFailed from './LoadFailed.svelte';
@@ -24,9 +32,11 @@
   import { chipBoxes } from './pin-chip';
   import SelectedCheck from './SelectedCheck.svelte';
   import Sheet from './Sheet.svelte';
+  import type { Notice } from './on-water.svelte';
   import UncollectedMark from './UncollectedMark.svelte';
 
   const DELETE_TITLE_ID = 'delete-trip-title';
+  const DELETE_NOTE_ID = 'delete-trip-note';
   const DAY_CHOICES: readonly { days: PastDaySelection; name: string }[] = [
     { days: 'last', name: 'Last day' },
     { days: 'earlier', name: 'Earlier days' },
@@ -42,7 +52,8 @@
     onshown,
     onopen,
     ondelete,
-    onretry
+    onretry,
+    notice
   }: {
     past: readonly Trip[];
     failed: boolean;
@@ -53,12 +64,14 @@
     onopen: (dropId: string, opener: HTMLElement, from: 'list' | 'map') => void;
     ondelete: (tripId: string) => Promise<boolean>;
     onretry: () => Promise<void>;
+    notice: Notice | null;
   } = $props();
 
   let selection = $state<PastDaySelection>('all');
   let deleteOpen = $state(false);
   let deleting = $state(false);
   let deleteButton = $state<HTMLButtonElement>();
+  let keepButton = $state<HTMLButtonElement>();
   let list = $state<HTMLUListElement>();
 
   const trip = $derived(past.find((item) => item.id === selected) ?? null);
@@ -166,10 +179,8 @@
   let picked = false;
   const hereItems = $derived(inListOrder(here.flatMap(itemOf)));
 
-  const rowClass =
-    'flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted';
-  const inputClass =
-    'peer absolute inset-0 size-full cursor-pointer appearance-none rounded-control focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring';
+  const rowClass = `flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left ${FOCUS_INSET} ${PRESS} active:bg-muted`;
+  const inputClass = `peer absolute inset-0 size-full cursor-pointer appearance-none rounded-control ${FOCUS}`;
 </script>
 
 {#snippet dropRows(shown: PastDropRow[])}
@@ -186,17 +197,15 @@
         >
           <GearIcon kind={row.gear.kind} size={24} />
           <div class="min-w-0 flex-1">
-            <p class="text-[17px] leading-snug font-medium">{row.name}</p>
+            <p class="text-control leading-snug font-medium">{row.name}</p>
             {#if row.drop.label}
               <p
-                class="line-clamp-2 text-[16px] leading-snug [overflow-wrap:anywhere]"
+                class="line-clamp-2 text-base leading-snug [overflow-wrap:anywhere]"
               >
                 {row.drop.label}
               </p>
             {/if}
-            <p
-              class="flex items-center gap-1.5 text-[15px] text-muted-foreground"
-            >
+            <p class="flex items-center gap-2 text-sm text-muted-foreground">
               {#if row.drop.collectedAt === null}
                 <UncollectedMark size={16} />
               {/if}
@@ -214,38 +223,29 @@
     <div class="px-4 pt-3">
       <button
         type="button"
-        class="-ml-2 flex min-h-11 touch-manipulation items-center gap-1 rounded-control px-2 text-[16px] font-medium text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        class="-ml-2 flex min-h-11 touch-manipulation items-center gap-1 rounded-control px-2 text-base font-medium text-primary {FOCUS}"
         onclick={() => void backToList()}
       >
-        <svg
-          class="size-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg
-        >All past trips
+        <Icon name="back" size={20} />All past trips
       </button>
       <h1
         id="past-trip-title"
         bind:this={titleHeading}
         tabindex="-1"
-        class="mt-1 text-[22px] leading-tight font-semibold focus:outline-none"
+        class="mt-1 text-display font-semibold focus:outline-none"
       >
         <span aria-hidden="true">{shortDates(trip)}</span><span class="sr-only"
           >{tripDates(trip)}</span
         >
       </h1>
-      <p class="pb-3 text-[15px] text-muted-foreground">
+      <p class="pb-3 text-sm text-muted-foreground">
         {pastTripCounts(trip)}
       </p>
     </div>
 
-    <div class="h-[45dvh]">
+    <div class="flex h-[45dvh] flex-col">
       {#await import('#lib/features/map/ChartMap.svelte')}
-        <p class="px-4 pt-4 text-[16px] text-muted-foreground">Loading map</p>
+        <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
       {:then { default: ChartMap }}
         <ChartMap {places} me={null} show={mapShow} {onshown}>
           {#snippet pin(id: string)}
@@ -279,13 +279,14 @@
           {/snippet}
         </ChartMap>
       {:catch}
-        <p class="px-4 pt-4 text-[16px]">This phone can't show maps</p>
+        <p class="px-4 pt-4 text-base">This phone can't show maps</p>
       {/await}
     </div>
 
     {#if multiDay}
       <fieldset class="px-4 pt-4">
-        <legend class="mb-2 text-[17px] font-semibold">Days on this trip</legend
+        <legend class="mb-2 text-control font-semibold"
+          >Days on this trip</legend
         >
         <div class="grid grid-cols-3 gap-2">
           {#each DAY_CHOICES as choice (choice.days)}
@@ -305,7 +306,7 @@
       </fieldset>
     {/if}
 
-    <h2 id="past-gear-title" class="px-4 pt-6 pb-2 text-[18px] font-semibold">
+    <h2 id="past-gear-title" class="px-4 pt-6 pb-2 text-control font-semibold">
       Gear
     </h2>
     {#if byDay.length > 0}
@@ -315,7 +316,7 @@
         >
           <h3
             id="past-day-{group.day.number}-title"
-            class="px-4 pt-3 pb-1 text-[16px] font-semibold"
+            class="px-4 pt-3 pb-1 text-base font-semibold"
           >
             <DayMarker day={group.day} size={20} />
           </h3>
@@ -344,7 +345,7 @@
       id="past-trips-title"
       bind:this={titleHeading}
       tabindex="-1"
-      class="px-4 pt-3 pb-2 text-[22px] leading-tight font-semibold focus:outline-none"
+      class="px-4 pt-3 pb-2 text-display font-semibold focus:outline-none"
     >
       Past trips
     </h1>
@@ -353,7 +354,7 @@
     {/if}
     {#if past.length === 0}
       {#if !failed}
-        <p class="px-4 text-[16px]">No past trips</p>
+        <p class="px-4 text-base">No past trips</p>
       {/if}
     {:else}
       <ul bind:this={list} class="border-t border-border bg-card">
@@ -368,25 +369,16 @@
               }}
             >
               <div class="min-w-0 flex-1">
-                <p class="text-[17px] leading-snug font-medium">
+                <p class="text-control leading-snug font-medium">
                   <span aria-hidden="true">{shortDates(item)}</span><span
                     class="sr-only">{tripDates(item)}</span
                   >
                 </p>
-                <p class="text-[15px] text-muted-foreground">
+                <p class="text-sm text-muted-foreground">
                   {pastTripCounts(item)}
                 </p>
               </div>
-              <svg
-                class="size-5 flex-none text-muted-foreground"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg
-              >
+              <Icon name="forward" size={20} class="text-muted-foreground" />
             </button>
           </li>
         {/each}
@@ -418,29 +410,31 @@
 <Sheet
   open={deleteOpen && trip !== null}
   titleId={DELETE_TITLE_ID}
+  describedBy={DELETE_NOTE_ID}
+  initialFocus={() => keepButton}
   onclose={keepTrip}
+  {notice}
   returnFocus={() => (deleteButton?.isConnected ? deleteButton : titleHeading)}
 >
   {#snippet heading()}
-    <h2 id={DELETE_TITLE_ID} class="text-[22px] leading-tight font-semibold">
-      Delete this trip?
-    </h2>
+    <h2 id={DELETE_TITLE_ID} class="text-title font-semibold">Delete trip?</h2>
   {/snippet}
 
-  <p class="text-[16px] leading-normal">Can't be undone</p>
+  <p id={DELETE_NOTE_ID} class="text-base leading-normal">Can't be undone</p>
 
   {#snippet footer()}
     <button
+      bind:this={keepButton}
       type="button"
-      class="flex-1 {DESTRUCTIVE_BUTTON}"
+      class="flex-1 basis-36 {PRIMARY_BUTTON}"
       aria-disabled={deleting}
-      onclick={() => void confirmDelete()}>Delete trip</button
+      onclick={keepTrip}>Keep trip</button
     >
     <button
       type="button"
-      class="flex-1 {PRIMARY_BUTTON}"
+      class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
       aria-disabled={deleting}
-      onclick={keepTrip}>Keep it</button
+      onclick={() => void confirmDelete()}>Delete trip</button
     >
   {/snippet}
 </Sheet>

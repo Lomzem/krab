@@ -355,6 +355,10 @@ export class OnWater {
     return true;
   }
 
+  saveLost(name: string) {
+    this.#say(`Couldn't save ${name}`);
+  }
+
   dismiss(key: number) {
     if (this.notice?.key === key) this.notice = null;
   }

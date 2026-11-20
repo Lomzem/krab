@@ -1,11 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Locator, type Page } from '@playwright/test';
+import { animationsSettled } from './settled';
 
 const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 export const expectAccessibleInBothThemes = async (page: Page) => {
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
+    await animationsSettled(page);
     const { violations } = await new AxeBuilder({ page })
       .withTags(WCAG_22_AA)
       .analyze();

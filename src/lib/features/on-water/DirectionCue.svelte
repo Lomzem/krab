@@ -24,10 +24,10 @@
 >
   {#snippet beside()}
     <div class="text-right whitespace-nowrap" aria-hidden="true">
-      <p class="text-[19px] leading-tight font-semibold tabular-nums">
+      <p class="text-title font-semibold tabular-nums">
         {direction.distance}
       </p>
-      <p class="text-[13px] font-medium text-muted-foreground">
+      <p class="text-sm font-medium text-muted-foreground">
         {direction.pointShort}
       </p>
     </div>

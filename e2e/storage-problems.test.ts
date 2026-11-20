@@ -44,6 +44,7 @@ const startWithLocation = async (page: Page) => {
 
 const endTheTrip = async (page: Page) => {
   const sheet = page.getByRole('dialog');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
@@ -61,6 +62,7 @@ test('a trip whose stored records fail to read shows that it could not load, not
   await startWithLocation(page);
   await dropPot(page, 'Pot 1');
   await endTheTrip(page);
+  await tab(page, 'Map').click();
   await dropPot(page, 'Pot 1');
 
   await failStorage(page, 'reads');
@@ -109,7 +111,9 @@ test('storage that fails to open says the trip could not load, Retry opens it ag
   await expect(main).toContainText(TRIP_LOAD_FAILED);
   await failStorage(page, null);
   await expect(page.getByText('Finding position')).toBeHidden();
+  await tab(page, 'Map').click();
   await dropPot(page, 'Pot 2');
+  await tab(page, 'Gear').click();
   await expect(inWaterRow(page, 'Pot 1')).toBeVisible();
   await expect(inWaterRow(page, 'Pot 2')).toBeVisible();
   await expect(main).not.toContainText(TRIP_LOAD_FAILED);
@@ -132,7 +136,7 @@ test('a double tap while storage is still opening makes one drop attempt, and it
       button.click();
     });
   await expect(
-    page.getByRole('heading', { name: 'Getting position' })
+    page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeFocused();
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(toastOf(page)).toContainText('Drop cancelled');
@@ -161,13 +165,15 @@ test('a drop tapped while storage is still opening keeps the tap time and the fi
   await page.getByRole('button', { name: 'Drop pot' }).click();
 
   await page.clock.fastForward('10:00');
-  await deliverFix(page, {
+  const away = {
     latitude: MADE_UP_SEA.latitude + 0.01,
     longitude: MADE_UP_SEA.longitude
-  });
+  };
+  await deliverFix(page, away);
   await releaseFirstOpen(page);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.clock.fastForward(15_000);
+  await deliverFix(page, away);
   await tab(page, 'Gear').click();
   await expect(pot).toContainText('10 min');
   await expect(pot).toContainText('0.7 mi');
@@ -204,8 +210,10 @@ test('a drop saved while an older reload is still reading stays on the Gear list
   await holdNextRead(page);
   await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
   await expect(sheet).toBeHidden();
+  await tab(page, 'Map').click();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 3 dropped');
+  await tab(page, 'Gear').click();
   await expect(inWaterRow(page, 'Pot 3')).toHaveCount(1);
 
   await releaseHeldRead(page);

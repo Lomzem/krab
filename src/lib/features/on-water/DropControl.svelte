@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CHOICE_FOCUS_INSET, FOCUS, PRESS } from './controls';
   import { KIND_NAMES, KINDS, type Kind } from '#lib/features/trip/index.js';
   import GearIcon from './GearIcon.svelte';
   import SelectedCheck from './SelectedCheck.svelte';
@@ -6,24 +7,26 @@
   let {
     kind = $bindable('pot'),
     button = $bindable(),
+    denied,
     ondrop
   }: {
     kind?: Kind;
     button?: HTMLButtonElement;
+    denied: boolean;
     ondrop: () => void;
   } = $props();
+
+  const name = $derived(KIND_NAMES[kind].toLowerCase());
 </script>
 
-<div
-  class="flex flex-wrap items-stretch gap-2 border-t border-border bg-card px-3 py-2"
->
+<div class="flex flex-wrap items-stretch gap-2">
   <fieldset
-    class="flex grow flex-wrap gap-0.5 rounded-control border border-input p-0.75"
+    class="flex min-h-16 grow gap-1 rounded-control bg-muted p-1 compact:min-h-14"
   >
     <legend class="sr-only">Gear to drop</legend>
     {#each KINDS as option (option)}
       <label
-        class="flex min-h-11 min-w-16 grow cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-[0.3125rem] px-2 text-[16px] font-medium whitespace-nowrap text-muted-foreground has-checked:bg-accent has-checked:text-accent-foreground has-focus-visible:outline-3 has-focus-visible:outline-offset-1 has-focus-visible:outline-ring"
+        class="flex min-w-16 flex-1 cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-[0.3125rem] px-2 text-base font-medium whitespace-nowrap text-muted-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-sm {CHOICE_FOCUS_INSET}"
       >
         <input
           class="sr-only"
@@ -40,10 +43,15 @@
   <button
     bind:this={button}
     type="button"
-    class="flex min-h-13 grow-999 touch-manipulation items-center justify-center gap-2 rounded-control bg-action px-3 text-[18px] font-semibold whitespace-nowrap text-action-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring active:brightness-95"
+    class="flex min-h-16 min-w-0 grow-999 basis-32 touch-manipulation flex-col items-center justify-center rounded-control bg-action px-3 py-2 text-control leading-tight font-semibold text-action-foreground compact:min-h-14 compact:py-1 {FOCUS} {PRESS} active:brightness-95"
     onclick={ondrop}
   >
-    <GearIcon {kind} size={22} />
-    Drop {KIND_NAMES[kind].toLowerCase()}
+    <span class="flex items-center gap-2">
+      <GearIcon {kind} size={22} />
+      Drop {name}
+    </span>
+    {#if denied}
+      <span class="text-sm font-medium">without position</span>
+    {/if}
   </button>
 </div>

@@ -237,10 +237,14 @@ const expectFailureInSight = async (page: Page) => {
   await expect(save).not.toHaveAttribute('aria-disabled', 'true');
 };
 
-const closeSheet = async (page: Page, how: 'Escape' | 'Save') => {
+const closeSheet = async (page: Page, how: 'Escape' | 'Discard' | 'Save') => {
   const sheet = page.getByRole('dialog');
-  if (how === 'Escape') await page.keyboard.press('Escape');
-  else await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  if (how === 'Save') {
+    await sheet.getByRole('button', { name: 'Save', exact: true }).click();
+  } else await page.keyboard.press('Escape');
+  if (how === 'Discard') {
+    await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  }
   await expect(sheet).toBeHidden();
   await page.mouse.move(0, 0);
 };
@@ -454,7 +458,7 @@ test('a catch Save that fails to store keeps its Collect Undo for the remaining 
   expect(await storedCollections(page)).toEqual([
     { collected: true, catch: null }
   ]);
-  await closeSheet(page, 'Escape');
+  await closeSheet(page, 'Discard');
   await expect(toastOf(page)).toContainText('Pot 1 collected');
   await expectExpiresAfter(page, 6000);
   expect(await storedCollections(page)).toEqual([
@@ -477,7 +481,7 @@ test('a catch Save that stops on an unexpected storage error leaves its Collect 
   await failStorage(page, 'defect');
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await failStorage(page, null);
-  await closeSheet(page, 'Escape');
+  await closeSheet(page, 'Discard');
   await expect(toastOf(page)).toContainText('Pot 1 collected');
   await expect(
     undoOf(page),

@@ -1,5 +1,5 @@
 import { Data, Deferred, Effect, Fiber, Result } from 'effect';
-import { availability } from './availability';
+import { availabilityForDrop, dropDeadline } from './availability';
 import { CannotDropAgain } from './failures';
 import {
   dropCommand,
@@ -18,8 +18,6 @@ import type {
   Trip,
   TripDeps
 } from './types';
-
-export const FIX_WAIT_MS = 20_000;
 
 export type PlacedDrop = {
   trip: Trip;
@@ -57,10 +55,11 @@ const SKIPPED: Located = { position: null, noPosition: 'skipped' };
 const NO_FIX: Located = { position: null, noPosition: 'no-fix' };
 const DENIED: Located = { position: null, noPosition: 'denied' };
 
-const settledAt = (positions: PositionSource, tapAt: number) => {
-  const status = availability(
+const settledAt = (positions: PositionSource, tapAt: number, now: number) => {
+  const status = availabilityForDrop(
     { denied: positions.denied(), fix: positions.latest() },
-    tapAt
+    tapAt,
+    now
   );
   if (status.kind === 'denied') return DENIED;
   if (status.kind === 'ready') return located(status.fix);
@@ -97,12 +96,12 @@ const store = (
     );
 
 const listen = (
-  positions: PositionSource,
+  deps: TripDeps,
   tapAt: number,
   choice: Deferred.Deferred<Located, DropCancelled>
 ) =>
-  positions.subscribe(() => {
-    const found = settledAt(positions, tapAt);
+  deps.positions.subscribe(() => {
+    const found = settledAt(deps.positions, tapAt, deps.clock.now());
     if (found) Deferred.doneUnsafe(choice, Effect.succeed(found));
   });
 
@@ -132,16 +131,14 @@ export const startDrop = (
 ): DropAttempt => {
   const tapAt = deps.clock.now();
   const command = dropCommand(target, tapAt);
-  const atTap = settledAt(deps.positions, tapAt);
+  const atTap = settledAt(deps.positions, tapAt, tapAt);
   const choice = Deferred.makeUnsafe<Located, DropCancelled>();
   if (atTap) Deferred.doneUnsafe(choice, Effect.succeed(atTap));
   const phase = observedPhase(atTap ? 'saving' : 'acquiring');
-  const unsubscribe = atTap
-    ? () => undefined
-    : listen(deps.positions, tapAt, choice);
+  const unsubscribe = atTap ? () => undefined : listen(deps, tapAt, choice);
   const where = Effect.raceFirst(
     Deferred.await(choice),
-    Effect.as(deps.clock.sleepUntil(tapAt + FIX_WAIT_MS), NO_FIX)
+    Effect.as(deps.clock.sleepUntil(dropDeadline(tapAt)), NO_FIX)
   ).pipe(
     Effect.ensuring(
       Effect.sync(() => {

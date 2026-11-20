@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { animationsSettled } from './settled';
 import {
   expect,
   holdStorage,
@@ -49,6 +50,10 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
 
   await label.fill('red float');
   await page.keyboard.press('Escape');
+  await expect(
+    sheet.getByRole('button', { name: 'Keep editing' })
+  ).toBeFocused();
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
   await expect(sheet).toBeHidden();
   await expect(pot1).toBeFocused();
   await pot1.click();
@@ -56,10 +61,10 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
 
   await label.fill('red float');
   await depth.fill('-3');
-  await expect(depth).not.toHaveAttribute('aria-invalid');
+  await expect(depth).toHaveAttribute('aria-invalid', 'true');
+  await expect(depth).toHaveAccessibleDescription('Enter 0 or more feet');
   await depth.press('Tab');
   await expect(depth).toHaveAttribute('aria-invalid', 'true');
-  await expect(depth).not.toHaveAccessibleDescription('');
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(depth).toBeFocused();
   await expect(depth).toHaveAttribute('aria-invalid', 'true');
@@ -94,7 +99,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
   await expect(sheet).toBeHidden();
   await expect(
-    page.getByRole('button', { name: /^Drop (pot|net)$/ })
+    page.getByRole('heading', { name: 'Gear', level: 1 })
   ).toBeFocused();
   await expect(toastOf(page)).toContainText('Pot 1 deleted');
   await expect(pot1).toHaveCount(0);
@@ -104,7 +109,123 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(label).toHaveValue('red float');
 });
 
-test('deleting a drop right after closing another gear sheet returns focus to Drop, not to the other gear', async ({
+test('a gear sheet with unsaved changes ignores a backdrop tap and asks before Close, Escape, Back or Show on map discard them', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const label = sheet.getByLabel('Label');
+  const form = sheet.locator('form');
+  const unsaved = sheet.getByRole('group', { name: 'Unsaved changes' });
+  const keepEditing = unsaved.getByRole('button', { name: 'Keep editing' });
+  const discard = unsaved.getByRole('button', { name: 'Discard changes' });
+  const save = sheet.getByRole('button', { name: 'Save' });
+  const tapBackdrop = () => page.mouse.click(200, 12);
+  const settle = () =>
+    page.evaluate(async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  for (const name of ['Pot 1', 'Pot 2']) {
+    await page.getByRole('button', { name: 'Drop pot' }).click();
+    await expect(toastOf(page)).toContainText(`${name} dropped`);
+  }
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const pot1 = gearRow(page, 'Pot 1');
+
+  await pot1.click();
+  await tapBackdrop();
+  await expect(sheet).toBeHidden();
+  await expect(pot1).toBeFocused();
+  await pot1.click();
+  await page.goBack();
+  await expect(sheet).toBeHidden();
+  await expect(pot1).toBeFocused();
+
+  await pot1.click();
+  await label.fill('red float');
+  await tapBackdrop();
+  await settle();
+  await expect(sheet).toBeVisible();
+  await expect(unsaved).toBeHidden();
+  await expect(label).toHaveValue('red float');
+
+  await label.focus();
+  await page.keyboard.press('Escape');
+  await expect(keepEditing).toBeFocused();
+  await expect(save).toBeHidden();
+  await expect(form).toHaveJSProperty('inert', true);
+  await page.keyboard.press('Tab');
+  await expect(discard).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(discard).not.toBeFocused();
+  await keepEditing.focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(keepEditing).not.toBeFocused();
+  await keepEditing.focus();
+  await tapBackdrop();
+  await keepEditing.click();
+  await expect(unsaved).toBeHidden();
+  await expect(form).toHaveJSProperty('inert', false);
+  await expect(label).toBeFocused();
+  await expect(label).toHaveValue('red float');
+
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(keepEditing).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(unsaved).toBeHidden();
+  await expect(save).toBeVisible();
+
+  await page.goBack();
+  await expect(keepEditing).toBeFocused();
+  await page.goBack();
+  await expect(unsaved).toBeHidden();
+  await expect(label).toHaveValue('red float');
+
+  await holdStorage(page);
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await releaseStorage(page);
+  await expect(pot1).toContainText('red float');
+  await pot1.click();
+  await expect(label).toHaveValue('red float');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await gearRow(page, 'Pot 2').click();
+  await label.fill('spare');
+  await holdStorage(page);
+  await sheet.getByRole('button', { name: 'Delete drop' }).click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+  await settle();
+  await expect(sheet).toBeVisible();
+  await expect(unsaved).toBeHidden();
+  await releaseStorage(page);
+  await expect(sheet).toBeHidden();
+  await expect(toastOf(page)).toContainText('Pot 2 deleted');
+
+  await pot1.click();
+
+  await label.fill('blue float');
+  await sheet.getByRole('button', { name: 'Show on map' }).click();
+  await expect(keepEditing).toBeFocused();
+  await discard.click();
+  await expect(sheet).toBeHidden();
+  await expect(
+    page.getByRole('main').getByRole('button', { name: /^Pot 1/ })
+  ).toBeFocused();
+
+  await page.goBack();
+  await expect(page).toHaveURL('about:blank');
+});
+
+test('deleting a drop right after closing another gear sheet returns focus to the Gear heading, not to the other gear', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -127,7 +248,9 @@ test('deleting a drop right after closing another gear sheet returns focus to Dr
   await sheet.getByRole('button', { name: 'Delete drop' }).dblclick();
   await expect(sheet).toBeHidden();
   await expect(toastOf(page)).toContainText('Pot 1 deleted');
-  await expect(page.getByRole('button', { name: 'Drop pot' })).toBeFocused();
+  await expect(
+    page.getByRole('heading', { name: 'Gear', level: 1 })
+  ).toBeFocused();
 });
 
 test('deleting a drop already deleted in another tab closes the sheet without an error and drops its row', async ({
@@ -210,6 +333,96 @@ test('while a sheet action is storing, the sheet ignores its other actions, and 
   await expect(label).toHaveValue('blue buoy');
 });
 
+type LastWrite = { lastWrite?: IDBTransaction };
+
+const recordWrites = (page: Page) =>
+  page.addInitScript(() => {
+    const database = IDBDatabase.prototype;
+    const begin = Reflect.get(database, 'transaction') as (
+      this: IDBDatabase,
+      ...args: unknown[]
+    ) => IDBTransaction;
+    Reflect.set(
+      database,
+      'transaction',
+      function (this: IDBDatabase, ...args: unknown[]) {
+        const tx = Reflect.apply(begin, this, args);
+        if (tx.mode === 'readwrite') (window as LastWrite).lastWrite = tx;
+        return tx;
+      }
+    );
+  });
+
+test('a Save that fails after Escape closed its sheet says so in a message', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const save = sheet.getByRole('button', { name: 'Save' });
+
+  await recordWrites(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await gearRow(page, 'Pot 1').click();
+  await sheet.getByLabel('Label').fill('red float');
+  await holdStorage(page);
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await page.evaluate(() => {
+    (window as LastWrite).lastWrite?.abort();
+  });
+  await releaseStorage(page);
+
+  await expect(toastOf(page)).toContainText("Couldn't save Pot 1");
+});
+
+test('a Save that fails after its sheet closed says so even while another sheet is saving', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const save = sheet.getByRole('button', { name: 'Save' });
+
+  await recordWrites(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await gearRow(page, 'Pot 1').click();
+  await sheet.getByLabel('Label').fill('red float');
+  await holdStorage(page);
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.evaluate(() => {
+    const writes = window as LastWrite & { firstWrite?: IDBTransaction };
+    writes.firstWrite = writes.lastWrite;
+  });
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await gearRow(page, 'Pot 2').click();
+  await sheet.getByLabel('Label').fill('blue buoy');
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.evaluate(() => {
+    (window as { firstWrite?: IDBTransaction }).firstWrite?.abort();
+  });
+  await releaseStorage(page);
+
+  await expect(sheet).toBeHidden();
+  await expect(toastOf(page)).toContainText("Couldn't save Pot 1");
+});
+
 test('on a 320 by 640 screen, tabbing from corrected Depth through Label and Bait after a refused Save shows all of Notes clear of the footer, and multiline notes save and reload intact', async ({
   page
 }) => {
@@ -274,8 +487,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
     const sheet = page.getByRole('dialog', { name: /^Pot \d$/ });
     const collect = sheet.getByRole('button', { name: 'Collect', exact: true });
-    const collectHidden = () =>
-      collect.evaluate((button) => {
+    const collectHidden = async () => {
+      await animationsSettled(page);
+      return collect.evaluate((button) => {
         const body = button.closest('dialog > div');
         if (!body) return 'no body';
         const shown = body.getBoundingClientRect();
@@ -290,6 +504,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           ? null
           : `Collect ${String(box.top)}..${String(box.bottom)} in body ${String(shown.top)}..${String(shown.bottom)}`;
       });
+    };
 
     await page.goto('/');
     await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -305,6 +520,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       .getByLabel('Notes', { exact: true })
       .fill('Fictional note about the outer float');
     await sheet.getByRole('button', { name: 'Close' }).click();
+    await sheet.getByRole('button', { name: 'Discard changes' }).click();
     await expect(sheet).toBeHidden();
     await gearRow(page, 'Pot 1').click();
     await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
@@ -318,6 +534,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       .last()
       .click();
     await page.keyboard.press('Escape');
+    await sheet.getByRole('button', { name: 'Discard changes' }).click();
     await expect(sheet).toBeHidden();
 
     await page.getByRole('button', { name: 'Map', exact: true }).click();
@@ -410,6 +627,21 @@ test('with the page zoomed up to 200% on 320 and 393 wide screens in both themes
 
 type Input = 'mouse' | 'touch';
 
+type Reached = Window & { reached?: number };
+
+function countClicksBeneath() {
+  const counted = window as Reached;
+  counted.reached = 0;
+  document.body.addEventListener('click', ({ target }) => {
+    if (target instanceof Element && target.closest('dialog')) return;
+    counted.reached = (counted.reached ?? 0) + 1;
+  });
+}
+
+function clicksBeneath() {
+  return (window as Reached).reached ?? 0;
+}
+
 const press = async (
   page: Page,
   input: Input,
@@ -432,6 +664,7 @@ const sheetShownAfterTimers = async (page: Page) => {
 };
 
 const pressToClose = async (page: Page, input: Input, x: number, y: number) => {
+  await animationsSettled(page);
   await press(page, input, x, y, 1);
   await expect.poll(() => sheetShownAfterTimers(page)).toBe(false);
 };
@@ -444,6 +677,7 @@ const pressToCloseLate = async (
   ms: number
 ) => {
   await holdStorage(page);
+  await animationsSettled(page);
   await press(page, input, x, y, 1);
   await expect(
     page.getByRole('dialog').getByRole('button', { name: 'Save' })
@@ -454,6 +688,7 @@ const pressToCloseLate = async (
 };
 
 const pressTwice = async (page: Page, target: Locator, input: Input) => {
+  await animationsSettled(page);
   const box = await target.boundingBox();
   expect(box, 'the control has a box').not.toBeNull();
   const x = (box?.x ?? 0) + (box?.width ?? 0) / 2;
@@ -495,6 +730,8 @@ test.describe('with the clock paused', () => {
         await page.emulateMedia({ colorScheme });
         await page.clock.install({ time: new Date('2031-03-04T05:00:00Z') });
         await page.goto('/');
+        await page.evaluate(countClicksBeneath);
+        const reached = () => page.evaluate(clicksBeneath);
         await page.getByRole('button', { name: 'Turn on location' }).click();
         await expect(
           page.getByRole('button', { name: 'Drop pot' })
@@ -505,6 +742,7 @@ test.describe('with the clock paused', () => {
         await tab('Gear').click();
 
         await gearRow(page, 'Pot 1').click();
+        let mark = await reached();
         await pressTwice(
           page,
           sheet.getByRole('button', { name: 'Delete drop' }),
@@ -513,16 +751,18 @@ test.describe('with the clock paused', () => {
         await expect(toastOf(page)).toContainText('Pot 1 deleted');
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
         await expect(
-          page.getByRole('button', { name: /^Drop (pot|net)$/ })
+          page.getByRole('heading', { name: 'Gear', level: 1 })
         ).toBeFocused();
         await expect(gearRow(page, 'Pot 1')).toHaveCount(0);
         expect(await storedDrops(page)).toBe(1);
+        expect(await reached()).toBe(mark);
 
         await gearRow(page, 'Pot 2').focus();
         await page.keyboard.press('Enter');
         await expect(
           sheet.getByRole('heading', { name: 'Pot 2' })
         ).toBeVisible();
+        mark = await reached();
         await pressTwice(
           page,
           sheet.getByRole('button', { name: 'Close' }),
@@ -530,6 +770,7 @@ test.describe('with the clock paused', () => {
         );
         await expect(sheet).toBeHidden();
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
+        expect(await reached()).toBe(mark);
 
         await toastOf(page).getByRole('button', { name: 'Undo' }).tap();
         await expect(toastOf(page)).toContainText('Pot 1 restored');
@@ -538,6 +779,7 @@ test.describe('with the clock paused', () => {
 
         await gearRow(page, 'Pot 2').click();
         await sheet.getByLabel('Label').fill('blue buoy');
+        mark = await reached();
         const saved = await pressTwice(
           page,
           sheet.getByRole('button', { name: 'Save' }),
@@ -548,36 +790,43 @@ test.describe('with the clock paused', () => {
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await expect(gearRow(page, 'Pot 2')).toContainText('blue buoy');
         expect(await storedDrops(page)).toBe(2);
+        expect(await reached()).toBe(mark);
 
         await page.clock.runFor(350);
+        mark = await reached();
         await press(page, 'touch', saved.x, saved.y, 1);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await tab('Gear').click();
         await gearRow(page, 'Pot 2').click();
         await pressToClose(page, 'mouse', saved.x, saved.y);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 1);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await tab('Gear').click();
         await gearRow(page, 'Pot 2').click();
         await pressToClose(page, 'mouse', saved.x, saved.y);
         await page.clock.runFor(500);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 2);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await tab('Gear').click();
         await gearRow(page, 'Pot 2').click();
         await pressToClose(page, 'mouse', saved.x, saved.y);
+        mark = await reached();
         await page.mouse.down({ clickCount: 2 });
         await page.clock.runFor(500);
         await page.mouse.up({ clickCount: 2 });
         await page.clock.runFor(0);
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        expect(await reached()).toBe(mark);
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(500);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 2);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         const saveLate = async (input: Input, label: string, ms: number) => {
           await tab('Gear').click();
@@ -590,25 +839,84 @@ test.describe('with the clock paused', () => {
         };
 
         await saveLate('touch', 'late float', 1000);
+        mark = await reached();
         await press(page, 'touch', saved.x, saved.y, 1);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await saveLate('touch', 'slow float', 200);
+        mark = await reached();
         await press(page, 'touch', saved.x, saved.y, 1);
         await page.clock.runFor(0);
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        expect(await reached()).toBe(mark);
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(150);
+        mark = await reached();
         await press(page, 'touch', saved.x, saved.y, 1);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
 
         await saveLate('mouse', 'slow buoy', 300);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 2);
         await page.clock.runFor(0);
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        expect(await reached()).toBe(mark);
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(200);
+        mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 2);
-        await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
+        await expect.poll(reached).toBeGreaterThan(mark);
       });
+});
+
+const CHROME_RING = {
+  light: 'rgb(29, 78, 216)',
+  dark: 'rgb(127, 176, 255)'
+} as const;
+
+const keyboardRing = async (page: Page, control: Locator) => {
+  await control.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(control).toBeFocused();
+  return control.evaluate((focused) => {
+    const drawn =
+      focused instanceof HTMLInputElement && focused.type === 'radio'
+        ? (focused.closest('label') ?? focused)
+        : focused;
+    const style = getComputedStyle(drawn);
+    return {
+      width: style.outlineWidth,
+      offset: style.outlineOffset,
+      color: style.outlineColor
+    };
+  });
+};
+
+test('Close, Save, Depth and a kind choice in the gear sheet show one 3 px focus ring 3 px out in both themes', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await gearRow(page, 'Pot 1').click();
+  const controls = [
+    sheet.getByRole('button', { name: 'Close' }),
+    sheet.getByRole('button', { name: 'Save' }),
+    sheet.getByLabel('Depth'),
+    sheet.getByRole('radio', { name: 'Pot' })
+  ];
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const control of controls) {
+      expect(await keyboardRing(page, control)).toEqual({
+        width: '3px',
+        offset: '3px',
+        color: CHROME_RING[colorScheme]
+      });
+    }
+  }
 });

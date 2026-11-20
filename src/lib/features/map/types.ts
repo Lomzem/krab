@@ -16,12 +16,7 @@ export type MyPosition = {
   at: LatLon;
   accuracyM: number;
   rough: boolean;
+  current: boolean;
   courseDeg: number | null;
   label: string;
-};
-
-export type Lane = {
-  bottom: number;
-  room: number | null;
-  beside: { room: number; right: number } | null;
 };

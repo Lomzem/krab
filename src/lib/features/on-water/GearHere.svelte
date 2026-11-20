@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FOCUS_INSET, PRESS } from './controls';
   import type { MapPlace } from '#lib/features/map/index.js';
   import type { HereItem } from './gear-here';
   import GearIcon from './GearIcon.svelte';
@@ -7,9 +8,9 @@
 
   const TITLE_ID = 'gear-here-title';
   const LOOK: Record<MapPlace['layer'], string> = {
-    'in-water': 'border-solid border-[#1a2e2b] bg-[#1a2e2b] text-white',
-    collected: 'border-dashed border-[#55655f] bg-white text-[#55655f]',
-    past: 'border-dotted border-[#55655f] bg-white text-[#55655f]'
+    'in-water': 'border-solid border-map-ink bg-map-ink text-map-paper',
+    collected: 'border-dashed border-map-muted bg-map-paper text-map-muted',
+    past: 'border-dotted border-map-muted bg-map-paper text-map-muted'
   };
 
   let {
@@ -29,7 +30,7 @@
 
 <Sheet open={items.length > 0} titleId={TITLE_ID} {onclose} {returnFocus}>
   {#snippet heading()}
-    <h2 id={TITLE_ID} class="text-[22px] leading-tight font-semibold">
+    <h2 id={TITLE_ID} class="text-title font-semibold">
       {items.length} gear {apart ? 'in this area' : 'here'}
     </h2>
   {/snippet}
@@ -39,7 +40,7 @@
       <li class="border-b border-border">
         <button
           type="button"
-          class="flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted"
+          class="flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left {FOCUS_INSET} {PRESS} active:bg-muted"
           aria-label={[item.name, ...item.details].join(', ')}
           onclick={() => {
             onpick(item.id);
@@ -59,11 +60,11 @@
             {/if}
           </span>
           <span class="min-w-0 flex-1">
-            <span class="block text-[17px] leading-snug font-medium"
+            <span class="block text-control leading-snug font-medium"
               >{item.name}</span
             >
             <span
-              class="block text-[15px] leading-snug [overflow-wrap:anywhere] text-muted-foreground"
+              class="block text-sm leading-snug [overflow-wrap:anywhere] text-muted-foreground"
               >{item.summary}</span
             >
           </span>

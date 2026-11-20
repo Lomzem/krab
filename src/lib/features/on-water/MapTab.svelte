@@ -1,19 +1,14 @@
 <script lang="ts">
+  import Icon from '#lib/icon/Icon.svelte';
+  import { FOCUS_INSET, PRESS } from './controls';
   import type { CompassState } from '#lib/features/compass/index.js';
-  import type {
-    Base,
-    Camera,
-    Lane,
-    MapPlace
-  } from '#lib/features/map/index.js';
+  import type { Base, Camera, MapPlace } from '#lib/features/map/index.js';
   import {
     collectedGear,
     compassPoint,
     dropsInDays,
-    gearCounts,
     gearInWater,
     isMultiDay,
-    nearestGear,
     pastDrops,
     roughness,
     tripDates,
@@ -23,10 +18,8 @@
     type PastDropRow,
     type Trip
   } from '#lib/features/trip/index.js';
-  import DirectionCue from './DirectionCue.svelte';
   import GearHere from './GearHere.svelte';
   import { inListOrder, type HereItem } from './gear-here';
-  import GearIcon from './GearIcon.svelte';
   import GroupPin from './GroupPin.svelte';
   import { DEFAULT_MAP_FILTER, type MapFilter } from './map-filter';
   import MapFilterSheet from './MapFilterSheet.svelte';
@@ -36,12 +29,11 @@
   let {
     trip,
     past,
-    canEnd,
-    onend,
-    endButton = $bindable(),
     fix,
+    lastFix,
     courseDeg,
     compass,
+    compassShown,
     oncompass,
     now,
     base = $bindable('chart'),
@@ -50,18 +42,15 @@
     show,
     onshown,
     onopen,
-    onlane,
-    newest,
-    cover
+    newest
   }: {
     trip: Trip | null;
     past: readonly Trip[];
-    canEnd: boolean;
-    onend: () => void;
-    endButton?: HTMLButtonElement;
     fix: Fix | null;
+    lastFix: Fix | null;
     courseDeg: number | null;
     compass: CompassState;
+    compassShown: boolean;
     oncompass: () => void;
     now: number;
     base?: Base;
@@ -70,13 +59,21 @@
     show: string | null;
     onshown: () => void;
     onopen: (dropId: string, opener: HTMLElement) => void;
-    onlane: (lane: Lane | null) => void;
     newest: string | null;
-    cover: number;
   } = $props();
 
+  const CAPSULE_BUTTON = `flex h-11 w-full touch-manipulation tiny-map:w-11 items-center justify-center ${FOCUS_INSET} ${PRESS} active:bg-muted`;
+  const COMPASS_STATES: Record<
+    Exclude<CompassState['kind'], 'unavailable'>,
+    string
+  > = {
+    off: 'Compass off',
+    waiting: 'Compass paused',
+    starting: 'Compass starting',
+    calibrating: 'Compass needs calibrating',
+    usable: 'Compass on'
+  };
   const rows = $derived(trip ? gearInWater(trip, fix, now) : []);
-  const nearest = $derived(nearestGear(rows));
   const rowsById = $derived(new Map(rows.map((row) => [row.drop.id, row])));
   const multiDay = $derived(trip !== null && isMultiDay(trip));
   const inDays = $derived(
@@ -118,6 +115,16 @@
       .join(', ')
   );
 
+  const compassOn = $derived(
+    compass.kind !== 'off' && compass.kind !== 'unavailable'
+  );
+  const compassState = $derived.by(() => {
+    if (compass.kind !== 'unavailable') return COMPASS_STATES[compass.kind];
+    return compass.reason === 'denied'
+      ? 'Motion access off'
+      : 'Compass unavailable';
+  });
+
   let filterOpen = $state(false);
   let filterButton = $state<HTMLButtonElement>();
   const rough = $derived(fix && roughness(fix));
@@ -125,11 +132,12 @@
     compass.kind === 'usable' ? Math.round(compass.trueHeadingDeg) % 360 : null
   );
   const course = $derived(headingDeg === null ? courseDeg : null);
-  const me = $derived(
+  const current = $derived(
     fix && {
       at: fix,
       accuracyM: fix.accuracyM,
       rough: rough !== null,
+      current: true,
       courseDeg: course,
       label: [
         'Current position',
@@ -139,6 +147,17 @@
         .filter(Boolean)
         .join(', ')
     }
+  );
+  const me = $derived(
+    current ??
+      (lastFix && {
+        at: lastFix,
+        accuracyM: lastFix.accuracyM,
+        rough: false,
+        current: false,
+        courseDeg: null,
+        label: 'Last position'
+      })
   );
 
   const present = (parts: (string | false | null | undefined)[]) =>
@@ -258,86 +277,53 @@
   };
 </script>
 
-<section class="flex h-full flex-col" aria-labelledby="map-title">
+<section class="flex flex-1 flex-col" aria-labelledby="map-title">
   <h1 id="map-title" class="sr-only">Map</h1>
-  {#if trip}
-    <div
-      class="flex min-h-12 items-center gap-3 border-b border-border bg-card py-0.5 pr-2 pl-4"
-    >
-      <p class="min-w-0 flex-1 text-[15px] text-muted-foreground">
-        {gearCounts(trip).inWater}
-      </p>
-      <button
-        bind:this={endButton}
-        type="button"
-        class="min-h-11 touch-manipulation rounded-control px-3 text-[16px] font-semibold text-destructive underline-offset-3 transition-opacity duration-0 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60 aria-disabled:delay-500"
-        aria-haspopup="dialog"
-        aria-disabled={!canEnd}
-        onclick={() => {
-          if (canEnd) onend();
-        }}>End trip</button
-      >
-    </div>
-  {/if}
-  {#if trip && nearest?.direction}
-    {@const direction = nearest.direction}
-    <section
-      class="flex min-h-14 items-center gap-3 border-b border-border bg-card px-4 py-1"
-      aria-labelledby="nearest-title"
-    >
-      <span class="text-primary"
-        ><GearIcon kind={nearest.gear.kind} size={24} /></span
-      >
-      <div class="min-w-0 flex-1">
-        <h2 id="nearest-title" class="text-[17px] leading-snug font-semibold">
-          <span class="sr-only">Nearest gear: </span>{nearest.name}
-        </h2>
-        <p class="text-[14px] text-muted-foreground" aria-hidden="true">
-          Nearest
-        </p>
-      </div>
-      <DirectionCue {direction} {compass} ontoggle={oncompass} />
-    </section>
-  {/if}
-
-  <div class="min-h-0 flex-1">
+  <div class="flex flex-1 flex-col">
     {#await import('#lib/features/map/ChartMap.svelte')}
-      <p class="px-4 pt-4 text-[16px] text-muted-foreground">Loading map</p>
+      <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
     {:then { default: ChartMap }}
       <ChartMap
         bind:base
         bind:camera
         {places}
         {me}
-        {headingDeg}
+        headingDeg={fix ? headingDeg : null}
         {show}
         {onshown}
-        {onlane}
         keepClear={newest}
-        {cover}
       >
         {#snippet controls()}
           {#if trip || past.length > 0}
             <button
               bind:this={filterButton}
               type="button"
-              class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-[15px] font-medium text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              class={CAPSULE_BUTTON}
               aria-haspopup="dialog"
               aria-label="Filter, showing {filterSummary}"
               onclick={() => {
                 filterOpen = true;
               }}
             >
-              <svg
-                class="size-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.75"
-                stroke-linecap="round"
-                aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg
-              >Filter
+              <Icon name="filter" />
             </button>
+          {/if}
+          {#if compassShown}
+            <button
+              type="button"
+              class="{CAPSULE_BUTTON} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+              aria-label="Compass"
+              aria-pressed={compassOn}
+              aria-describedby="compass-state"
+              onclick={oncompass}
+            >
+              <Icon
+                name={compass.kind === 'unavailable'
+                  ? 'compass-off'
+                  : 'compass'}
+              />
+            </button>
+            <span id="compass-state" class="sr-only">{compassState}</span>
           {/if}
         {/snippet}
         {#snippet pin(id: string, selected: boolean)}
@@ -357,7 +343,7 @@
             </button>
             {#if time}
               <span
-                class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-white/90 px-1 text-[12px] leading-tight font-semibold whitespace-nowrap text-[#1a2e2b] tabular-nums"
+                class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-map-paper/90 px-1 text-xs leading-tight font-semibold whitespace-nowrap text-[#1a2e2b] tabular-nums"
                 aria-hidden="true">{time}</span
               >
             {/if}
@@ -385,7 +371,7 @@
         {/snippet}
       </ChartMap>
     {:catch}
-      <p class="px-4 pt-4 text-[16px]">This phone can't show maps</p>
+      <p class="px-4 pt-4 text-base">This phone can't show maps</p>
     {/await}
   </div>
 </section>
