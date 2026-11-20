@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FOCUS_INSET, PRESS } from './controls';
   import {
     arrowDeg,
     BearingArrow,
@@ -37,14 +38,13 @@
   const inWaterByDay = $derived(dayGroups(rows));
   const collectedByDay = $derived(dayGroups(collected));
 
-  const rowClass =
-    'flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring active:bg-muted';
+  const rowClass = `flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left ${FOCUS_INSET} ${PRESS} active:bg-muted`;
 </script>
 
 <header class="px-4 pt-3 pb-2">
-  <h1 class="text-[22px] leading-tight font-semibold">Gear</h1>
+  <h1 class="text-display font-semibold">Gear</h1>
   {#if counts}
-    <p class="text-[15px] text-muted-foreground">
+    <p class="text-sm text-muted-foreground">
       {counts.inWater}<span aria-hidden="true">&nbsp;·</span><span
         class="sr-only">,</span
       >
@@ -55,7 +55,7 @@
 
 {#snippet dropLabel(label: string)}
   {#if label}
-    <p class="line-clamp-2 text-[16px] leading-snug [overflow-wrap:anywhere]">
+    <p class="line-clamp-2 text-base leading-snug [overflow-wrap:anywhere]">
       {label}
     </p>
   {/if}
@@ -91,14 +91,14 @@
             : '@max-[22rem]:basis-[calc(100%-2.5rem)]'
         ]}
       >
-        <p class="text-[17px] leading-snug font-medium">{row.name}</p>
+        <p class="text-control leading-snug font-medium">{row.name}</p>
         {@render dropLabel(row.drop.label)}
-        <p class="text-[15px] text-muted-foreground">
+        <p class="text-sm text-muted-foreground">
           <span aria-hidden="true">{row.timeInWater.short} in the water</span>
           <span class="sr-only">In the water for {row.timeInWater.spoken}</span>
         </p>
         {#if row.rough}
-          <p class="text-[15px] font-medium text-destructive">
+          <p class="text-base font-medium text-destructive">
             <span aria-hidden="true"
               >Rough position, within about {row.rough.short}</span
             >
@@ -112,12 +112,10 @@
         <div class="flex items-center gap-2 @max-2xs:ml-10">
           <BearingArrow degrees={arrowDeg(row.direction.bearingDeg, compass)} />
           <div class="text-right" aria-hidden="true">
-            <p
-              class="text-[19px] leading-tight font-semibold whitespace-nowrap tabular-nums"
-            >
+            <p class="text-title font-semibold whitespace-nowrap tabular-nums">
               {row.direction.distance}
             </p>
-            <p class="text-[13px] font-medium text-muted-foreground">
+            <p class="text-sm font-medium text-muted-foreground">
               {row.direction.pointShort}
             </p>
           </div>
@@ -126,7 +124,7 @@
           >
         </div>
       {:else if !row.drop.position}
-        <p class="text-[15px] text-muted-foreground @max-[22rem]:ml-10">
+        <p class="text-sm text-muted-foreground @max-[22rem]:ml-10">
           No position
         </p>
       {/if}
@@ -147,9 +145,9 @@
         >
           <GearIcon kind={item.gear.kind} size={24} />
           <div class="min-w-0 flex-1">
-            <p class="text-[17px] leading-snug font-medium">{item.name}</p>
+            <p class="text-control leading-snug font-medium">{item.name}</p>
             {@render dropLabel(item.drop.label)}
-            <p class="text-[15px] text-muted-foreground">{item.catchText}</p>
+            <p class="text-sm text-muted-foreground">{item.catchText}</p>
           </div>
         </button>
       </li>
@@ -163,7 +161,7 @@
       <section aria-labelledby="day-{group.day.number}-title">
         <h2
           id="day-{group.day.number}-title"
-          class="px-4 pt-3 pb-1 text-[17px] font-semibold"
+          class="px-4 pt-3 pb-1 text-control font-semibold"
         >
           <DayMarker day={group.day} size={22} />
         </h2>
@@ -175,7 +173,10 @@
   {/if}
   {#if collected.length > 0}
     <section aria-labelledby="collected-title">
-      <h2 id="collected-title" class="px-4 pt-5 pb-1 text-[17px] font-semibold">
+      <h2
+        id="collected-title"
+        class="px-4 pt-5 pb-1 text-control font-semibold"
+      >
         Collected
       </h2>
       {#if collectedByDay.length > 0}
@@ -186,7 +187,7 @@
           >
             <h3
               id="collected-day-{group.day.number}-title"
-              class="px-4 pt-2 pb-1 text-[15px] font-medium text-muted-foreground"
+              class="px-4 pt-2 pb-1 text-sm font-medium text-muted-foreground"
             >
               <DayMarker day={group.day} size={20} />
             </h3>
@@ -199,5 +200,5 @@
     </section>
   {/if}
 {:else}
-  <p class="px-4 text-[16px]">Nothing in the water</p>
+  <p class="px-4 text-base">Nothing in the water</p>
 {/if}

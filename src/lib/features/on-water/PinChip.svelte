@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PIN_FOCUS } from './controls';
   import type { MapPlace } from '#lib/features/map/index.js';
   import DayMarker from './DayMarker.svelte';
   import GearIcon from './GearIcon.svelte';
@@ -24,10 +25,10 @@
 
   const LOOK: Record<MapPlace['layer'], string> = {
     'in-water':
-      'border-solid border-[#1a2e2b] bg-[#1a2e2b] text-[14px] text-white shadow',
+      'border-solid border-map-ink bg-map-ink text-sm text-map-paper shadow',
     collected:
-      'border-dashed border-[#55655f] bg-white/85 text-[13px] text-[#55655f]',
-    past: 'border-dotted border-[#55655f] bg-white/85 text-[13px] text-[#55655f]'
+      'border-dashed border-map-muted bg-map-paper/85 text-sm text-map-muted',
+    past: 'border-dotted border-map-muted bg-map-paper/85 text-sm text-map-muted'
   };
   const PAD: Record<MapPlace['layer'], string> = {
     'in-water': 'p-1',
@@ -45,8 +46,7 @@
     face.number === null ? 'p-0.5' : PAD[face.layer],
     joined && 'rounded-r-none',
     selected && SELECTED_RING,
-    ring &&
-      'group-focus-visible:outline-3 group-focus-visible:outline-offset-3 group-focus-visible:outline-[#1d4ed8]'
+    ring && PIN_FOCUS
   ]}
 >
   <GearIcon kind={face.kind} size={metrics.icon} />{face.number ?? ''}

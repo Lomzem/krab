@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FOCUS } from './controls';
   let heading = $state<HTMLHeadingElement>();
 
   $effect(() => {
@@ -20,7 +21,7 @@
       id="saving-drop-title"
       bind:this={heading}
       tabindex="-1"
-      class="text-[18px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      class="text-control font-semibold {FOCUS}"
     >
       Saving drop
     </h2>

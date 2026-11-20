@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from '#lib/icon/Icon.svelte';
+  import { FOCUS, PRESS } from './controls';
   import { countOf, type CatchDraft } from './details-draft';
   import SelectedCheck from './SelectedCheck.svelte';
 
@@ -87,8 +89,7 @@
       : `Whole number for ${name}`;
   });
 
-  const stepper =
-    'flex size-12 shrink-0 touch-manipulation items-center select-none justify-center rounded-control border border-primary text-primary focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted aria-disabled:border-border aria-disabled:text-muted-foreground';
+  const stepper = `flex size-12 shrink-0 touch-manipulation items-center select-none justify-center rounded-control border border-primary text-primary ${FOCUS} ${PRESS} active:bg-muted aria-disabled:border-border aria-disabled:text-muted-foreground`;
 </script>
 
 <section class="grid gap-3" aria-labelledby="{idPrefix}-catch-title">
@@ -97,14 +98,14 @@
       id="{idPrefix}-catch-title"
       bind:this={heading}
       tabindex="-1"
-      class="text-[18px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      class="text-control font-semibold {FOCUS}"
     >
       Catch
     </h3>
     <button
       type="button"
       class={[
-        'flex min-h-11 touch-manipulation items-center gap-1 rounded-control border pr-2.5 pl-3 text-[15px] font-medium select-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring',
+        `flex min-h-11 touch-manipulation items-center gap-1 rounded-control border pr-2.5 pl-3 text-sm font-medium select-none ${FOCUS}`,
         nothing
           ? 'border-primary bg-accent text-accent-foreground'
           : 'border-input'
@@ -125,7 +126,7 @@
       <label
         id="{idPrefix}-{side}"
         for="{idPrefix}-{side}-count"
-        class="text-[17px] font-medium select-none">{name}</label
+        class="text-control font-medium select-none">{name}</label
       >
       <button
         type="button"
@@ -136,15 +137,7 @@
           if (count) step(side, -1);
         }}
       >
-        <svg
-          class="size-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.25"
-          stroke-linecap="round"
-          aria-hidden="true"><path d="M5 12h14" /></svg
-        >
+        <Icon name="minus" />
       </button>
       <input
         id="{idPrefix}-{side}-count"
@@ -157,7 +150,7 @@
           : undefined}
         aria-describedby={noteId}
         style:font-size="{countFont(text ?? '')}px"
-        class="h-12 w-full min-w-0 rounded-control border border-input bg-card px-1 text-center font-semibold text-foreground tabular-nums focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-invalid:border-2 aria-invalid:border-destructive"
+        class="h-12 w-full min-w-0 rounded-control border border-input bg-card px-1 text-center font-semibold text-foreground tabular-nums {FOCUS} aria-invalid:border-2 aria-invalid:border-destructive"
         oninput={(event) => {
           set(side, event.currentTarget.value);
         }}
@@ -174,15 +167,7 @@
           if (count !== Number.MAX_SAFE_INTEGER) step(side, 1);
         }}
       >
-        <svg
-          class="size-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.25"
-          stroke-linecap="round"
-          aria-hidden="true"><path d="M5 12h14M12 5v14" /></svg
-        >
+        <Icon name="plus" />
       </button>
       <output class="sr-only">{name}: {spoken(text)}</output>
     </div>
@@ -191,7 +176,7 @@
     <p
       id={noteId}
       class={[
-        'text-[15px] leading-5',
+        'text-sm leading-5',
         refused
           ? 'border-l-3 border-destructive pl-2 font-medium'
           : 'text-muted-foreground'
@@ -204,7 +189,7 @@
     {#if value}
       <button
         type="button"
-        class="min-h-11 touch-manipulation rounded-control px-1 text-[15px] font-medium text-primary underline underline-offset-4 select-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        class="min-h-11 touch-manipulation rounded-control px-1 text-sm font-medium text-primary underline underline-offset-4 select-none {FOCUS}"
         onclick={() => {
           left = [];
           onchange(null);

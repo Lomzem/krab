@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from '#lib/icon/Icon.svelte';
+  import { MAP_FOCUS } from '#lib/features/on-water/controls.js';
   import {
     Map as MapLibre,
     Marker,
@@ -674,64 +676,31 @@
       {@render controls?.()}
       <button
         type="button"
-        class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-[15px] font-medium text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+        class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-foreground hover:bg-muted {MAP_FOCUS} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
         aria-label="Street map"
         aria-pressed={base === 'street'}
         onclick={() => {
           base = base === 'chart' ? 'street' : 'chart';
         }}
       >
-        <svg
-          class="size-5 shrink-0"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-          ><rect
-            x="3.5"
-            y="3.5"
-            width="17"
-            height="17"
-            rx="3"
-          />{#if base === 'street'}<path d="m7.5 12.5 3 3 6-6.5" />{/if}</svg
-        >Street
+        <Icon
+          name={base === 'street' ? 'box-checked' : 'box'}
+          size={20}
+        />Street
       </button>
       {#if places.length > 0}
         <button
           type="button"
-          class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted {MAP_FOCUS}"
           aria-label="Show all gear"
           onclick={showAll}
         >
-          <svg
-            class="size-5.5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            ><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><circle
-              cx="9"
-              cy="10"
-              r="1.75"
-              fill="currentColor"
-            /><circle cx="15" cy="9" r="1.75" fill="currentColor" /><circle
-              cx="12"
-              cy="15"
-              r="1.75"
-              fill="currentColor"
-            /></svg
-          >
+          <Icon name="show-all" />
         </button>
       {/if}
       <button
         type="button"
-        class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent"
+        class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted {MAP_FOCUS} aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent"
         aria-label="Centre on my position"
         aria-disabled={me?.current ? undefined : 'true'}
         onclick={() => {
@@ -740,23 +709,12 @@
           revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
         }}
       >
-        <svg
-          class="size-5.5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linecap="round"
-          aria-hidden="true"
-          ><circle cx="12" cy="12" r="4" /><path
-            d="M12 2v4M12 18v4M2 12h4M18 12h4"
-          /></svg
-        >
+        <Icon name="centre" />
       </button>
     </div>
     {#if availability !== 'available'}
       <p
-        class="flex-none border-b border-border bg-card px-3 py-1.5 text-[14px] leading-tight text-foreground"
+        class="flex-none border-b border-border bg-card px-3 py-1.5 text-sm leading-tight text-foreground"
         role="status"
       >
         {OUTAGE_NOTICE[availability]}
@@ -766,7 +724,7 @@
 
   <div class="flex min-h-0 flex-1">
     <div
-      class="relative isolate min-w-0 flex-1 overflow-hidden bg-[#d5e2e0]"
+      class="relative isolate min-w-0 flex-1 overflow-hidden bg-map-sea"
       bind:clientHeight={viewHeight}
     >
       <div class="absolute inset-0">
@@ -775,7 +733,7 @@
 
       {#if failed}
         <p
-          class="absolute inset-x-3 top-3 rounded-control border border-border bg-card px-4 py-3 text-[16px]"
+          class="absolute inset-x-3 top-3 rounded-control border border-border bg-card px-4 py-3 text-base"
         >
           This phone can't show maps
         </p>
@@ -829,10 +787,14 @@
                     >
                       <stop
                         offset="0.3"
-                        stop-color="#1d4ed8"
+                        style:stop-color="var(--position)"
                         stop-opacity="0.4"
                       />
-                      <stop offset="1" stop-color="#1d4ed8" stop-opacity="0" />
+                      <stop
+                        offset="1"
+                        style:stop-color="var(--position)"
+                        stop-opacity="0"
+                      />
                     </radialGradient>
                   </defs>
                   <path
@@ -845,7 +807,7 @@
                 {#if me.courseDeg !== null}
                   <path
                     d="M22 22 13 2a20 20 0 0 1 18 0Z"
-                    fill="#1d4ed8"
+                    class="fill-position"
                     fill-opacity="0.35"
                     style:transform={`rotate(${String(Math.round(me.courseDeg))}deg)`}
                     style:transform-origin="22px 22px"
@@ -857,7 +819,7 @@
                     cy="22"
                     r="27"
                     fill="none"
-                    stroke="#ffffff"
+                    class="stroke-map-paper"
                     stroke-width="5"
                   />
                   <circle
@@ -865,15 +827,14 @@
                     cy="22"
                     r="27"
                     fill="none"
-                    stroke="#1d4ed8"
+                    class="stroke-position"
                     stroke-width="2.5"
                   />
                   <circle
                     cx="22"
                     cy="22"
                     r="8"
-                    fill="#1d4ed8"
-                    stroke="#ffffff"
+                    class="fill-position stroke-map-paper"
                     stroke-width="3"
                   />
                 {:else}
@@ -882,7 +843,7 @@
                     cy="22"
                     r="8"
                     fill="none"
-                    stroke="#ffffff"
+                    class="stroke-map-paper"
                     stroke-width="7"
                   />
                   <circle
@@ -890,7 +851,7 @@
                     cy="22"
                     r="8"
                     fill="none"
-                    stroke="#1d4ed8"
+                    class="stroke-position"
                     stroke-width="3"
                   />
                 {/if}
@@ -909,7 +870,7 @@
         <div class="flex flex-col pt-1" bind:offsetHeight={railReach}>
           <button
             type="button"
-            class="relative flex size-11 touch-manipulation items-center justify-center rounded-t-control border border-border bg-card text-foreground focus-visible:z-10 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            class="relative flex size-11 touch-manipulation items-center justify-center rounded-t-control border border-border bg-card text-foreground focus-visible:z-10 {MAP_FOCUS}"
             aria-label="Zoom in"
             aria-disabled={zoom >= MAX_ZOOM}
             onclick={() => {
@@ -917,19 +878,11 @@
               if (zoom < MAX_ZOOM) map?.zoomIn();
             }}
           >
-            <svg
-              class="size-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg
-            >
+            <Icon name="plus" size={20} />
           </button>
           <button
             type="button"
-            class="relative -mt-px flex size-11 touch-manipulation items-center justify-center rounded-b-control border border-border bg-card text-foreground focus-visible:z-10 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            class="relative -mt-px flex size-11 touch-manipulation items-center justify-center rounded-b-control border border-border bg-card text-foreground focus-visible:z-10 {MAP_FOCUS}"
             aria-label="Zoom out"
             aria-disabled={zoom <= MIN_ZOOM}
             onclick={() => {
@@ -937,15 +890,7 @@
               if (zoom > MIN_ZOOM) map?.zoomOut();
             }}
           >
-            <svg
-              class="size-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              aria-hidden="true"><path d="M5 12h14" /></svg
-            >
+            <Icon name="minus" size={20} />
           </button>
         </div>
       </div>

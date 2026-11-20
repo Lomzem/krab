@@ -42,13 +42,11 @@
   {notice}
 >
   {#snippet heading()}
-    <h2 id={TITLE_ID} class="text-[22px] leading-tight font-semibold">
-      End trip?
-    </h2>
+    <h2 id={TITLE_ID} class="text-title font-semibold">End trip?</h2>
   {/snippet}
 
   {#if uncollected > 0}
-    <p id={LEFT_ID} class="text-[16px] leading-normal">
+    <p id={LEFT_ID} class="text-base leading-normal">
       {uncollected} still in the water
     </p>
   {/if}

@@ -18,13 +18,13 @@ type Metrics = {
 
 export const CHIP_METRICS: Record<MapPlace['layer'], Metrics> = {
   'in-water': { pad: { left: 4, right: 4, y: 4 }, icon: 17, text: 14, day: 15 },
-  collected: { pad: { left: 2, right: 4, y: 2 }, icon: 15, text: 13, day: 14 },
-  past: { pad: { left: 2, right: 4, y: 2 }, icon: 15, text: 13, day: 14 }
+  collected: { pad: { left: 2, right: 4, y: 2 }, icon: 15, text: 14, day: 14 },
+  past: { pad: { left: 2, right: 4, y: 2 }, icon: 15, text: 14, day: 14 }
 };
 
 export const MARK_SIZE = 14;
 export const SELECTED_RING =
-  'ring-3 ring-[#a3256f] ring-offset-2 ring-offset-white';
+  'ring-3 ring-map-selected ring-offset-2 ring-offset-map-paper [--map-ring-inner:5px]';
 export const TIME_LABEL = { top: 15, size: 12, line: 15 };
 
 const BORDER = 2;

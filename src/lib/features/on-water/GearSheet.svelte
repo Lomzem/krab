@@ -188,13 +188,13 @@
     {#if subject}
       <h2
         id={TITLE_ID}
-        class="flex items-center gap-2 text-[22px] leading-tight font-semibold"
+        class="flex items-center gap-2 text-title font-semibold"
       >
         <GearIcon kind={subject.gear.kind} size={24} />
         {subject.name}
       </h2>
       {#if subject.day}
-        <p class="mt-0.5 text-[15px] font-medium text-muted-foreground">
+        <p class="mt-1 text-sm font-medium text-muted-foreground">
           <DayMarker day={subject.day} />
         </p>
       {/if}
@@ -229,7 +229,7 @@
         aria-labelledby={UNSAVED_ID}
         class="flex basis-full flex-wrap gap-2"
       >
-        <p id={UNSAVED_ID} class="basis-full text-[16px] font-medium">
+        <p id={UNSAVED_ID} class="basis-full text-base font-medium">
           Unsaved changes
         </p>
         <button
@@ -248,7 +248,7 @@
       {#if failure}
         <p
           role="alert"
-          class="mb-1 basis-full border-l-3 border-destructive pl-3 text-[15px]"
+          class="mb-1 basis-full border-l-3 border-destructive pl-3 text-base"
         >
           {failure}
         </p>

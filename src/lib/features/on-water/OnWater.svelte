@@ -19,7 +19,11 @@
     type DropEdit,
     type Kind
   } from '#lib/features/trip/index.js';
-  import { DESTRUCTIVE_TEXT_BUTTON, QUIET_BUTTON } from './controls';
+  import {
+    DESTRUCTIVE_TEXT_BUTTON,
+    FOCUS_INSET,
+    QUIET_BUTTON
+  } from './controls';
   import DirectionCue from './DirectionCue.svelte';
   import DropControl from './DropControl.svelte';
   import EndTripSheet from './EndTripSheet.svelte';
@@ -370,7 +374,7 @@
     {:else if tab === 'gear'}
       {#if water.load === 'failed'}
         <header class="px-4 pt-5">
-          <h1 class="text-[22px] leading-tight font-semibold">Gear</h1>
+          <h1 class="text-display font-semibold">Gear</h1>
         </header>
         <LoadFailed text={TRIP_LOAD_FAILED} onretry={reload} />
       {:else if water.load === 'ready'}
@@ -524,7 +528,7 @@
             {@attach (node: HTMLButtonElement) => {
               if (item.tab === 'map') mapTabButton = node;
             }}
-            class="relative flex min-h-13 w-full touch-manipulation flex-col items-center justify-center gap-0.5 text-[13px] font-medium before:absolute before:inset-x-6 before:top-0 before:h-0.75 before:rounded-b-sm before:bg-mark before:opacity-0 focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-ring aria-[current=page]:font-semibold aria-[current=page]:text-foreground aria-[current=page]:before:opacity-100"
+            class="relative flex min-h-13 w-full touch-manipulation flex-col items-center justify-center gap-0.5 text-sm font-medium before:absolute before:inset-x-6 before:top-0 before:h-0.75 before:rounded-b-sm before:bg-foreground before:opacity-0 {FOCUS_INSET} aria-[current=page]:font-semibold aria-[current=page]:text-foreground aria-[current=page]:before:opacity-100"
             aria-current={tab === item.tab ? 'page' : undefined}
             onclick={() => {
               tab = item.tab;

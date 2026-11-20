@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from '#lib/icon/Icon.svelte';
+  import { FOCUS } from './controls';
   import { tick, untrack, type Snippet } from 'svelte';
   import type { Notice } from './on-water.svelte';
 
@@ -208,7 +210,7 @@
   bind:this={dialog}
   aria-labelledby={titleId}
   aria-describedby={describedBy}
-  class="m-0 mt-auto max-h-[88dvh] w-full max-w-none flex-col overflow-hidden rounded-t-2xl bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40 open:flex"
+  class="m-0 mt-auto max-h-[88dvh] w-full max-w-none flex-col overflow-hidden rounded-t-2xl bg-card p-0 text-foreground shadow-xl transition-[translate] duration-(--motion-sheet-in) ease-out backdrop:bg-black/40 open:flex starting:open:translate-y-full"
   onpointerdown={notePress}
   onkeydown={noteKey}
   oncancel={(event) => {
@@ -223,18 +225,10 @@
     <div class="min-w-0 flex-1">{@render heading()}</div>
     <button
       type="button"
-      class="flex size-11 flex-none touch-manipulation items-center justify-center rounded-control text-muted-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      class="flex size-11 flex-none touch-manipulation items-center justify-center rounded-control text-muted-foreground {FOCUS}"
       onclick={onclose}
     >
-      <svg
-        class="size-5.5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.9"
-        stroke-linecap="round"
-        aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg
-      >
+      <Icon name="close" />
       <span class="sr-only">Close</span>
     </button>
   </header>
@@ -249,7 +243,7 @@
     role="status"
     aria-label="Messages"
     class={said &&
-      'border-t border-border px-4 pt-3 text-[16px] leading-snug font-medium'}
+      'border-t border-border px-4 pt-3 text-base leading-snug font-medium'}
   >
     {said}
   </p>

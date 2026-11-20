@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FOCUS_INVERSE } from './controls';
   import { untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { Lane } from '#lib/features/map/index.js';
@@ -113,7 +114,7 @@
       <div
         role="group"
         class={[
-          'pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-control bg-inverse pr-1 pl-4 text-inverse-foreground shadow-md',
+          'pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-control bg-inverse pr-1 pl-4 text-inverse-foreground shadow-md transition-[opacity,translate] duration-(--motion-receipt-in) ease-out starting:translate-y-1 starting:opacity-0',
           lane ? 'py-0' : 'min-h-14 py-1.5'
         ]}
         style:min-height={lane ? `${String(TARGET_PX)}px` : null}
@@ -127,7 +128,7 @@
       >
         <p
           class={[
-            'flex-1 py-1.5 text-[16px] font-medium',
+            'flex-1 py-1.5 text-base font-medium',
             lane && 'self-stretch overflow-y-auto'
           ]}
         >
@@ -137,7 +138,7 @@
           {@const undo = notice.offer}
           <button
             type="button"
-            class="min-h-11 min-w-11 touch-manipulation rounded-control px-3 text-[16px] font-semibold text-inverse-action underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-inverse-action aria-disabled:text-inverse-foreground/70 aria-disabled:no-underline"
+            class="min-h-11 min-w-11 touch-manipulation rounded-control px-3 text-base font-semibold text-inverse-action underline underline-offset-4 {FOCUS_INVERSE} aria-disabled:text-inverse-foreground/70 aria-disabled:no-underline"
             aria-disabled={blocked ? 'true' : undefined}
             onclick={() => {
               onundo(undo);
@@ -148,14 +149,14 @@
           {@const key = notice.key}
           <button
             type="button"
-            class="min-h-11 min-w-11 touch-manipulation rounded-control px-3 text-[16px] font-semibold text-inverse-action underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-inverse-action"
+            class="min-h-11 min-w-11 touch-manipulation rounded-control px-3 text-base font-semibold text-inverse-action underline underline-offset-4 {FOCUS_INVERSE}"
             onclick={() => {
               onretry(retry);
             }}>Retry</button
           >
           <button
             type="button"
-            class="min-h-11 min-w-11 touch-manipulation rounded-control px-3 text-[16px] font-medium text-inverse-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-inverse-action"
+            class="min-h-11 min-w-11 touch-manipulation rounded-control px-3 text-base font-medium text-inverse-foreground {FOCUS_INVERSE}"
             onclick={() => {
               ondismiss(key);
             }}>Dismiss</button

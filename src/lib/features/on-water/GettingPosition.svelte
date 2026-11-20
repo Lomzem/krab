@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ACTION_BUTTON, QUIET_BUTTON } from './controls';
+  import { ACTION_BUTTON, FOCUS, QUIET_BUTTON } from './controls';
 
   let { oncancel, onskip }: { oncancel: () => void; onskip: () => void } =
     $props();
@@ -24,7 +24,7 @@
       id="finding-drop-position-title"
       bind:this={heading}
       tabindex="-1"
-      class="text-[18px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      class="text-control font-semibold {FOCUS}"
     >
       Finding drop position
     </h2>

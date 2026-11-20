@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from '#lib/icon/Icon.svelte';
+  import { FOCUS, MAP_FOCUS } from './controls';
   import type { CompassState } from '#lib/features/compass/index.js';
   import type {
     Base,
@@ -280,13 +282,13 @@
     <div
       class="flex min-h-12 items-center gap-3 border-b border-border bg-card py-0.5 pr-2 pl-4"
     >
-      <p class="min-w-0 flex-1 text-[15px] text-muted-foreground">
+      <p class="min-w-0 flex-1 text-sm text-muted-foreground">
         {gearCounts(trip).inWater}
       </p>
       <button
         bind:this={endButton}
         type="button"
-        class="min-h-11 touch-manipulation rounded-control px-3 text-[16px] font-semibold text-destructive underline-offset-3 transition-opacity duration-0 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:opacity-60 aria-disabled:delay-500"
+        class="min-h-11 touch-manipulation rounded-control px-3 text-base font-semibold text-destructive underline-offset-3 transition-opacity duration-0 {FOCUS} aria-disabled:opacity-60 aria-disabled:delay-500"
         aria-haspopup="dialog"
         aria-disabled={!canEnd}
         onclick={() => {
@@ -302,12 +304,10 @@
         ><GearIcon kind={nearest.gear.kind} size={24} /></span
       >
       <div class="min-w-0 flex-1">
-        <h2 id="nearest-title" class="text-[17px] leading-snug font-semibold">
+        <h2 id="nearest-title" class="text-control leading-snug font-semibold">
           <span class="sr-only">Nearest gear: </span>{nearest.name}
         </h2>
-        <p class="text-[14px] text-muted-foreground" aria-hidden="true">
-          Nearest
-        </p>
+        <p class="text-sm text-muted-foreground" aria-hidden="true">Nearest</p>
       </div>
       <DirectionCue {direction} {compass} ontoggle={oncompass} />
     </section>
@@ -317,7 +317,7 @@
 
   <div class="min-h-0 flex-1">
     {#await import('#lib/features/map/ChartMap.svelte')}
-      <p class="px-4 pt-4 text-[16px] text-muted-foreground">Loading map</p>
+      <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
     {:then { default: ChartMap }}
       <ChartMap
         bind:base
@@ -336,22 +336,14 @@
             <button
               bind:this={filterButton}
               type="button"
-              class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-[15px] font-medium text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-foreground hover:bg-muted {MAP_FOCUS}"
               aria-haspopup="dialog"
               aria-label="Filter, showing {filterSummary}"
               onclick={() => {
                 filterOpen = true;
               }}
             >
-              <svg
-                class="size-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.75"
-                stroke-linecap="round"
-                aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg
-              >Filter
+              <Icon name="filter" size={20} />Filter
             </button>
           {/if}
         {/snippet}
@@ -372,7 +364,7 @@
             </button>
             {#if time}
               <span
-                class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-white/90 px-1 text-[12px] leading-tight font-semibold whitespace-nowrap text-[#1a2e2b] tabular-nums"
+                class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-map-paper/90 px-1 text-xs leading-tight font-semibold whitespace-nowrap text-[#1a2e2b] tabular-nums"
                 aria-hidden="true">{time}</span
               >
             {/if}
@@ -400,7 +392,7 @@
         {/snippet}
       </ChartMap>
     {:catch}
-      <p class="px-4 pt-4 text-[16px]">This phone can't show maps</p>
+      <p class="px-4 pt-4 text-base">This phone can't show maps</p>
     {/await}
   </div>
 </section>

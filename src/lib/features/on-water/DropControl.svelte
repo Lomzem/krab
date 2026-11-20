@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CHOICE_FOCUS_INSET, FOCUS, PRESS } from './controls';
   import { KIND_NAMES, KINDS, type Kind } from '#lib/features/trip/index.js';
   import GearIcon from './GearIcon.svelte';
   import SelectedCheck from './SelectedCheck.svelte';
@@ -27,7 +28,7 @@
     <legend class="sr-only">Gear to drop</legend>
     {#each KINDS as option (option)}
       <label
-        class="flex min-h-11 min-w-16 grow cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-[0.3125rem] px-2 text-[16px] font-medium whitespace-nowrap text-muted-foreground has-checked:bg-accent has-checked:text-accent-foreground has-focus-visible:outline-3 has-focus-visible:outline-offset-1 has-focus-visible:outline-ring"
+        class="flex min-h-11 min-w-16 grow cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-[0.3125rem] px-2 text-base font-medium whitespace-nowrap text-muted-foreground has-checked:bg-accent has-checked:text-accent-foreground {CHOICE_FOCUS_INSET}"
       >
         <input
           class="sr-only"
@@ -44,7 +45,7 @@
   <button
     bind:this={button}
     type="button"
-    class="flex min-h-13 grow-999 touch-manipulation items-center justify-center gap-2 rounded-control bg-action px-3 py-1 text-[18px] leading-tight font-semibold text-action-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring active:brightness-95"
+    class="flex min-h-13 grow-999 touch-manipulation items-center justify-center gap-2 rounded-control bg-action px-3 py-1 text-control leading-tight font-semibold text-action-foreground {FOCUS} {PRESS} active:brightness-95"
     onclick={ondrop}
   >
     <GearIcon {kind} size={22} />

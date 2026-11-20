@@ -1990,3 +1990,46 @@ test('a focused pin that a resize moves off the map hands focus to the map view'
   await expect(place).toHaveJSProperty('inert', true);
   await expect(view).toBeFocused();
 });
+
+const MAP_RING_BANDS = (inner: number) => [
+  `rgb(255, 255, 255) 0px 0px 0px ${String(inner + 3)}px`,
+  `rgb(11, 58, 143) 0px 0px 0px ${String(inner + 6)}px`
+];
+
+const shadowsWhenTabbedTo = async (page: Page, control: Locator) => {
+  await control.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(control).toBeFocused();
+  return control.evaluate((focused) =>
+    [focused, ...focused.querySelectorAll('span')]
+      .map((element) => getComputedStyle(element).boxShadow)
+      .filter((shadow) => shadow.includes('rgb(11, 58, 143)'))
+      .join(', ')
+  );
+};
+
+test('a focused pin and map control show a white then navy ring, outside the magenta ring of gear shown on map', async ({
+  page
+}) => {
+  await dropPotAndOpenMap(page);
+  const map = mapArea(page);
+  for (const control of [
+    potOnMap(page),
+    map.getByRole('button', { name: 'Zoom in' })
+  ]) {
+    const shadows = await shadowsWhenTabbedTo(page, control);
+    for (const band of MAP_RING_BANDS(0)) expect(shadows).toContain(band);
+  }
+
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await gearRow(page, 'Pot 1').click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Show on map' })
+    .click();
+  await expect(potOnMap(page)).toHaveAttribute('aria-current', 'true');
+  const shadows = await shadowsWhenTabbedTo(page, potOnMap(page));
+  expect(shadows).toContain('rgb(163, 37, 111) 0px 0px 0px 5px');
+  for (const band of MAP_RING_BANDS(5)) expect(shadows).toContain(band);
+});

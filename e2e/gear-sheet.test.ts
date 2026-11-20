@@ -727,3 +727,55 @@ test.describe('with the clock paused', () => {
         await expect(tab('Map')).toHaveAttribute('aria-current', 'page');
       });
 });
+
+const CHROME_RING = {
+  light: 'rgb(29, 78, 216)',
+  dark: 'rgb(127, 176, 255)'
+} as const;
+
+const keyboardRing = async (page: Page, control: Locator) => {
+  await control.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(control).toBeFocused();
+  return control.evaluate((focused) => {
+    const drawn =
+      focused instanceof HTMLInputElement && focused.type === 'radio'
+        ? (focused.closest('label') ?? focused)
+        : focused;
+    const style = getComputedStyle(drawn);
+    return {
+      width: style.outlineWidth,
+      offset: style.outlineOffset,
+      color: style.outlineColor
+    };
+  });
+};
+
+test('Close, Save, Depth and a kind choice in the gear sheet show one 3 px focus ring 3 px out in both themes', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await gearRow(page, 'Pot 1').click();
+  const controls = [
+    sheet.getByRole('button', { name: 'Close' }),
+    sheet.getByRole('button', { name: 'Save' }),
+    sheet.getByLabel('Depth'),
+    sheet.getByRole('radio', { name: 'Pot' })
+  ];
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const control of controls) {
+      expect(await keyboardRing(page, control)).toEqual({
+        width: '3px',
+        offset: '3px',
+        color: CHROME_RING[colorScheme]
+      });
+    }
+  }
+});

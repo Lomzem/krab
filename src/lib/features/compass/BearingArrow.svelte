@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '#lib/icon/Icon.svelte';
   let { degrees }: { degrees: number } = $props();
 
   let turned = 0;
@@ -9,16 +10,9 @@
   });
 </script>
 
-<svg
+<span
   class="block size-6 flex-none motion-safe:transition-transform"
   style:transform={`rotate(${String(rotation)}deg)`}
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2.25"
-  stroke-linecap="round"
-  stroke-linejoin="round"
-  aria-hidden="true"
 >
-  <path d="M12 20V4M5.5 10.5 12 4l6.5 6.5" />
-</svg>
+  <Icon name="arrow-up" />
+</span>

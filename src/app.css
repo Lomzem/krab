@@ -6,8 +6,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--action);
+  --color-primary-foreground: var(--action-foreground);
   --color-action: var(--action);
   --color-action-foreground: var(--action-foreground);
   --color-inverse: var(--inverse);
@@ -24,7 +24,36 @@
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
   --color-mark: var(--mark);
+  --color-warning: var(--warning);
+  --color-position: var(--position);
+  --color-ring-map: var(--ring-map);
+  --color-ring-map-separator: var(--ring-map-separator);
+  --color-map-ink: var(--map-ink);
+  --color-map-muted: var(--map-muted);
+  --color-map-paper: var(--map-paper);
+  --color-map-sea: var(--map-sea);
+  --color-map-alert: var(--map-alert);
+  --color-map-selected: var(--map-selected);
   --radius-control: var(--radius);
+}
+
+@theme {
+  --text-*: initial;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.375rem;
+  --text-control: 1.0625rem;
+  --text-control--line-height: 1.375rem;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.5rem;
+  --text-display: 1.5rem;
+  --text-display--line-height: 1.75rem;
+  --spacing-gap: 0.5rem;
+  --spacing-edge: 0.75rem;
+  --spacing-section: 1rem;
 }
 
 :root {
@@ -35,8 +64,6 @@
   --background: #f3f5f4;
   --foreground: #1a2e2b;
   --card: #ffffff;
-  --primary: #1d6457;
-  --primary-foreground: #ffffff;
   --action: #1d6457;
   --action-foreground: #ffffff;
   --inverse: #1a2e2b;
@@ -53,6 +80,21 @@
   --ring: #1d4ed8;
   --destructive: #b3261e;
   --mark: #a3256f;
+  --warning: #805300;
+  --position: #1d4ed8;
+  --ring-map: #0b3a8f;
+  --ring-map-separator: #ffffff;
+  --map-ink: #1a2e2b;
+  --map-muted: #55655f;
+  --map-paper: #ffffff;
+  --map-sea: #d5e2e0;
+  --map-alert: #b3261e;
+  --map-selected: #a3256f;
+  --motion-receipt-in: 180ms;
+  --motion-receipt-out: 140ms;
+  --motion-sheet-in: 220ms;
+  --motion-sheet-out: 160ms;
+  --motion-press: 90ms;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -60,10 +102,8 @@
     --background: #15211f;
     --foreground: #e3ebe8;
     --card: #1c2b29;
-    --primary: #73c9b4;
-    --primary-foreground: #0d2420;
-    --action: #4f9e8c;
-    --action-foreground: #08201b;
+    --action: #73c9b4;
+    --action-foreground: #0d2420;
     --inverse: #2c403c;
     --inverse-foreground: #e3ebe8;
     --inverse-action: #9fe0cf;
@@ -78,6 +118,17 @@
     --ring: #7fb0ff;
     --destructive: #ff8f84;
     --mark: #f08ccb;
+    --warning: #ffd166;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-receipt-in: 0ms;
+    --motion-receipt-out: 0ms;
+    --motion-sheet-in: 0ms;
+    --motion-sheet-out: 0ms;
+    --motion-press: 0ms;
   }
 }
 

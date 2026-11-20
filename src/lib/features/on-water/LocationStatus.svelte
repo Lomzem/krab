@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FOCUS } from './controls';
   import { roughness, type Availability } from '#lib/features/trip/index.js';
 
   let { status }: { status: Availability } = $props();
@@ -10,21 +11,21 @@
 
 {#if status.kind === 'denied'}
   <section
-    class="border-t border-l-3 border-border border-l-destructive bg-card px-4 py-1.5"
+    class="border-t border-l-3 border-border border-l-warning bg-card px-4 py-1.5"
     aria-labelledby="location-off-title"
   >
     <div class="flex flex-wrap items-center gap-x-3">
       <div class="min-w-0 flex-1 basis-40">
         <h2
           id="location-off-title"
-          class="text-[16px] leading-snug font-semibold"
+          class="text-base leading-snug font-semibold"
         >
           Location is off
         </h2>
       </div>
       <button
         type="button"
-        class="-mr-2 min-h-11 rounded-control px-2 text-left text-[15px] font-medium text-primary underline underline-offset-3 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        class="-mr-2 min-h-11 rounded-control px-2 text-left text-sm font-medium text-primary underline underline-offset-3 {FOCUS}"
         aria-expanded={guidanceOpen}
         aria-controls="location-off-steps"
         onclick={() => {
@@ -33,7 +34,7 @@
       >
     </div>
     {#if guidanceOpen}
-      <ol id="location-off-steps" class="pt-1 pb-1 text-[15px] leading-snug">
+      <ol id="location-off-steps" class="pt-1 pb-1 text-sm leading-snug">
         <li>Settings › Privacy &amp; Security › Location Services</li>
         <li>Location Services on</li>
         <li>Safari Websites › While Using</li>
@@ -44,7 +45,7 @@
 {:else}
   <p
     class={[
-      'flex items-center gap-2 border-t border-border bg-card px-4 pt-2 text-[15px] font-medium',
+      'flex items-center gap-2 border-t border-border bg-card px-4 pt-2 text-sm font-medium',
       status.kind === 'finding' ? 'text-muted-foreground' : 'text-foreground'
     ]}
   >
@@ -54,7 +55,7 @@
           'size-2 shrink-0 rounded-full border-2',
           status.kind === 'finding'
             ? 'border-muted-foreground'
-            : 'border-action bg-action'
+            : 'border-warning bg-warning'
         ]}
         aria-hidden="true"
       ></span>
