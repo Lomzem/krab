@@ -1132,8 +1132,10 @@ for (const [width, height] of [
     await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
     await expect(toastOf(page)).toContainText('Pot 2 dropped');
     const newest = mapArea(page).getByRole('button', { name: /^Pot 2[ ,]/ });
+    await expect(newest).toBeVisible();
     const footprint = async () => {
       const [marker] = await newest.evaluateAll(markerFootprints);
+      expect(marker, 'Pot 2 map footprint').toBeDefined();
       return marker;
     };
     let during = await footprint();
