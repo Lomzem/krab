@@ -62,7 +62,7 @@
     newest: string | null;
   } = $props();
 
-  const CAPSULE_BUTTON = `flex h-11 w-full touch-manipulation items-center justify-center ${FOCUS_INSET} ${PRESS} active:bg-muted`;
+  const CAPSULE_BUTTON = `flex h-11 w-full touch-manipulation tiny-map:w-11 items-center justify-center ${FOCUS_INSET} ${PRESS} active:bg-muted`;
   const COMPASS_STATES: Record<
     Exclude<CompassState['kind'], 'unavailable'>,
     string

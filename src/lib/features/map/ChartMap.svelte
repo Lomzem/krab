@@ -47,7 +47,7 @@
   const MIN_FIT_SPAN = 48;
   const CLEAR_GAP = 8;
   const FOCUS_REACH = 11;
-  const ICON_BUTTON = `flex h-11 w-full touch-manipulation items-center justify-center ${FOCUS_INSET} ${PRESS} active:bg-muted`;
+  const ICON_BUTTON = `flex h-11 w-full touch-manipulation tiny-map:w-11 items-center justify-center ${FOCUS_INSET} ${PRESS} active:bg-muted`;
   const CREDIT_LINK = `flex min-h-11 items-center px-3 text-base underline underline-offset-3 ${FOCUS_INSET}`;
   const SAFE_EDGE_SLACK = 1 + 1e-6;
   const OUTAGE_NOTICE: Record<Outage, string> = {
@@ -769,7 +769,7 @@
 {#snippet baseChoice(choice: Base, text: string)}
   <button
     type="button"
-    class="flex min-h-11 w-full touch-manipulation items-center justify-center px-2.5 text-sm font-medium text-muted-foreground {FOCUS_INSET} {PRESS} active:bg-muted aria-pressed:text-foreground aria-pressed:underline aria-pressed:decoration-2 aria-pressed:underline-offset-4"
+    class="flex min-h-11 w-full touch-manipulation items-center justify-center px-2.5 text-sm font-medium text-muted-foreground tiny-map:w-auto {FOCUS_INSET} {PRESS} active:bg-muted aria-pressed:text-foreground aria-pressed:underline aria-pressed:decoration-2 aria-pressed:underline-offset-4"
     aria-label="{text} map"
     aria-pressed={base === choice}
     onclick={() => {
@@ -924,21 +924,26 @@
 
     <div
       bind:this={capsule}
-      class="z-10 col-start-1 row-start-1 m-3 mb-0 flex min-w-11 flex-col self-start justify-self-end rounded-xl border border-input bg-card text-foreground shadow-sm short-map:flex-row"
+      class="z-10 col-start-1 row-start-1 m-3 mb-0 flex min-w-11 flex-col self-start justify-self-end rounded-xl border border-input bg-card text-foreground shadow-sm short-map:flex-row tiny-map:flex-col"
     >
-      <div class="flex min-w-11 flex-col">
+      <div class="flex min-w-11 flex-col tiny-map:flex-row">
         {@render baseChoice('chart', 'Chart')}
         {@render baseChoice('street', 'Street')}
         {#if controls}
-          <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
+          <span
+            class="mx-2 h-px bg-border tiny-map:mx-0 tiny-map:my-2 tiny-map:h-auto tiny-map:w-px"
+            aria-hidden="true"
+          ></span>
           {@render controls()}
         {/if}
       </div>
       <span
-        class="mx-2 h-px bg-border short-map:mx-0 short-map:my-2 short-map:h-auto short-map:w-px"
+        class="mx-2 h-px bg-border short-map:mx-0 short-map:my-2 short-map:h-auto short-map:w-px tiny-map:mx-2 tiny-map:my-0 tiny-map:h-px tiny-map:w-auto"
         aria-hidden="true"
       ></span>
-      <div class="flex min-w-11 flex-col">
+      <div
+        class="flex min-w-11 flex-col tiny-map:flex-row tiny-map:justify-end"
+      >
         {#if places.length > 0}
           <button
             type="button"

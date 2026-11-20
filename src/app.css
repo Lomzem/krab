@@ -2,6 +2,7 @@
 
 @custom-variant compact (@media (max-height: 26rem));
 @custom-variant short-map (@container map (max-height: 26rem));
+@custom-variant tiny-map (@container map (max-height: 13rem));
 
 @theme inline {
   --font-sans:

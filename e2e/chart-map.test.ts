@@ -1336,7 +1336,8 @@ function missedInterior(control: Element) {
 
 for (const [width, height] of [
   [320, 640],
-  [320, 568]
+  [320, 568],
+  [852, 340]
 ] as const) {
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, every map control takes taps across its whole target while the Undo toast shows, and tapping their lower edges keeps the drop`, async ({
