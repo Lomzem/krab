@@ -285,12 +285,13 @@
       (result) => ({ result }),
       () => null
     );
-    if (operation.sheet !== origin) return;
+    const owned = operation.sheet === origin;
     if (sheet !== origin) {
-      operation = { sheet: origin, pending: false, problem: null };
+      if (owned) operation = { sheet: origin, pending: false, problem: null };
       closed(outcome);
       return;
     }
+    if (!owned) return;
     const problem = outcome ? settle(outcome.result) : 'storage';
     operation = { sheet: origin, pending: false, problem };
   };

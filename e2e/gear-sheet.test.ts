@@ -382,6 +382,47 @@ test('a Save that fails after Escape closed its sheet says so in a message', asy
   await expect(toastOf(page)).toContainText("Couldn't save Pot 1");
 });
 
+test('a Save that fails after its sheet closed says so even while another sheet is saving', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const save = sheet.getByRole('button', { name: 'Save' });
+
+  await recordWrites(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await gearRow(page, 'Pot 1').click();
+  await sheet.getByLabel('Label').fill('red float');
+  await holdStorage(page);
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.evaluate(() => {
+    const writes = window as LastWrite & { firstWrite?: IDBTransaction };
+    writes.firstWrite = writes.lastWrite;
+  });
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await gearRow(page, 'Pot 2').click();
+  await sheet.getByLabel('Label').fill('blue buoy');
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.evaluate(() => {
+    (window as { firstWrite?: IDBTransaction }).firstWrite?.abort();
+  });
+  await releaseStorage(page);
+
+  await expect(sheet).toBeHidden();
+  await expect(toastOf(page)).toContainText("Couldn't save Pot 1");
+});
+
 test('on a 320 by 640 screen, tabbing from corrected Depth through Label and Bait after a refused Save shows all of Notes clear of the footer, and multiline notes save and reload intact', async ({
   page
 }) => {
