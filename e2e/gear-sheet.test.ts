@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { animationsSettled } from './settled';
 import {
   expect,
   holdStorage,
@@ -385,8 +386,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
     const sheet = page.getByRole('dialog', { name: /^Pot \d$/ });
     const collect = sheet.getByRole('button', { name: 'Collect', exact: true });
-    const collectHidden = () =>
-      collect.evaluate((button) => {
+    const collectHidden = async () => {
+      await animationsSettled(page);
+      return collect.evaluate((button) => {
         const body = button.closest('dialog > div');
         if (!body) return 'no body';
         const shown = body.getBoundingClientRect();
@@ -401,6 +403,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           ? null
           : `Collect ${String(box.top)}..${String(box.bottom)} in body ${String(shown.top)}..${String(shown.bottom)}`;
       });
+    };
 
     await page.goto('/');
     await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -545,6 +548,7 @@ const sheetShownAfterTimers = async (page: Page) => {
 };
 
 const pressToClose = async (page: Page, input: Input, x: number, y: number) => {
+  await animationsSettled(page);
   await press(page, input, x, y, 1);
   await expect.poll(() => sheetShownAfterTimers(page)).toBe(false);
 };
@@ -557,6 +561,7 @@ const pressToCloseLate = async (
   ms: number
 ) => {
   await holdStorage(page);
+  await animationsSettled(page);
   await press(page, input, x, y, 1);
   await expect(
     page.getByRole('dialog').getByRole('button', { name: 'Save' })
@@ -567,6 +572,7 @@ const pressToCloseLate = async (
 };
 
 const pressTwice = async (page: Page, target: Locator, input: Input) => {
+  await animationsSettled(page);
   const box = await target.boundingBox();
   expect(box, 'the control has a box').not.toBeNull();
   const x = (box?.x ?? 0) + (box?.width ?? 0) / 2;

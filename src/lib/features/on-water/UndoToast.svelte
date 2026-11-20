@@ -114,7 +114,7 @@
       <div
         role="group"
         class={[
-          'pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-control bg-inverse pr-1 pl-4 text-inverse-foreground shadow-md transition-[opacity,translate] duration-(--motion-receipt-in) ease-out starting:translate-y-1 starting:opacity-0',
+          'pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-control bg-inverse pr-1 pl-4 text-inverse-foreground shadow-md transition-[opacity,translate] duration-(--motion-receipt-in) ease-out starting:[translate:0_0.25rem] starting:opacity-0',
           lane ? 'py-0' : 'min-h-14 py-1.5'
         ]}
         style:min-height={lane ? `${String(TARGET_PX)}px` : null}

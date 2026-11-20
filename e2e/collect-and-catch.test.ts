@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { animationsSettled } from './settled';
 import { expect, storedCollections, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 import { failStorage, injectStorageFaults } from './storage-faults';
@@ -182,8 +183,9 @@ const collectPot = async (page: Page) => {
   await expect(sheet.getByRole('heading', { name: 'Catch' })).toBeFocused();
 };
 
-const catchLayout = (page: Page) =>
-  page.getByRole('dialog').evaluate((dialog) => {
+const catchLayout = async (page: Page) => {
+  await animationsSettled(page);
+  return page.getByRole('dialog').evaluate((dialog) => {
     const section = dialog.querySelector(
       'section[aria-labelledby$="-catch-title"]'
     );
@@ -216,6 +218,7 @@ const catchLayout = (page: Page) =>
       scale: window.visualViewport?.scale ?? null
     };
   });
+};
 
 test('rapid taps on Kept and Released count every tap once, and neither those taps, Nothing caught nor Clear catch move the catch editor or what follows it', async ({
   page

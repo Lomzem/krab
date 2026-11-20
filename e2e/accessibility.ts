@@ -1,22 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Locator, type Page } from '@playwright/test';
+import { animationsSettled } from './settled';
 
 const WCAG_22_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
-
-const settled = async () => {
-  const finite = document
-    .getAnimations()
-    .filter(
-      (animation) =>
-        animation.effect?.getComputedTiming().iterations !== Infinity
-    );
-  for (const animation of finite) await animation.finished.catch(() => null);
-};
 
 export const expectAccessibleInBothThemes = async (page: Page) => {
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
-    await page.evaluate(settled);
+    await animationsSettled(page);
     const { violations } = await new AxeBuilder({ page })
       .withTags(WCAG_22_AA)
       .analyze();
