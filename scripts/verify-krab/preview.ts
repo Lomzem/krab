@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { spawn } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 const server = spawn(
   process.execPath,
@@ -15,7 +15,10 @@ const server = spawn(
   ],
   { stdio: 'inherit' }
 );
-writeFileSync('test-results/verify-krab-lock/preview-pid', String(server.pid));
+const scratch =
+  process.env['KRAB_VERIFY_SCRATCH'] ?? 'test-results/verify-krab-lock';
+mkdirSync(scratch, { recursive: true });
+writeFileSync(`${scratch}/preview-pid`, String(server.pid));
 server.on('exit', (code) => {
   process.exitCode = code ?? 1;
 });

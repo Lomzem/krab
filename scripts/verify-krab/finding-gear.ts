@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './recipe';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { doctor } from './doctor';
@@ -136,7 +137,8 @@ const surfaceOf = (rgba: number[] | null) => {
 
 test('finding gear on the Map tab and from the Gear list', async ({
   page,
-  context
+  context,
+  liveProviders
 }, info) => {
   const { log, capture, keep } = recorder(page, info, 'finding-gear', 'Map');
   const requested: string[] = [];
@@ -193,7 +195,7 @@ test('finding gear on the Map tab and from the Gear list', async ({
   const street = map.getByRole('button', { name: 'Street map' });
   await street.click();
   await expect(street).toHaveAttribute('aria-pressed', 'true');
-  await expect(map).toContainText('OpenStreetMap');
+  if (liveProviders) await expect(map).toContainText('OpenStreetMap');
   await map.getByRole('button', { name: 'Centre on my position' }).click();
   await expect(pot).toBeInViewport();
   log(
@@ -207,8 +209,10 @@ test('finding gear on the Map tab and from the Gear list', async ({
 });
 
 test('NOAA chart tiles line up with a public coastline at two zooms', async ({
-  page
+  page,
+  liveProviders
 }, info) => {
+  test.skip(!liveProviders, 'needs real NOAA tiles');
   const { log, keep } = recorder(page, info, 'finding-gear', 'Alignment');
   keep('doctor.json', doctor());
   await page.goto('/');

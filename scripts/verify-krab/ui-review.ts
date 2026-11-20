@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './recipe';
 import AxeBuilder from '@axe-core/playwright';
 import { MADE_UP_SEA } from '../../playwright.config';
 import { toastOf } from '../../e2e/fixtures';
@@ -257,7 +258,8 @@ const settledObservation = async <T>(observe: () => Promise<T>) => {
 
 test('supplemental UI review with live maps and accessibility observations', async ({
   page,
-  context
+  context,
+  liveProviders
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(page, info, 'ui-review', 'Map');
@@ -367,11 +369,11 @@ test('supplemental UI review with live maps and accessibility observations', asy
   for (let step = outs; step < 9; step += 1) await zoomOut.click();
   await capture('03-live-chart-wide');
   await map.getByRole('button', { name: 'Street map', exact: true }).click();
-  await expect(map).toContainText('OpenStreetMap');
+  if (liveProviders) await expect(map).toContainText('OpenStreetMap');
   await capture('04-live-street-wide');
   const streetCredits = await creditsContrast(page);
   keep('credits-contrast-street.json', streetCredits);
-  expect(streetCredits.parts.length).toBeGreaterThan(0);
+  if (liveProviders) expect(streetCredits.parts.length).toBeGreaterThan(0);
   for (const part of streetCredits.parts)
     expect(part.ratio, part.text).toBeGreaterThanOrEqual(4.5);
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
@@ -467,7 +469,8 @@ test('supplemental UI review with live maps and accessibility observations', asy
 
 test('Street controls after switching from Chart, right away, settled and after a pan', async ({
   page,
-  context
+  context,
+  liveProviders
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(
@@ -516,7 +519,7 @@ test('Street controls after switching from Chart, right away, settled and after 
     if ((await street.getAttribute('aria-pressed')) === 'true') {
       await street.click();
       await expect(street).toHaveAttribute('aria-pressed', 'false');
-      await expect(map).not.toContainText('OpenStreetMap');
+      if (liveProviders) await expect(map).not.toContainText('OpenStreetMap');
     }
     await street.click();
     await capture(`street-${tag}-1-immediate`);
@@ -530,7 +533,7 @@ test('Street controls after switching from Chart, right away, settled and after 
       when: 'immediate',
       controls: await controlColours(page)
     });
-    await expect(map).toContainText('OpenStreetMap');
+    if (liveProviders) await expect(map).toContainText('OpenStreetMap');
     await expect(street).toHaveAttribute('aria-pressed', 'true');
     await capture(`street-${tag}-2-settled`);
     await closeUps(`street-${tag}-2-settled`);
@@ -627,7 +630,8 @@ const touches = (a: Rect, b: Rect) =>
 
 test('the newest drop stays drawn and tappable during Undo while the Offline notice shows', async ({
   page,
-  context
+  context,
+  providers
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(
@@ -651,6 +655,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(map.getByRole('region', { name: 'Map view' })).toBeVisible();
+  providers?.cutOff();
   await context.setOffline(true);
   await map.getByRole('button', { name: 'Street map', exact: true }).click();
   const notice = map.getByRole('status').filter({ hasText: 'Map offline' });
@@ -679,6 +684,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   const expired = await newest.evaluate(footprintOf);
   await capture(`newest-${tag}-2-after-undo-expires`);
   keep('newest-during-undo.json', { size, view, covers, during, expired });
+  providers?.serve();
   await context.setOffline(false);
   expect(covers.toast).not.toBeNull();
   expect(covers.notice).not.toBeNull();
@@ -704,7 +710,8 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
 
 test('a single newest drop and its time label stay clear of Undo on a fresh Chart to Street switch', async ({
   page,
-  context
+  context,
+  liveProviders
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(
@@ -741,7 +748,7 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
   await street.click();
   const immediate = await measure();
   await capture(`single-${tag}-1-immediate`);
-  await expect(map).toContainText('OpenStreetMap');
+  if (liveProviders) await expect(map).toContainText('OpenStreetMap');
   await settledObservation(() => pin.evaluate(footprintOf));
   const settled = await measure();
   await capture(`single-${tag}-2-settled`);

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './recipe';
 import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';

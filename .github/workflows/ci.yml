@@ -60,3 +60,5 @@ jobs:
         run: bun run build:next
       - name: Run end-to-end tests
         run: bun run test:e2e
+      - name: Run verify-krab recipes with fixture providers
+        run: bun run test:recipes

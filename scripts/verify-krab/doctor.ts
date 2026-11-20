@@ -15,7 +15,9 @@ const linkOf = (path: string) =>
   );
 
 export const doctor = () => {
-  const pid = readFileSync('test-results/verify-krab-lock/preview-pid', 'utf8');
+  const scratch =
+    process.env['KRAB_VERIFY_SCRATCH'] ?? 'test-results/verify-krab-lock';
+  const pid = readFileSync(`${scratch}/preview-pid`, 'utf8');
   const command = readFileSync(`/proc/${pid}/cmdline`, 'utf8');
   assert.ok(command.includes('node_modules/vite/bin/vite.js'));
   assert.ok(command.includes('--strictPort'));
