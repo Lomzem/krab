@@ -149,13 +149,14 @@
   });
 
   $effect(() => {
-    if (page.state.gearSheet) return;
+    const onSheetEntry = page.state.gearSheet;
     untrack(() => {
       if (returning) {
         returning = false;
         if (open && !entered) enter();
         return;
       }
+      if (onSheetEntry) return;
       if (!entered) return;
       entered = false;
       if (!open) return;
