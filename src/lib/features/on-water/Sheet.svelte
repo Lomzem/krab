@@ -6,6 +6,7 @@
     open,
     titleId,
     onclose,
+    onbackdrop,
     returnFocus,
     notice = null,
     describedBy,
@@ -17,6 +18,7 @@
     open: boolean;
     titleId: string;
     onclose: () => void;
+    onbackdrop?: () => void;
     returnFocus: () => HTMLElement | null | undefined;
     notice?: Notice | null;
     describedBy?: string;
@@ -214,7 +216,7 @@
     onclose();
   }}
   onclick={(event) => {
-    if (event.target === dialog) onclose();
+    if (event.target === dialog) (onbackdrop ?? onclose)();
   }}
 >
   <header class="flex items-center gap-3 border-b border-border py-2 pr-2 pl-4">

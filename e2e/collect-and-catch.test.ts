@@ -55,6 +55,7 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
 
   await step('One more kept').click();
   await page.keyboard.press('Escape');
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
   await expect(sheet).toBeHidden();
   await expect(collectedRow(page, 'Pot 1')).toBeFocused();
   await collectedRow(page, 'Pot 1').click();
@@ -83,6 +84,7 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
     'Released: not recorded'
   );
   await page.keyboard.press('Escape');
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
   await expect(sheet).toBeHidden();
   await collectedRow(page, 'Pot 1').click();
   await expect(countOf(page, 'Kept')).toContainText('Kept: 2');
@@ -321,6 +323,7 @@ test('Kept and Released take typed whole counts beside the steppers; a blank or 
     expect(await catchLayout(page)).toEqual(before);
   }
   await page.keyboard.press('Escape');
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
   await expect(sheet).toBeHidden();
   await page.reload();
   await gearTab(page).click();
@@ -345,6 +348,7 @@ test('Kept and Released take typed whole counts beside the steppers; a blank or 
   await expect(released).toHaveAttribute('aria-invalid', 'true');
   await expect(inWaterRow(page, 'Pot 1')).toHaveCount(0);
   await page.keyboard.press('Escape');
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
   await expect(collectedRow(page, 'Pot 1')).toContainText(
     '1400 kept, 0 released'
   );
@@ -362,6 +366,7 @@ test('Kept and Released take typed whole counts beside the steppers; a blank or 
   await sheet.getByRole('button', { name: 'One fewer kept' }).click();
   await expect(kept).toHaveValue('9007199254740990');
   await page.keyboard.press('Escape');
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
   await expect(sheet).toBeHidden();
 });
 

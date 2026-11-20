@@ -49,6 +49,10 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
 
   await label.fill('red float');
   await page.keyboard.press('Escape');
+  await expect(
+    sheet.getByRole('button', { name: 'Keep editing' })
+  ).toBeFocused();
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
   await expect(sheet).toBeHidden();
   await expect(pot1).toBeFocused();
   await pot1.click();
@@ -102,6 +106,113 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(toastOf(page)).toContainText('Pot 1 restored');
   await pot1.click();
   await expect(label).toHaveValue('red float');
+});
+
+test('a gear sheet with unsaved changes ignores a backdrop tap and asks before Close, Escape, Back or Show on map discard them', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const label = sheet.getByLabel('Label');
+  const form = sheet.locator('form');
+  const unsaved = sheet.getByRole('group', { name: 'Unsaved changes' });
+  const keepEditing = unsaved.getByRole('button', { name: 'Keep editing' });
+  const discard = unsaved.getByRole('button', { name: 'Discard changes' });
+  const save = sheet.getByRole('button', { name: 'Save' });
+  const tapBackdrop = () => page.mouse.click(200, 12);
+  const settle = () =>
+    page.evaluate(async () => {
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+    });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  for (const name of ['Pot 1', 'Pot 2']) {
+    await page.getByRole('button', { name: 'Drop pot' }).click();
+    await expect(toastOf(page)).toContainText(`${name} dropped`);
+  }
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const pot1 = gearRow(page, 'Pot 1');
+
+  await pot1.click();
+  await tapBackdrop();
+  await expect(sheet).toBeHidden();
+  await expect(pot1).toBeFocused();
+  await pot1.click();
+  await page.goBack();
+  await expect(sheet).toBeHidden();
+  await expect(pot1).toBeFocused();
+
+  await pot1.click();
+  await label.fill('red float');
+  await tapBackdrop();
+  await settle();
+  await expect(sheet).toBeVisible();
+  await expect(unsaved).toBeHidden();
+  await expect(label).toHaveValue('red float');
+
+  await label.focus();
+  await page.keyboard.press('Escape');
+  await expect(keepEditing).toBeFocused();
+  await expect(save).toBeHidden();
+  await expect(form).toHaveJSProperty('inert', true);
+  await tapBackdrop();
+  await keepEditing.click();
+  await expect(unsaved).toBeHidden();
+  await expect(form).toHaveJSProperty('inert', false);
+  await expect(label).toBeFocused();
+  await expect(label).toHaveValue('red float');
+
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(keepEditing).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(unsaved).toBeHidden();
+  await expect(save).toBeVisible();
+
+  await page.goBack();
+  await expect(keepEditing).toBeFocused();
+  await page.goBack();
+  await expect(unsaved).toBeHidden();
+  await expect(label).toHaveValue('red float');
+
+  await holdStorage(page);
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await releaseStorage(page);
+  await pot1.click();
+  await expect(label).toHaveValue('red float');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await gearRow(page, 'Pot 2').click();
+  await label.fill('spare');
+  await holdStorage(page);
+  await sheet.getByRole('button', { name: 'Delete drop' }).click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+  await settle();
+  await expect(sheet).toBeVisible();
+  await expect(unsaved).toBeHidden();
+  await releaseStorage(page);
+  await expect(sheet).toBeHidden();
+  await expect(toastOf(page)).toContainText('Pot 2 deleted');
+
+  await pot1.click();
+
+  await label.fill('blue float');
+  await sheet.getByRole('button', { name: 'Show on map' }).click();
+  await expect(keepEditing).toBeFocused();
+  await discard.click();
+  await expect(sheet).toBeHidden();
+  await expect(
+    page.getByRole('main').getByRole('button', { name: /^Pot 1/ })
+  ).toBeFocused();
+
+  await page.goBack();
+  await expect(page).toHaveURL('about:blank');
 });
 
 test('deleting a drop right after closing another gear sheet returns focus to Drop, not to the other gear', async ({
@@ -305,6 +416,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       .getByLabel('Notes', { exact: true })
       .fill('Fictional note about the outer float');
     await sheet.getByRole('button', { name: 'Close' }).click();
+    await sheet.getByRole('button', { name: 'Discard changes' }).click();
     await expect(sheet).toBeHidden();
     await gearRow(page, 'Pot 1').click();
     await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
@@ -318,6 +430,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       .last()
       .click();
     await page.keyboard.press('Escape');
+    await sheet.getByRole('button', { name: 'Discard changes' }).click();
     await expect(sheet).toBeHidden();
 
     await page.getByRole('button', { name: 'Map', exact: true }).click();

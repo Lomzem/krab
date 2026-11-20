@@ -63,11 +63,16 @@ test('drop details stay a draft until Save, refuse a bad depth, save and survive
 
   await label.fill('red float');
   await page.keyboard.press('Escape');
+  await expect(
+    sheet.getByRole('button', { name: 'Keep editing' })
+  ).toBeFocused();
+  await capture('02a-unsaved-changes');
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
   await expect(sheet).toBeHidden();
   await expect(pot1).toBeFocused();
   expect(await readTrips(page)).toEqual(opened);
   log(
-    'fill Label, press Escape; sheet closes, row focused, IndexedDB unchanged'
+    'fill Label, press Escape; Unsaved changes asks first; Discard changes closes, row focused, IndexedDB unchanged'
   );
   await capture('02-draft-discarded');
 

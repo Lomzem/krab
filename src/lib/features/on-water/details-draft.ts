@@ -39,6 +39,21 @@ export const catchDraftOf = (recorded: Catch | null): CatchDraft | null =>
     released: String(recorded.released)
   };
 
+export const draftChanged = (
+  drop: Drop,
+  draft: DetailsDraft,
+  typed: CatchDraft | null
+) => {
+  const stored = draftOf(drop);
+  const storedCatch = catchDraftOf(drop.catch);
+  const fields = Object.keys(stored) as (keyof DetailsDraft)[];
+  return (
+    fields.some((field) => stored[field] !== draft[field]) ||
+    typed?.kept !== storedCatch?.kept ||
+    typed?.released !== storedCatch?.released
+  );
+};
+
 export const countOf = (text: string) => {
   const trimmed = text.trim();
   const count = Number(trimmed);

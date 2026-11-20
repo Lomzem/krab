@@ -15,6 +15,7 @@
   import {
     catchDraftOf,
     countOf,
+    draftChanged,
     draftOf,
     editOf,
     type CatchDraft
@@ -31,6 +32,8 @@
     oncollect,
     ondropagain,
     direction,
+    ondirty,
+    inert = false,
     children
   }: {
     subject: SheetSubject;
@@ -41,6 +44,8 @@
     oncollect?: (dropId: string) => void;
     ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     direction?: Snippet<[Drop]>;
+    ondirty?: (dirty: boolean) => void;
+    inert?: boolean;
     children?: Snippet;
   } = $props();
 
@@ -64,6 +69,10 @@
   let wasCollected = initial().collected;
   let collectButton = $state<HTMLButtonElement>();
   let catchHeading = $state<HTMLHeadingElement>();
+
+  $effect(() => {
+    ondirty?.(kind !== stored || draftChanged(drop, draft, catchDraft));
+  });
 
   $effect(() => {
     const collected = collectedAt !== null;
@@ -116,7 +125,7 @@
   };
 </script>
 
-<form id={formId} class="grid gap-5" onsubmit={submit} novalidate>
+<form id={formId} class="grid gap-5" {inert} onsubmit={submit} novalidate>
   {#if collectedAt === null && subject.trip.endedAt !== null}
     <p class="text-[16px] font-medium">Uncollected</p>
   {:else if collectedAt === null}

@@ -413,14 +413,16 @@
     returnFocus={sheetReturnFocus}
     notice={water.notice}
   >
-    {#snippet actions(target: Drop)}
+    {#snippet actions(target: Drop, leave: (exit: () => void) => void)}
       {#if sheet?.from === 'list' && target.position}
         <button
           type="button"
           class="w-full {QUIET_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
-            show(target);
+            leave(() => {
+              show(target);
+            });
           }}>Show on map</button
         >
       {/if}
