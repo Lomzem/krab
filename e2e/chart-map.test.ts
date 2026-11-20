@@ -1923,3 +1923,70 @@ test.describe('with location denied', () => {
     });
   }
 });
+
+test('a pin panned off the map is inert, out of the Tab order, until it is in view again', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await dropPotAndOpenMap(page);
+  const map = mapArea(page);
+  const view = map.getByRole('region', { name: 'Map view' });
+  const tabbedFrom = async (start: Locator) => {
+    await start.focus();
+    const names: string[] = [];
+    for (let step = 0; step < 12; step += 1) {
+      await page.keyboard.press('Tab');
+      names.push(
+        await page.evaluate(
+          () =>
+            document.activeElement?.getAttribute('aria-label') ??
+            document.activeElement?.textContent.trim() ??
+            ''
+        )
+      );
+    }
+    return names.filter((name) => name.startsWith('Pot 1'));
+  };
+  await expect(potOnMap(page)).toBeInViewport();
+  expect(await tabbedFrom(view)).toHaveLength(1);
+
+  const place = map.locator('[data-place]');
+  const pastLeftEdge = async () => {
+    const [pin, area] = await Promise.all([
+      place.boundingBox(),
+      view.boundingBox()
+    ]);
+    return (pin?.x ?? 0) + (pin?.width ?? 0) < (area?.x ?? 0);
+  };
+  for (let step = 0; step < 20 && !(await pastLeftEdge()); step += 1) {
+    await view.press('ArrowRight');
+    await settled(place);
+  }
+  expect(await pastLeftEdge()).toBe(true);
+  await expect.poll(() => tabbedFrom(view)).toEqual([]);
+  await expect(place).toHaveJSProperty('inert', true);
+
+  await map.getByRole('button', { name: 'Show all gear' }).click();
+  await expect(potOnMap(page)).toBeInViewport();
+  await expect(place).toHaveJSProperty('inert', false);
+  expect(await tabbedFrom(view)).toHaveLength(1);
+});
+
+test('a focused pin that a resize moves off the map hands focus to the map view', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await dropPotAndOpenMap(page);
+  const map = mapArea(page);
+  const view = map.getByRole('region', { name: 'Map view' });
+  const place = map.locator('[data-place]');
+  await view.press('ArrowUp');
+  await settled(place);
+  await expect(potOnMap(page)).toBeInViewport();
+  await potOnMap(page).focus();
+  await expect(potOnMap(page)).toBeFocused();
+
+  await page.setViewportSize({ width: 320, height: 480 });
+  await expect(place).toHaveJSProperty('inert', true);
+  await expect(view).toBeFocused();
+});

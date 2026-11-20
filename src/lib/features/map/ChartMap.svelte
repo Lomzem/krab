@@ -354,6 +354,25 @@
     });
   };
 
+  const hideOffscreen = () => {
+    const area = container?.getBoundingClientRect();
+    if (!map || !area) return;
+    for (const spot of spots) {
+      const node = markers.get(spot.key)?.getElement();
+      const drawn = drawnOf(spot);
+      if (!node || !drawn) continue;
+      const away =
+        drawn.right < 0 ||
+        drawn.bottom < 0 ||
+        drawn.left > area.width ||
+        drawn.top > area.height;
+      if (away && node.contains(document.activeElement)) {
+        map.getCanvas().focus();
+      }
+      node.inert = away;
+    }
+  };
+
   const settle = () => {
     const area = container?.getBoundingClientRect();
     if (!area) return;
@@ -460,6 +479,7 @@
     await tick();
     reveal(id);
     await tick();
+    hideOffscreen();
     const spot = spotOf.get(id);
     if (spot) {
       markers
@@ -536,6 +556,7 @@
       selected = null;
       leaveOverview();
     });
+    created.on('move', hideOffscreen);
     created.on('resize', () => {
       if (overview) void frameSoon();
     });
@@ -629,6 +650,12 @@
     untrack(() => {
       if (overview) void revealSoon(id, band);
     });
+  });
+
+  $effect(() => {
+    if (ready && spots.length > 0) {
+      untrack(() => void tick().then(hideOffscreen));
+    }
   });
 
   $effect(() => {
