@@ -533,10 +533,36 @@
         placed.setLngLat(lngLat(next));
       },
       destroy: () => {
+        const held = node.contains(document.activeElement)
+          ? heldDrops(node)
+          : [];
         if (id && markers.get(id) === placed) markers.delete(id);
         placed.remove();
+        if (held.length > 0)
+          void tick().then(() => {
+            refocus(held);
+          });
       }
     };
+  };
+
+  const heldDrops = (node: HTMLElement) => {
+    const shown = node.querySelector<HTMLElement>('[data-drop], [data-drops]');
+    return (shown?.dataset['drops'] ?? shown?.dataset['drop'] ?? '')
+      .split(' ')
+      .filter((drop) => drop !== '');
+  };
+
+  const refocus = (held: string[]) => {
+    if (document.activeElement !== document.body) return;
+    const next = held
+      .map((drop) =>
+        container?.querySelector<HTMLElement>(
+          `[data-place] :is([data-drop="${CSS.escape(drop)}"], [data-drops~="${CSS.escape(drop)}"])`
+        )
+      )
+      .find((shown) => shown);
+    next?.focus();
   };
 
   const showPlace = async (id: string) => {
