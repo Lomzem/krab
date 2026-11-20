@@ -67,7 +67,8 @@
     pin,
     group,
     controls,
-    keepClear = null
+    keepClear = null,
+    fitLabel = 'Show all gear'
   }: {
     base?: Base;
     camera?: Camera | null;
@@ -82,6 +83,7 @@
     >;
     controls?: Snippet;
     keepClear?: string | null;
+    fitLabel?: string;
   } = $props();
 
   let container = $state<HTMLDivElement>();
@@ -948,7 +950,7 @@
           <button
             type="button"
             class={ICON_BUTTON}
-            aria-label="Show all gear"
+            aria-label={fitLabel}
             onclick={showAll}
           >
             <Icon name="show-all" />

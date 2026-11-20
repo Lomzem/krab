@@ -21,7 +21,11 @@
   import GearHere from './GearHere.svelte';
   import { inListOrder, type HereItem } from './gear-here';
   import GroupPin from './GroupPin.svelte';
-  import { DEFAULT_MAP_FILTER, type MapFilter } from './map-filter';
+  import {
+    DEFAULT_MAP_FILTER,
+    filterHides,
+    type MapFilter
+  } from './map-filter';
   import MapFilterSheet from './MapFilterSheet.svelte';
   import PinChip from './PinChip.svelte';
   import { chipBoxes } from './pin-chip';
@@ -103,9 +107,10 @@
     earlier: 'earlier days only',
     all: 'all days'
   } as const;
+  const hides = $derived(filterHides(filter, trip));
   const filterSummary = $derived(
     [
-      'gear in the water',
+      trip && 'gear in the water',
       filter.collected && 'collected gear',
       past.length > 0 && filter.past && 'past trips',
       filter.timeInWater && 'time in the water',
@@ -292,13 +297,15 @@
         {show}
         {onshown}
         keepClear={newest}
+        fitLabel={hides ? 'Fit shown gear' : 'Show all gear'}
       >
         {#snippet controls()}
           {#if trip || past.length > 0}
             <button
               bind:this={filterButton}
               type="button"
-              class={CAPSULE_BUTTON}
+              class="relative {CAPSULE_BUTTON} data-active:bg-accent data-active:text-accent-foreground"
+              data-active={hides || undefined}
               aria-haspopup="dialog"
               aria-label="Filter, showing {filterSummary}"
               onclick={() => {
@@ -306,6 +313,12 @@
               }}
             >
               <Icon name="filter" />
+              {#if hides}
+                <span
+                  class="absolute top-2 right-2 size-2 rounded-full bg-action"
+                  aria-hidden="true"
+                ></span>
+              {/if}
             </button>
           {/if}
           {#if compassShown}

@@ -14,6 +14,7 @@
   import type { Base, Camera } from '#lib/features/map/index.js';
   import {
     canUndoCollect,
+    dropsInDays,
     gearInWater,
     nearestGear,
     type Drop,
@@ -126,9 +127,17 @@
       ? null
       : rowStatus
   );
-  const nearest = $derived(
-    water.trip ? nearestGear(gearInWater(water.trip, readiness.fix, now)) : null
-  );
+  const nearest = $derived.by(() => {
+    if (!water.trip) return null;
+    const shown = new Set(
+      dropsInDays(water.trip, mapFilter.days, now).map(({ id }) => id)
+    );
+    return nearestGear(
+      gearInWater(water.trip, readiness.fix, now).filter(({ drop }) =>
+        shown.has(drop.id)
+      )
+    );
+  });
   const rowShown = $derived(
     tab === 'map' ||
       water.notice !== null ||
