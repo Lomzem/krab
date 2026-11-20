@@ -28,6 +28,7 @@
   import UncollectedMark from './UncollectedMark.svelte';
 
   const DELETE_TITLE_ID = 'delete-trip-title';
+  const DELETE_NOTE_ID = 'delete-trip-note';
   const DAY_CHOICES: readonly { days: PastDaySelection; name: string }[] = [
     { days: 'last', name: 'Last day' },
     { days: 'earlier', name: 'Earlier days' },
@@ -62,6 +63,7 @@
   let deleteOpen = $state(false);
   let deleting = $state(false);
   let deleteButton = $state<HTMLButtonElement>();
+  let keepButton = $state<HTMLButtonElement>();
   let list = $state<HTMLUListElement>();
 
   const trip = $derived(past.find((item) => item.id === selected) ?? null);
@@ -421,30 +423,33 @@
 <Sheet
   open={deleteOpen && trip !== null}
   titleId={DELETE_TITLE_ID}
+  describedBy={DELETE_NOTE_ID}
+  initialFocus={() => keepButton}
   onclose={keepTrip}
   {notice}
   returnFocus={() => (deleteButton?.isConnected ? deleteButton : titleHeading)}
 >
   {#snippet heading()}
     <h2 id={DELETE_TITLE_ID} class="text-[22px] leading-tight font-semibold">
-      Delete this trip?
+      Delete trip?
     </h2>
   {/snippet}
 
-  <p class="text-[16px] leading-normal">Can't be undone</p>
+  <p id={DELETE_NOTE_ID} class="text-[16px] leading-normal">Can't be undone</p>
 
   {#snippet footer()}
     <button
+      bind:this={keepButton}
       type="button"
-      class="flex-1 {DESTRUCTIVE_BUTTON}"
+      class="flex-1 basis-36 {PRIMARY_BUTTON}"
       aria-disabled={deleting}
-      onclick={() => void confirmDelete()}>Delete trip</button
+      onclick={keepTrip}>Keep trip</button
     >
     <button
       type="button"
-      class="flex-1 {PRIMARY_BUTTON}"
+      class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
       aria-disabled={deleting}
-      onclick={keepTrip}>Keep it</button
+      onclick={() => void confirmDelete()}>Delete trip</button
     >
   {/snippet}
 </Sheet>

@@ -40,9 +40,7 @@ const dropPotAt = async (page: Page, north: number, name: string) => {
 const endTheTrip = async (page: Page, outcome: string) => {
   const sheet = page.getByRole('dialog');
   await page.getByRole('button', { name: 'End trip' }).click();
-  await expect(
-    sheet.getByRole('heading', { name: 'End this trip?' })
-  ).toBeVisible();
+  await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
   await expect(sheet).toContainText(outcome);
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
@@ -79,8 +77,14 @@ test('ending a mixed trip preserves collected and uncollected gear on the main m
   await startMixedTrip(page);
   const endButton = mapArea.getByRole('button', { name: 'End trip' });
   await endButton.click();
-  await expect(sheet).toContainText('1 still in the water');
-  await sheet.getByRole('button', { name: 'Keep fishing' }).click();
+  await expect(sheet).toHaveAccessibleDescription('1 still in the water');
+  await expect(
+    sheet.getByRole('button', { name: 'Keep trip going' })
+  ).toBeFocused();
+  await expect(
+    sheet.getByRole('button', { name: /^(Keep trip going|End trip)$/ })
+  ).toHaveText(['Keep trip going', 'End trip']);
+  await sheet.getByRole('button', { name: 'Keep trip going' }).click();
   await expect(sheet).toBeHidden();
   await expect(endButton).toBeFocused();
 
@@ -304,9 +308,14 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   const deleteTrip = main.getByRole('button', { name: 'Delete trip' });
   await deleteTrip.click();
   await expect(
-    sheet.getByRole('heading', { name: 'Delete this trip?' })
+    sheet.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
-  await sheet.getByRole('button', { name: 'Keep it' }).click();
+  await expect(sheet).toHaveAccessibleDescription("Can't be undone");
+  await expect(sheet.getByRole('button', { name: 'Keep trip' })).toBeFocused();
+  await expect(
+    sheet.getByRole('button', { name: /^(Keep trip|Delete trip)$/ })
+  ).toHaveText(['Keep trip', 'Delete trip']);
+  await sheet.getByRole('button', { name: 'Keep trip' }).click();
   await expect(sheet).toBeHidden();
   await expect(deleteTrip).toBeFocused();
 
@@ -314,12 +323,13 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   await holdStorage(page);
   await sheet.getByRole('button', { name: 'Delete trip' }).click();
   for (const leave of [
-    () => sheet.getByRole('button', { name: 'Keep it' }).click({ force: true }),
+    () =>
+      sheet.getByRole('button', { name: 'Keep trip' }).click({ force: true }),
     () => page.keyboard.press('Escape')
   ]) {
     await leave();
     await expect(
-      sheet.getByRole('heading', { name: 'Delete this trip?' })
+      sheet.getByRole('heading', { name: 'Delete trip?' })
     ).toBeVisible();
   }
   await expect(toastOf(page)).not.toContainText('Trip deleted');

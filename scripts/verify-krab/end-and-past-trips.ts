@@ -76,17 +76,15 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   await capture('01-trip-running');
 
   await endButton.click();
-  await expect(
-    sheet.getByRole('heading', { name: 'End this trip?' })
-  ).toBeVisible();
+  await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
   await expect(sheet).toContainText(STILL_IN);
   await capture('02-confirm');
-  await sheet.getByRole('button', { name: 'Keep fishing' }).click();
+  await sheet.getByRole('button', { name: 'Keep trip going' }).click();
   await expect(sheet).toBeHidden();
   await expect(endButton).toBeFocused();
   expect((await readTrips(page))[0]?.endedAt).toBeNull();
   log(
-    'End trip opens End this trip? naming the drop still in; Keep fishing closes it, refocuses End trip, stored endedAt stays null'
+    'End trip opens End trip? naming the drop still in; Keep trip going closes it, refocuses End trip, stored endedAt stays null'
   );
 
   await endButton.click();
@@ -275,10 +273,10 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   const deleteTrip = main.getByRole('button', { name: 'Delete trip' });
   await deleteTrip.click();
   await expect(
-    sheet.getByRole('heading', { name: 'Delete this trip?' })
+    sheet.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
   await capture('06-delete-confirm');
-  await sheet.getByRole('button', { name: 'Keep it' }).click();
+  await sheet.getByRole('button', { name: 'Keep trip' }).click();
   await expect(deleteTrip).toBeFocused();
   expect(await readTrips(page)).toHaveLength(1);
   await deleteTrip.click();

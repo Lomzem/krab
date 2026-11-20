@@ -8,6 +8,8 @@
     onclose,
     returnFocus,
     notice = null,
+    describedBy,
+    initialFocus,
     heading,
     children,
     footer
@@ -17,6 +19,8 @@
     onclose: () => void;
     returnFocus: () => HTMLElement | null | undefined;
     notice?: Notice | null;
+    describedBy?: string;
+    initialFocus?: () => HTMLElement | null | undefined;
     heading: Snippet;
     children: Snippet;
     footer?: Snippet;
@@ -184,6 +188,7 @@
       lastPress = null;
       openedAt = untrack(() => notice?.key ?? 0);
       dialog.showModal();
+      untrack(() => initialFocus?.())?.focus();
       if (body) body.scrollTop = 0;
     } else if (!open && dialog.open) {
       endDoublePress();
@@ -200,6 +205,7 @@
 <dialog
   bind:this={dialog}
   aria-labelledby={titleId}
+  aria-describedby={describedBy}
   class="m-0 mt-auto max-h-[88dvh] w-full max-w-none flex-col overflow-hidden rounded-t-2xl bg-card p-0 text-foreground shadow-xl backdrop:bg-black/40 open:flex"
   onpointerdown={notePress}
   onkeydown={noteKey}

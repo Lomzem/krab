@@ -215,9 +215,7 @@ test('visual inventory through a dense overnight trip', async ({
   await checkFocus('filter');
   await sheet.getByRole('button', { name: 'Done' }).click();
   await map.getByRole('button', { name: 'End trip' }).click();
-  await expect(
-    sheet.getByRole('heading', { name: 'End this trip?' })
-  ).toBeVisible();
+  await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
   await capture('14-end-confirmation');
   await checkFocus('end');
   await sheet.getByRole('button', { name: 'End trip', exact: true }).click();
@@ -234,11 +232,11 @@ test('visual inventory through a dense overnight trip', async ({
   await capture('16-past-trip-detail');
   await page.getByRole('button', { name: 'Delete trip', exact: true }).click();
   await expect(
-    sheet.getByRole('heading', { name: 'Delete this trip?' })
+    sheet.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
   await capture('17-delete-confirmation');
   await checkFocus('delete');
-  await sheet.getByRole('button', { name: 'Keep it' }).click();
+  await sheet.getByRole('button', { name: 'Keep trip' }).click();
   keep('indexeddb-after.json', await readTrips(page));
   log(
     'Map filter, end confirmation, past-trip list and detail, delete confirmation; keep trip'
