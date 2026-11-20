@@ -1625,7 +1625,7 @@ test('drops that share a spot stay in one group at every zoom, and a group that 
     sharedSpotOf(
       await map.getByRole('button', { name: /^Pot \d/ }).evaluateAll(labelsOf)
     );
-  await holdFixes(page);
+  await holdFixes(page, { steady: true });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await dropAt(page, 1);
@@ -1682,7 +1682,7 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
     await sheet.getByRole('button', { name: 'Show on map' }).click();
     await expect(sheet).toHaveCount(0);
   };
-  await holdFixes(page);
+  await holdFixes(page, { steady: true });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await dropAt(page, 1);

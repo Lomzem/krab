@@ -6,7 +6,10 @@
     compassChoice,
     deviceCompass
   } from '#lib/features/compass/index.js';
-  import { PositionWatch } from '#lib/features/location/index.js';
+  import {
+    PositionWatch,
+    readiness as watchReadiness
+  } from '#lib/features/location/index.js';
   import type { Base, Camera, Lane } from '#lib/features/map/index.js';
   import {
     canUndoCollect,
@@ -57,6 +60,7 @@
 
   const watch = new PositionWatch();
   const water = new OnWater(watch);
+  const readiness = watchReadiness(watch);
   keepScreenAwakeWhile(() => water.trip !== null);
   const compass = new Compass({
     sensor: deviceCompass,
@@ -108,7 +112,7 @@
   const busy = $derived(sheetOperation?.pending ?? false);
   const sheetDirection = $derived(
     subject && water.trip
-      ? (gearInWater(water.trip, watch.fix, now).find(
+      ? (gearInWater(water.trip, readiness.fix, now).find(
           (row) => row.drop.id === subject.drop.id
         )?.direction ?? null)
       : null
@@ -340,7 +344,8 @@
             endOpen = true;
           }}
           bind:endButton
-          fix={watch.fix}
+          fix={readiness.fix}
+          lastFix={readiness.lastFix}
           courseDeg={watch.courseDeg}
           compass={$compass}
           oncompass={toggleCompass}
@@ -371,7 +376,7 @@
       {:else if water.load === 'ready'}
         <GearList
           trip={water.trip}
-          from={watch.fix}
+          from={readiness.fix}
           compass={$compass}
           {now}
           onopen={opensFrom('list')}
@@ -488,9 +493,14 @@
     {#if explained}
       <section aria-label="Drop gear">
         {#key tab}
-          <LocationStatus permission={watch.permission} fix={watch.fix} />
+          <LocationStatus status={readiness.status} />
         {/key}
-        <DropControl bind:kind bind:button={dropButton} ondrop={drop} />
+        <DropControl
+          bind:kind
+          bind:button={dropButton}
+          denied={readiness.status.kind === 'denied'}
+          ondrop={drop}
+        />
       </section>
     {:else}
       <LocationIntro onallow={allowLocation} />

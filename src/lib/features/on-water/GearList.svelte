@@ -125,9 +125,9 @@
             >{row.direction.distanceSpoken} {row.direction.point}</span
           >
         </div>
-      {:else}
+      {:else if !row.drop.position}
         <p class="text-[15px] text-muted-foreground @max-[22rem]:ml-10">
-          {row.drop.position ? 'Waiting for location' : 'No position'}
+          No position
         </p>
       {/if}
     </button>

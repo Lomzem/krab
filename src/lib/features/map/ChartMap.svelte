@@ -102,7 +102,9 @@
   const markers = new SvelteMap<string, Marker>();
 
   const accuracy = $derived(
-    accuracyArea(me?.at ?? null, me?.accuracyM ?? 0, me?.rough ?? false)
+    me?.current
+      ? accuracyArea(me.at, me.accuracyM, me.rough)
+      : accuracyArea(null, 0, false)
   );
 
   const featured = $derived(
@@ -700,30 +702,30 @@
           >
         </button>
       {/if}
-      {#if me}
-        <button
-          type="button"
-          class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          aria-label="Centre on my position"
-          onclick={() => {
-            centreOn(me.at);
-            revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
-          }}
+      <button
+        type="button"
+        class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-ring aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent"
+        aria-label="Centre on my position"
+        aria-disabled={me?.current ? undefined : 'true'}
+        onclick={() => {
+          if (!me?.current) return;
+          centreOn(me.at);
+          revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
+        }}
+      >
+        <svg
+          class="size-5.5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          aria-hidden="true"
+          ><circle cx="12" cy="12" r="4" /><path
+            d="M12 2v4M12 18v4M2 12h4M18 12h4"
+          /></svg
         >
-          <svg
-            class="size-5.5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-            aria-hidden="true"
-            ><circle cx="12" cy="12" r="4" /><path
-              d="M12 2v4M12 18v4M2 12h4M18 12h4"
-            /></svg
-          >
-        </button>
-      {/if}
+      </button>
     </div>
     {#if availability !== 'available'}
       <p
@@ -822,30 +824,49 @@
                     style:transform-origin="22px 22px"
                   />
                 {/if}
-                <circle
-                  cx="22"
-                  cy="22"
-                  r="27"
-                  fill="none"
-                  stroke="#ffffff"
-                  stroke-width="5"
-                />
-                <circle
-                  cx="22"
-                  cy="22"
-                  r="27"
-                  fill="none"
-                  stroke="#1d4ed8"
-                  stroke-width="2.5"
-                />
-                <circle
-                  cx="22"
-                  cy="22"
-                  r="8"
-                  fill="#1d4ed8"
-                  stroke="#ffffff"
-                  stroke-width="3"
-                />
+                {#if me.current}
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="27"
+                    fill="none"
+                    stroke="#ffffff"
+                    stroke-width="5"
+                  />
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="27"
+                    fill="none"
+                    stroke="#1d4ed8"
+                    stroke-width="2.5"
+                  />
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="8"
+                    fill="#1d4ed8"
+                    stroke="#ffffff"
+                    stroke-width="3"
+                  />
+                {:else}
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="8"
+                    fill="none"
+                    stroke="#ffffff"
+                    stroke-width="7"
+                  />
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="8"
+                    fill="none"
+                    stroke="#1d4ed8"
+                    stroke-width="3"
+                  />
+                {/if}
               </svg>
             </div>
           </div>

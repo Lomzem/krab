@@ -1,37 +1,12 @@
 <script lang="ts">
-  import type { LocationPermission } from '#lib/features/location/index.js';
-  import {
-    availability,
-    roughness,
-    type Fix
-  } from '#lib/features/trip/index.js';
+  import { roughness, type Availability } from '#lib/features/trip/index.js';
 
-  let { permission, fix }: { permission: LocationPermission; fix: Fix | null } =
-    $props();
+  let { status }: { status: Availability } = $props();
 
-  let checkedAt = $state(Date.now());
   let guidanceOpen = $state(false);
 
-  const status = $derived(
-    availability({ denied: permission === 'denied', fix }, checkedAt)
-  );
-
   const rough = $derived(status.kind === 'ready' && roughness(status.fix));
-
-  const recheck = () => {
-    checkedAt = Date.now();
-  };
-
-  $effect(() => {
-    if (status.kind !== 'ready') return;
-    const timer = setTimeout(recheck, status.staleAt - Date.now());
-    return () => {
-      clearTimeout(timer);
-    };
-  });
 </script>
-
-<svelte:document onvisibilitychange={recheck} />
 
 {#if status.kind === 'denied'}
   <section

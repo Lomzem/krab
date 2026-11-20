@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, holdStorage, releaseStorage, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
-import { deliverFix, holdFixes } from './held-geolocation';
+import { deliverFix, denyLocation, holdFixes } from './held-geolocation';
 
 const MIN_TARGET_PX = 44;
 
@@ -179,6 +179,90 @@ test('Finding position returns just after 5 seconds or on resume with a stale fi
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect.poll(() => findingDropPositionShown(page)).toBe(1);
 });
+
+test('a stale fix shows as Last position with no distances, and Centre on my position waits for a fresh fix', async ({
+  page
+}) => {
+  const map = page.getByRole('region', { name: 'Map' });
+  const current = map.getByRole('img', { name: /^Current position/ });
+  const last = map.getByRole('img', { name: 'Last position' });
+  const nearest = map.getByRole('heading', { name: /Nearest gear/ });
+  const centre = map.getByRole('button', { name: 'Centre on my position' });
+  const away = { ...MADE_UP_SEA, latitude: MADE_UP_SEA.latitude + 0.001 };
+  await holdFixes(page);
+  await page.clock.install({ time: START });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await page.clock.pauseAt(PAUSED);
+  await expect(centre).toHaveAttribute('aria-disabled', 'true');
+
+  await deliverFix(page, MADE_UP_SEA, PAUSED);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await deliverFix(page, away, PAUSED);
+  await expect(current).toBeVisible();
+  await expect(nearest).toBeVisible();
+  await expect(centre).not.toHaveAttribute('aria-disabled');
+  const view = map.getByRole('region', { name: 'Map view' });
+  const viewBox = await view.boundingBox();
+
+  await page.clock.runFor(5001);
+  await expect(last).toBeVisible();
+  expect(await view.boundingBox()).toEqual(viewBox);
+  await expect(current).toHaveCount(0);
+  await expect(nearest).toHaveCount(0);
+  await expect(centre).toHaveAttribute('aria-disabled', 'true');
+  await expect(centre).toBeVisible();
+
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const row = page
+    .getByRole('main')
+    .getByRole('listitem')
+    .filter({ hasText: 'Pot 1' });
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText('ft');
+  await expect(row).not.toContainText('Waiting for location');
+
+  await deliverFix(page, away, new Date('2031-03-04T06:00:05.001Z'));
+  await expect(row).toContainText('ft');
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await expect(current).toBeVisible();
+  await expect(last).toHaveCount(0);
+  await expect(centre).not.toHaveAttribute('aria-disabled');
+});
+
+for (const width of [320, 393]) {
+  test(`at ${String(width)} px wide, location turned off after a fix hides my position, and Drop says it saves without one in the same box`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width, height: 700 });
+    await holdFixes(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Turn on location' }).click();
+    await deliverFix(page, MADE_UP_SEA);
+    const map = page.getByRole('region', { name: 'Map' });
+    await expect(
+      map.getByRole('img', { name: /^Current position/ })
+    ).toBeVisible();
+    const ready = page.getByRole('button', { name: 'Drop pot', exact: true });
+    const readyBox = await ready.boundingBox();
+
+    await denyLocation(page);
+    const denied = page.getByRole('button', {
+      name: 'Drop pot without position'
+    });
+    await expect(denied).toBeVisible();
+    await expect(ready).toHaveCount(0);
+    expect(await denied.boundingBox()).toEqual(readyBox);
+    await expect(map.getByRole('img', { name: /position/ })).toHaveCount(0);
+    await expect(
+      map.getByRole('button', { name: 'Centre on my position' })
+    ).toHaveAttribute('aria-disabled', 'true');
+
+    await denied.click();
+    await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
+  });
+}
 
 test('a drop with no fix within 5 seconds saves without a position by itself, and a later fix never moves it', async ({
   page

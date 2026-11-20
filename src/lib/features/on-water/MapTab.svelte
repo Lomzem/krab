@@ -40,6 +40,7 @@
     onend,
     endButton = $bindable(),
     fix,
+    lastFix,
     courseDeg,
     compass,
     oncompass,
@@ -60,6 +61,7 @@
     onend: () => void;
     endButton?: HTMLButtonElement;
     fix: Fix | null;
+    lastFix: Fix | null;
     courseDeg: number | null;
     compass: CompassState;
     oncompass: () => void;
@@ -75,6 +77,8 @@
     cover: number;
   } = $props();
 
+  const READOUT =
+    'flex min-h-[calc(3.25rem+16px)] items-center gap-3 border-b border-border bg-card px-4 py-1';
   const rows = $derived(trip ? gearInWater(trip, fix, now) : []);
   const nearest = $derived(nearestGear(rows));
   const rowsById = $derived(new Map(rows.map((row) => [row.drop.id, row])));
@@ -125,11 +129,12 @@
     compass.kind === 'usable' ? Math.round(compass.trueHeadingDeg) % 360 : null
   );
   const course = $derived(headingDeg === null ? courseDeg : null);
-  const me = $derived(
+  const current = $derived(
     fix && {
       at: fix,
       accuracyM: fix.accuracyM,
       rough: rough !== null,
+      current: true,
       courseDeg: course,
       label: [
         'Current position',
@@ -139,6 +144,17 @@
         .filter(Boolean)
         .join(', ')
     }
+  );
+  const me = $derived(
+    current ??
+      (lastFix && {
+        at: lastFix,
+        accuracyM: lastFix.accuracyM,
+        rough: false,
+        current: false,
+        courseDeg: null,
+        label: 'Last position'
+      })
   );
 
   const present = (parts: (string | false | null | undefined)[]) =>
@@ -281,10 +297,7 @@
   {/if}
   {#if trip && nearest?.direction}
     {@const direction = nearest.direction}
-    <section
-      class="flex min-h-14 items-center gap-3 border-b border-border bg-card px-4 py-1"
-      aria-labelledby="nearest-title"
-    >
+    <section class={READOUT} aria-labelledby="nearest-title">
       <span class="text-primary"
         ><GearIcon kind={nearest.gear.kind} size={24} /></span
       >
@@ -298,6 +311,8 @@
       </div>
       <DirectionCue {direction} {compass} ontoggle={oncompass} />
     </section>
+  {:else if rows.some(({ drop }) => drop.position)}
+    <div class={READOUT}></div>
   {/if}
 
   <div class="min-h-0 flex-1">
@@ -309,7 +324,7 @@
         bind:camera
         {places}
         {me}
-        {headingDeg}
+        headingDeg={fix ? headingDeg : null}
         {show}
         {onshown}
         {onlane}

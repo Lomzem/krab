@@ -513,7 +513,9 @@ test.describe('with the clock paused', () => {
         await expect(toastOf(page)).toContainText('Pot 1 deleted');
         await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
         await expect(
-          page.getByRole('button', { name: /^Drop (pot|net)$/ })
+          page.getByRole('button', {
+            name: /^Drop (pot|net)( without position)?$/
+          })
         ).toBeFocused();
         await expect(gearRow(page, 'Pot 1')).toHaveCount(0);
         expect(await storedDrops(page)).toBe(1);

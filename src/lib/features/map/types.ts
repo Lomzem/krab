@@ -16,6 +16,7 @@ export type MyPosition = {
   at: LatLon;
   accuracyM: number;
   rough: boolean;
+  current: boolean;
   courseDeg: number | null;
   label: string;
 };
