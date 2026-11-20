@@ -46,6 +46,7 @@
   const MIN_ZOOM = 0;
   const MIN_FIT_SPAN = 48;
   const CLEAR_GAP = 8;
+  const FOCUS_REACH = 11;
   const ICON_BUTTON = `flex h-11 w-full touch-manipulation items-center justify-center ${FOCUS_INSET} ${PRESS} active:bg-muted`;
   const CREDIT_LINK = `flex min-h-11 items-center px-3 text-base underline underline-offset-3 ${FOCUS_INSET}`;
   const SAFE_EDGE_SLACK = 1 + 1e-6;
@@ -428,6 +429,24 @@
     return shift?.hidden === 0;
   };
 
+  const revealFocused = (event: FocusEvent) => {
+    const area = container?.getBoundingClientRect();
+    const target = event.target;
+    if (
+      !area ||
+      !(target instanceof HTMLElement) ||
+      !target.matches(':focus-visible')
+    )
+      return;
+    const box = target.getBoundingClientRect();
+    revealDrawn({
+      left: box.left - area.left - FOCUS_REACH,
+      right: box.right - area.left + FOCUS_REACH,
+      top: box.top - area.top - FOCUS_REACH,
+      bottom: box.bottom - area.top + FOCUS_REACH
+    });
+  };
+
   const reveal = (id: string) => {
     const spot = spotOf.get(id);
     return revealDrawn(spot ? drawnOf(spot) : null);
@@ -781,6 +800,7 @@
           data-place={spot.key}
           style:z-index={LAYER_ORDER[spot.layer]}
           use:marker={spot.at}
+          onfocusin={revealFocused}
         >
           {#if spot.ids.length === 1}
             {@render pin(spot.key, isSelected(spot.ids))}

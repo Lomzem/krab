@@ -1175,11 +1175,7 @@ for (const [width, height] of [
   });
 }
 
-test('on a 320 by 640 screen, gear dropped where the map credits show never covers them, and with a map notice showing Centre on my position puts me clear of every map control, the notice and the credits', async ({
-  context,
-  page,
-  providers
-}) => {
+const dropPot2UnderCredits = async (page: Page, context: BrowserContext) => {
   await page.setViewportSize({ width: 320, height: 640 });
   await dropPotAndOpenMap(page);
   await expect
@@ -1226,6 +1222,15 @@ test('on a 320 by 640 screen, gear dropped where the map credits show never cove
   expect(await creditsText.evaluate(shownWhole), 'credits overprinted').toBe(
     true
   );
+  return { pot2, creditsText };
+};
+
+test('on a 320 by 640 screen, gear dropped where the map credits show never covers them, and with a map notice showing Centre on my position puts me clear of every map control, the notice and the credits', async ({
+  context,
+  page,
+  providers
+}) => {
+  const { creditsText } = await dropPot2UnderCredits(page, context);
 
   await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
   providers.cutOff();
@@ -1267,6 +1272,42 @@ test('on a 320 by 640 screen, gear dropped where the map credits show never cove
       };
     })
     .toEqual({ blocked: covers.map(() => 0), inView: true });
+});
+
+test('on a 320 by 640 screen, Tab to gear drawn under the map credits pans it and its focus ring whole into view, clear of the credits', async ({
+  context,
+  page
+}) => {
+  const { pot2, creditsText } = await dropPot2UnderCredits(page, context);
+  await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
+
+  await drawnView(page).focus();
+  for (let step = 0; step < 12; step += 1) {
+    await page.keyboard.press('Tab');
+    if (await pot2.evaluate((pin) => pin === document.activeElement)) break;
+  }
+  await expect(pot2).toBeFocused();
+  await expect
+    .poll(async () => {
+      const [marker] = await pot2.evaluateAll(markerFootprints);
+      const ring = {
+        left: marker.left - 6,
+        top: marker.top - 6,
+        right: marker.right + 6,
+        bottom: marker.bottom + 6
+      };
+      const view = asFootprint(await boxOf(drawnView(page)));
+      return {
+        overCredits: overlapping([ring, asFootprint(await boxOf(creditsText))])
+          .length,
+        inView:
+          ring.left >= view.left &&
+          ring.right <= view.right &&
+          ring.top >= view.top &&
+          ring.bottom <= view.bottom
+      };
+    })
+    .toEqual({ overCredits: 0, inView: true });
 });
 
 function missedInterior(control: Element) {
@@ -2022,7 +2063,7 @@ test('a focused pin that a resize moves off the map hands focus to the map view'
   await potOnMap(page).focus();
   await expect(potOnMap(page)).toBeFocused();
 
-  await page.setViewportSize({ width: 320, height: 480 });
+  await page.setViewportSize({ width: 320, height: 360 });
   await expect(place).toHaveJSProperty('inert', true);
   await expect(view).toBeFocused();
 });
