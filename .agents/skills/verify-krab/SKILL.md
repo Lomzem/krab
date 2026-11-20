@@ -37,7 +37,7 @@ This requires exactly one active container matching this checkout and the pinned
 
 ## Drive
 
-[The journey config](../../../scripts/verify-krab.config.ts) selects the executable recipes; [the feature map](features/README.md) describes coverage and limitations. Invoke them through `bun scripts/verify-krab/run.ts` so build, Docker checks, evidence retention and teardown all run. The recipes use the iPhone WebKit project from [playwright.config.ts](../../../playwright.config.ts), grant geolocation, and supply only its fictional mid-ocean `MADE_UP_SEA` position. The chart alignment journey samples NOAA tiles at named public landmarks without setting them as a position or drop.
+[The journey config](../../../scripts/verify-krab.config.ts) selects the executable recipes; [the feature map](features/README.md) describes coverage and limitations. Invoke them through `bun scripts/verify-krab/run.ts` so build, Docker checks, evidence retention and teardown all run. The recipes use the iPhone WebKit project from [playwright.config.ts](../../../playwright.config.ts), grant geolocation, and supply only its fictional mid-ocean `MADE_UP_SEA` position. The chart alignment journey samples real NOAA tiles at named public landmarks without setting them as a position or drop, so it runs only under the wrapper.
 
 Use the executable recipe's accessible roles and names when driving the documented journey. Drive real UI actions; use page evaluation for read-only observations of real browser IndexedDB and rendered evidence metadata. Never insert trip records or call component state setters to manufacture success.
 
@@ -71,6 +71,8 @@ Run no kill-by-name commands. After an interrupted wrapper, inspect `docker ps -
 
 ## Upkeep
 
-The runner and its [journey config](../../../scripts/verify-krab.config.ts) own launch and recipe selection; [visual-review.md](visual-review.md) owns visual capture guidance. Playwright consumes the configs and recipes; run the bounded wrapper rather than individual recipe files. Preview uses the image's Node because Bun is supplied by the host.
+The runner and its [journey config](../../../scripts/verify-krab.config.ts) own launch and recipe selection; [visual-review.md](visual-review.md) owns visual capture guidance. Playwright consumes the configs and recipes; for evidence, run the bounded wrapper rather than individual recipe files. Preview uses the image's Node because Bun is supplied by the host.
+
+CI runs the same journey and visual recipes on every change through `bun run test:recipes`, with [its config](../../../scripts/verify-krab.fixtures.config.ts) answering NOAA and OpenFreeMap from the e2e `providers` fixture; `bun run test:recipes:container` runs it locally. That run retains no evidence and skips the NOAA alignment journey. Recipes import `test` from [recipe.ts](../../../scripts/verify-krab/recipe.ts); gate an assertion on `liveProviders` only when it needs real provider content, CORS or attribution, and cut off or serve `providers` around `context.setOffline` when it is present. Live provider behavior is proven only by the wrapper.
 
 As features change, use `/maintain-verification-skill` in Claude Code or `$maintain-verification-skill` in Codex to reconcile the feature map and runnable recipes. Real-device coverage is recorded through the [device checklist](features/device-checks.md).
