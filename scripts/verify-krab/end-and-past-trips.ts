@@ -115,7 +115,7 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
     .getByRole('group', { name: 'Also show' })
     .getByRole('checkbox', { name: 'Past trips' });
   const pastGroup = mapArea.getByRole('button', {
-    name: 'Pot 1 +1 more, 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    name: 'Pot 1 +1 more here; 1 of 2 uncollected',
     exact: true
   });
   const showPastLayer = async (on: boolean) => {
@@ -211,7 +211,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   await expect(pot1).toBeVisible();
   await expect(net1).toBeVisible();
   const detailGroup = detail.getByRole('button', {
-    name: 'Pot 1 +1 more, 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    name: 'Pot 1 +1 more here; 1 of 2 uncollected',
     exact: true
   });
   await expect(detailGroup).toBeVisible();

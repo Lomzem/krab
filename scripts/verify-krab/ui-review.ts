@@ -336,7 +336,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
   expect(chartCredits.parts.length).toBeGreaterThan(0);
   for (const part of chartCredits.parts)
     expect(part.ratio, part.text).toBeGreaterThanOrEqual(4.5);
-  const group = map.getByRole('button', { name: /, 8 gear in this area: / });
+  const group = map.getByRole('button', { name: / \+7 more in this area$/ });
   const zoomOut = map.getByRole('button', { name: 'Zoom out', exact: true });
   let outs = 0;
   await expect(async () => {

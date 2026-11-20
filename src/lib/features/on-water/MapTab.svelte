@@ -19,7 +19,7 @@
     type Trip
   } from '#lib/features/trip/index.js';
   import GearHere from './GearHere.svelte';
-  import { inListOrder, type HereItem } from './gear-here';
+  import { inListOrder, spokenItem, type HereItem } from './gear-here';
   import GroupPin from './GroupPin.svelte';
   import {
     DEFAULT_MAP_FILTER,
@@ -189,9 +189,6 @@
   const collectedDetails = (row: CollectedRow) =>
     present([row.day?.text, 'collected', row.catchText]);
 
-  const label = (name: string, details: string[]) =>
-    [name, ...details].join(', ');
-
   const itemOf = (id: string): HereItem[] => {
     const row = rowsById.get(id);
     if (row) {
@@ -204,6 +201,7 @@
           day: row.day,
           uncollected: false,
           name: row.name,
+          label: row.drop.label,
           details: pinDetails(row),
           summary: pinSummary(row)
         }
@@ -220,6 +218,7 @@
           day: done.day,
           uncollected: false,
           name: done.name,
+          label: done.drop.label,
           details: collectedDetails(done),
           summary: collectedDetails(done).join(', ')
         }
@@ -236,6 +235,7 @@
           day: null,
           uncollected: ended.drop.collectedAt === null,
           name: ended.name,
+          label: ended.drop.label,
           details: pastDetails(ended),
           summary: pastDetails(ended).join(', ')
         }
@@ -345,7 +345,7 @@
             <button
               type="button"
               class="group grid size-11 place-items-center focus-visible:outline-none"
-              aria-label={label(item.name, item.details)}
+              aria-label={spokenItem(item)}
               aria-current={selected || undefined}
               data-drop={id}
               onclick={(event) => {

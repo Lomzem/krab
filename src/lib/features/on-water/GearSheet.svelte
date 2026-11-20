@@ -194,6 +194,13 @@
         <GearIcon kind={subject.gear.kind} size={24} />
         {subject.name}
       </h2>
+      {#if subject.drop.label}
+        <p
+          class="mt-1 line-clamp-2 text-base leading-snug [overflow-wrap:anywhere]"
+        >
+          {subject.drop.label}
+        </p>
+      {/if}
       {#if subject.day}
         <p class="mt-1 text-sm font-medium text-muted-foreground">
           <DayMarker day={subject.day} />

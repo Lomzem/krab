@@ -104,7 +104,7 @@ test('ending a mixed trip preserves collected and uncollected gear on the main m
     .getByRole('group', { name: 'Also show' })
     .getByRole('checkbox', { name: 'Past trips' });
   const pastGroup = mapArea.getByRole('button', {
-    name: 'Pot 1 +1 more, 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    name: 'Pot 1 +1 more here; 1 of 2 uncollected',
     exact: true
   });
   const showPastLayer = async (on: boolean) => {
@@ -178,7 +178,7 @@ test('a past trip lists its collected and uncollected gear, saves an edited catc
   await expect(pot1).toBeVisible();
   await expect(net1).toBeVisible();
   const detailGroup = detail.getByRole('button', {
-    name: 'Pot 1 +1 more, 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    name: 'Pot 1 +1 more here; 1 of 2 uncollected',
     exact: true
   });
   await expect(detailGroup).toBeVisible();

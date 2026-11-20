@@ -1,5 +1,11 @@
 import type { BrowserContext, Locator, Page } from '@playwright/test';
-import { expect, storedDrops, test, toastOf } from './fixtures';
+import {
+  expect,
+  storedDropNames,
+  storedDrops,
+  test,
+  toastOf
+} from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { deliverFix, holdFixes } from './held-geolocation';
 import {
@@ -663,7 +669,9 @@ test('eight drops shown apart merge into groups as I zoom out without any marker
   }
   await page.getByRole('button', { name: 'Map', exact: true }).click();
 
-  const group = map.getByRole('button', { name: /8 gear in this area: / });
+  const group = map.getByRole('button', {
+    name: /\+7 more in this area$/
+  });
   const gear = map.getByRole('button', { name: /^(Pot \d|\d gear here)/ });
   const zoomOut = map.getByRole('button', { name: 'Zoom out' });
   let footprints: Footprint[] = [];
@@ -703,7 +711,7 @@ test('eight drops shown apart merge into groups as I zoom out without any marker
   await expectAccessibleInBothThemes(page);
   const lead = /^\d/.exec(await group.innerText())?.[0];
   await expect(group).toHaveAccessibleName(
-    `Pot ${String(lead)} +7 more, 8 gear in this area: ${Array.from({ length: 8 }, (_, step) => `Pot ${String(step + 1)}`).join(', ')}`
+    `Pot ${String(lead)} +7 more in this area`
   );
   await expect(map.getByRole('button', { name: /^Pot \d,/ })).toHaveCount(0);
 
@@ -733,17 +741,23 @@ test('eight drops shown apart merge into groups as I zoom out without any marker
   }
 });
 
-const representedOn = (map: Locator) =>
-  map.locator('.maplibregl-marker[data-place]').evaluateAll((markers) =>
-    markers.map((marker) => {
-      const name =
-        marker.querySelector('button')?.getAttribute('aria-label') ?? '';
-      const single = /^((?:Pot|Net) \d+),/.exec(name)?.[1];
-      if (single) return [single];
-      const listed = /gear (?:here|in this area)[^:]*: ([^;]*)/.exec(name)?.[1];
-      return listed ? listed.split(', ') : [];
-    })
-  );
+const representedOn = async (map: Locator) => {
+  const names = await storedDropNames(map.page());
+  const spots = await map
+    .locator('.maplibregl-marker[data-place] button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) =>
+        (
+          button.getAttribute('data-drop') ??
+          button.getAttribute('data-drops') ??
+          ''
+        )
+          .split(' ')
+          .filter(Boolean)
+      )
+    );
+  return spots.map((ids) => ids.map((id) => names[id] ?? id));
+};
 
 function ringedInMagenta(button: Element) {
   for (const span of button.querySelectorAll('span'))
@@ -862,13 +876,9 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
       if (await own.count()) {
         await own.click();
       } else {
-        await map
-          .getByRole('button', {
-            name: new RegExp(
-              `gear (here|in this area)[^:]*: (.*, )?${name}(,|;|$)`
-            )
-          })
-          .click();
+        const stored = await storedDropNames(page);
+        const id = Object.keys(stored).find((key) => stored[key] === name);
+        await map.locator(`[data-drops~="${String(id)}"]`).click();
         await dialogs
           .getByRole('button', { name: new RegExp(`^${name},`) })
           .click();
@@ -1424,17 +1434,32 @@ const settled = async (target: Locator) => {
     .toBe(true);
 };
 
-const labelsOf = (buttons: Element[]) =>
-  buttons.map((button) => button.getAttribute('aria-label') ?? '');
+const spotsOf = (buttons: Element[]) =>
+  buttons.map((button) => ({
+    name: button.getAttribute('aria-label') ?? '',
+    ids: (
+      button.getAttribute('data-drop') ??
+      button.getAttribute('data-drops') ??
+      ''
+    ).split(' ')
+  }));
 
-const sharedSpotOf = (labels: string[]) =>
-  labels
-    .filter((name) => name.includes('Pot 3'))
-    .map((name) => {
+const sharedSpotOf = (
+  spots: { name: string; ids: string[] }[],
+  names: Record<string, string>
+) =>
+  spots
+    .map(({ name, ids }) => ({ name, gear: ids.map((id) => names[id]) }))
+    .filter(({ gear }) => gear.includes('Pot 3'))
+    .map(({ name, gear }) => {
       const sharing = ['Pot 1', 'Pot 2', 'Pot 4'].filter((other) =>
-        name.includes(other)
+        gear.includes(other)
       );
-      const said = /\d gear (here|in this area)/.exec(name)?.[0] ?? 'alone';
+      const where = / (in this area|here)$/.exec(name)?.[1];
+      const said =
+        gear.length > 1
+          ? `${String(gear.length)} gear ${String(where)}`
+          : 'alone';
       return `${sharing.join('+')} ${said}`;
     })
     .join(' | ');
@@ -1504,7 +1529,7 @@ test('a group led by collected gear says how many are in the water and collected
 }) => {
   const map = mapArea(page);
   const sheet = page.getByRole('dialog');
-  const group = map.getByRole('button', { name: /\+\d more,/ });
+  const group = map.getByRole('button', { name: / \+\d more / });
   const others = group.getByText(/^\+\d$/);
   const othersBorder = () =>
     others.evaluate((segment) => getComputedStyle(segment).borderTopStyle);
@@ -1521,9 +1546,7 @@ test('a group led by collected gear says how many are in the water and collected
   for (const number of [1, 2, 3]) await dropAt(page, number);
 
   await page.getByRole('button', { name: 'Map', exact: true }).click();
-  await expect(group).toHaveAccessibleName(
-    /^Pot \d \+2 more, 3 gear here: Pot \d, Pot \d, Pot \d$/
-  );
+  await expect(group).toHaveAccessibleName(/^Pot \d \+2 more here$/);
   expect(await othersBorder()).toBe('solid');
 
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
@@ -1534,7 +1557,7 @@ test('a group led by collected gear says how many are in the water and collected
   await gearRow(page, 'Pot 2').click();
   await sheet.getByRole('button', { name: 'Show on map' }).click();
   await expect(group).toHaveAccessibleName(
-    'Pot 2 +2 more, 3 gear here: Pot 1, Pot 3, Pot 2; 2 in the water, 1 collected'
+    'Pot 2 +2 more here; 2 in the water, 1 collected'
   );
   await expect(others).toHaveText('+2');
   expect(await othersBorder()).toBe('solid');
@@ -1551,40 +1574,45 @@ test('a group led by collected gear says how many are in the water and collected
   await map.getByRole('button', { name: /^Filter/ }).click();
   await sheet.getByRole('checkbox', { name: 'Collected gear' }).uncheck();
   await sheet.getByRole('button', { name: 'Done' }).click();
-  await expect(group).toHaveAccessibleName(
-    /^Pot \d \+1 more, 2 gear here: Pot 1, Pot 3$/
-  );
+  await expect(group).toHaveAccessibleName(/^Pot \d \+1 more here$/);
   await map.getByRole('button', { name: /^Filter/ }).click();
   await sheet.getByRole('checkbox', { name: 'Collected gear' }).check();
   await sheet.getByRole('button', { name: 'Done' }).click();
 
   await collectFromGroup('Pot 1');
   await collectFromGroup('Pot 3');
-  await expect(group).toHaveAccessibleName(
-    /^Pot \d \+2 more, 3 gear here: Pot \d, Pot \d, Pot \d$/
-  );
+  await expect(group).toHaveAccessibleName(/^Pot \d \+2 more here$/);
   expect(await othersBorder()).toBe('dashed');
 });
 
-test('collecting the gear that leads a group returns focus to the group, now led by other gear', async ({
+test('a saved label shows in the group chooser and the sheet heading, and collecting the gear that leads a group returns focus to the group, now led by other gear', async ({
   page
 }) => {
   const map = mapArea(page);
   const sheet = page.getByRole('dialog');
-  const group = map.getByRole('button', { name: /\+\d more,/ });
+  const group = map.getByRole('button', { name: / \+\d more / });
   await holdFixes(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   for (const number of [1, 2]) await dropAt(page, number);
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await gearRow(page, 'Pot 2').click();
+  await sheet.getByLabel('Label').fill('Red float');
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toHaveCount(0);
   await page.getByRole('button', { name: 'Map', exact: true }).click();
-  await expect(group).toHaveAccessibleName(/^Pot 2 \+1 more,/);
+  await expect(group).toHaveAccessibleName(/^Pot 2 \+1 more /);
 
   await group.click();
-  await sheet.getByRole('button', { name: /^Pot 2,/ }).click();
+  const labelled = sheet.getByRole('button', { name: /^Pot 2, Red float,/ });
+  await expect(labelled).toContainText('Red float');
+  await labelled.click();
+  await expect(sheet.getByRole('heading', { level: 2 })).toHaveText('Pot 2');
+  await expect(sheet.getByText('Red float', { exact: true })).toBeVisible();
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await page.keyboard.press('Escape');
   await expect(sheet).toHaveCount(0);
-  await expect(group).toHaveAccessibleName(/^Pot 1 \+1 more,/);
+  await expect(group).toHaveAccessibleName(/^Pot 1 \+1 more /);
   await expect(group).toBeFocused();
 });
 
@@ -1623,7 +1651,7 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
   test.slow();
   const map = mapArea(page);
   const sheet = page.getByRole('dialog');
-  const group = map.getByRole('button', { name: /^Pot \d+ \+\d+ more,/ });
+  const group = map.getByRole('button', { name: /^Pot \d+ \+\d+ more / });
   const endTrip = async () => {
     await page.getByRole('button', { name: 'Gear', exact: true }).click();
     await page.getByRole('button', { name: 'End trip' }).click();
@@ -1635,12 +1663,13 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
     const names = Array.from(
       { length: more + 1 },
       (_, step) => `Pot ${String(first + step)}`
-    ).join(', ');
-    await expect(group).toHaveAccessibleName(
-      new RegExp(
-        `^Pot \\d+ \\+${String(more)} more, ${String(more + 1)} gear here: ${names}; all uncollected$`
-      )
     );
+    await expect(group).toHaveAccessibleName(
+      new RegExp(`^Pot \\d+ \\+${String(more)} more here; all uncollected$`)
+    );
+    expect(
+      (await representedOn(map)).find((spot) => spot.length > 1)?.toSorted()
+    ).toEqual(names.toSorted());
     await expect(group).toContainText(`+${String(more)}`);
     await settled(group);
     const [drawn] = await group.evaluateAll(markerFootprints);
@@ -1687,7 +1716,8 @@ test('drops that share a spot stay in one group at every zoom, and a group that 
     /^(Pot 1\+Pot 2 3 gear here|Pot 1\+Pot 2\+Pot 4 4 gear in this area)$/;
   const sharedSpot = async () =>
     sharedSpotOf(
-      await map.getByRole('button', { name: /^Pot \d/ }).evaluateAll(labelsOf)
+      await map.getByRole('button', { name: /^Pot \d/ }).evaluateAll(spotsOf),
+      await storedDropNames(page)
     );
   await holdFixes(page, { steady: true });
   await page.goto('/');
@@ -1756,7 +1786,7 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
   await expect(pot3).toBeVisible();
   await expect(shownOnMap).toHaveCount(0);
   expect(await ringed(pot3)).toBe(false);
-  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more, 2 gear here: /);
+  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more here/);
 
   await showFromGear('Pot 3');
   await expect(pot3).toBeFocused();
@@ -1778,9 +1808,7 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
 
   await showFromGear('Pot 2');
   await expect(ledByPot2).toBeFocused();
-  await expect(ledByPot2).toHaveAccessibleName(
-    /^Pot 2 \+1 more, 2 gear here: /
-  );
+  await expect(ledByPot2).toHaveAccessibleName(/^Pot 2 \+1 more here/);
   await expect(ledByPot2).toHaveAttribute('aria-current', 'true');
   await expect(shownOnMap).toHaveCount(1);
   expect(await ringed(ledByPot2)).toBe(true);
@@ -1792,14 +1820,14 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
 
   await panAway(page, pair);
   await expect(shownOnMap).toHaveCount(0);
-  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more, 2 gear here: /);
+  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more here/);
   expect(await ringed(pair)).toBe(false);
 
   await showFromGear('Pot 2');
   await expect(ledByPot2).toHaveAttribute('aria-current', 'true');
   await map.getByRole('button', { name: 'Show all gear' }).click();
   await expect(shownOnMap).toHaveCount(0);
-  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more, 2 gear here: /);
+  await expect(pair).toHaveAccessibleName(/^Pot 1 \+1 more here/);
   expect(await ringed(pair)).toBe(false);
 
   await showFromGear('Pot 2');
