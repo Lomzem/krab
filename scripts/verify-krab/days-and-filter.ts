@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './recipe';
 import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
@@ -14,7 +15,7 @@ const dropPotAt = async (page: Page, north: number, name: string) => {
     latitude: MADE_UP_SEA.latitude + north,
     longitude: MADE_UP_SEA.longitude
   });
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText(`${name} dropped`);
 };

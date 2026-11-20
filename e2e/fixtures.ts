@@ -1,4 +1,9 @@
-import { test as base, type Page, type Route } from '@playwright/test';
+import {
+  test as base,
+  type BrowserContext,
+  type Page,
+  type Route
+} from '@playwright/test';
 
 export { expect } from '@playwright/test';
 
@@ -43,46 +48,53 @@ const fulfil = (
       })
     : route.fulfill({ json: streetStyle, headers });
 
+export const serveProviders = async (
+  context: BrowserContext,
+  use: (providers: Providers) => Promise<void>
+) => {
+  let mode: 'serve' | 'cutOff' | 'refuseCors' | 'hold' = 'serve';
+  let served: unknown = STREET_STYLE;
+  const waiting: Route[] = [];
+  const answer = async (route: Route) => {
+    if (mode === 'hold') {
+      waiting.push(route);
+      return;
+    }
+    if (mode === 'serve') await fulfil(route, served);
+    else if (mode === 'refuseCors')
+      await fulfil(route, served, {
+        'access-control-allow-origin': 'https://elsewhere.example'
+      });
+    else await route.abort('internetdisconnected');
+  };
+  await context.route(NOAA, answer);
+  await context.route(OPEN_FREE_MAP, answer);
+  await use({
+    serve: (streetStyle = STREET_STYLE) => {
+      mode = 'serve';
+      served = streetStyle;
+      for (const route of waiting.splice(0)) {
+        fulfil(route, served).catch(() => undefined);
+      }
+    },
+    cutOff: () => {
+      mode = 'cutOff';
+    },
+    refuseCors: () => {
+      mode = 'refuseCors';
+    },
+    hold: () => {
+      mode = 'hold';
+    },
+    held: () => waiting.length
+  });
+};
+
 export const test = base.extend<{ providers: Providers }>({
   serviceWorkers: 'block',
   providers: [
     async ({ context }, use) => {
-      let mode: 'serve' | 'cutOff' | 'refuseCors' | 'hold' = 'serve';
-      let served: unknown = STREET_STYLE;
-      const waiting: Route[] = [];
-      const answer = async (route: Route) => {
-        if (mode === 'hold') {
-          waiting.push(route);
-          return;
-        }
-        if (mode === 'serve') await fulfil(route, served);
-        else if (mode === 'refuseCors')
-          await fulfil(route, served, {
-            'access-control-allow-origin': 'https://elsewhere.example'
-          });
-        else await route.abort('internetdisconnected');
-      };
-      await context.route(NOAA, answer);
-      await context.route(OPEN_FREE_MAP, answer);
-      await use({
-        serve: (streetStyle = STREET_STYLE) => {
-          mode = 'serve';
-          served = streetStyle;
-          for (const route of waiting.splice(0)) {
-            fulfil(route, served).catch(() => undefined);
-          }
-        },
-        cutOff: () => {
-          mode = 'cutOff';
-        },
-        refuseCors: () => {
-          mode = 'refuseCors';
-        },
-        hold: () => {
-          mode = 'hold';
-        },
-        held: () => waiting.length
-      });
+      await serveProviders(context, use);
     },
     { auto: true }
   ]

@@ -26,7 +26,9 @@
     "check:assets": "bun run scripts/check-assets.ts",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:container": "bun run scripts/e2e-container.ts"
+    "test:e2e:container": "bun run scripts/e2e-container.ts",
+    "test:recipes": "playwright test --config scripts/verify-krab.fixtures.config.ts",
+    "test:recipes:container": "bun run scripts/e2e-container.ts --config scripts/verify-krab.fixtures.config.ts"
   },
   "dependencies": {
     "@fontsource/atkinson-hyperlegible-next": "5.3.0",

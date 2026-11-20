@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './recipe';
 import AxeBuilder from '@axe-core/playwright';
 import { MADE_UP_SEA } from '../../playwright.config';
 import { toastOf } from '../../e2e/fixtures';
@@ -257,7 +258,8 @@ const settledObservation = async <T>(observe: () => Promise<T>) => {
 
 test('supplemental UI review with live maps and accessibility observations', async ({
   page,
-  context
+  context,
+  liveProviders
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(page, info, 'ui-review', 'Map');
@@ -278,7 +280,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
       latitude: MADE_UP_SEA.latitude + number * 0.001,
       accuracy: 8
     });
-    await expect(page.getByText('Position ready')).toBeVisible();
+    await expect(page.getByText('Finding position')).toBeHidden();
     await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
     await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
   }
@@ -332,7 +334,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
   expect(chartCredits.parts.length).toBeGreaterThan(0);
   for (const part of chartCredits.parts)
     expect(part.ratio, part.text).toBeGreaterThanOrEqual(4.5);
-  const group = map.getByRole('button', { name: /\. 8 gear in this area: / });
+  const group = map.getByRole('button', { name: /, 8 gear in this area: / });
   const zoomOut = map.getByRole('button', { name: 'Zoom out', exact: true });
   let outs = 0;
   await expect(async () => {
@@ -367,11 +369,11 @@ test('supplemental UI review with live maps and accessibility observations', asy
   for (let step = outs; step < 9; step += 1) await zoomOut.click();
   await capture('03-live-chart-wide');
   await map.getByRole('button', { name: 'Street map', exact: true }).click();
-  await expect(map).toContainText('OpenStreetMap');
+  if (liveProviders) await expect(map).toContainText('OpenStreetMap');
   await capture('04-live-street-wide');
   const streetCredits = await creditsContrast(page);
   keep('credits-contrast-street.json', streetCredits);
-  expect(streetCredits.parts.length).toBeGreaterThan(0);
+  if (liveProviders) expect(streetCredits.parts.length).toBeGreaterThan(0);
   for (const part of streetCredits.parts)
     expect(part.ratio, part.text).toBeGreaterThanOrEqual(4.5);
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
@@ -467,7 +469,8 @@ test('supplemental UI review with live maps and accessibility observations', asy
 
 test('Street controls after switching from Chart, right away, settled and after a pan', async ({
   page,
-  context
+  context,
+  liveProviders
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(
@@ -486,7 +489,7 @@ test('Street controls after switching from Chart, right away, settled and after 
       ];
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   const map = page.getByRole('region', { name: 'Map', exact: true });
@@ -516,7 +519,7 @@ test('Street controls after switching from Chart, right away, settled and after 
     if ((await street.getAttribute('aria-pressed')) === 'true') {
       await street.click();
       await expect(street).toHaveAttribute('aria-pressed', 'false');
-      await expect(map).not.toContainText('OpenStreetMap');
+      if (liveProviders) await expect(map).not.toContainText('OpenStreetMap');
     }
     await street.click();
     await capture(`street-${tag}-1-immediate`);
@@ -530,7 +533,7 @@ test('Street controls after switching from Chart, right away, settled and after 
       when: 'immediate',
       controls: await controlColours(page)
     });
-    await expect(map).toContainText('OpenStreetMap');
+    if (liveProviders) await expect(map).toContainText('OpenStreetMap');
     await expect(street).toHaveAttribute('aria-pressed', 'true');
     await capture(`street-${tag}-2-settled`);
     await closeUps(`street-${tag}-2-settled`);
@@ -627,7 +630,8 @@ const touches = (a: Rect, b: Rect) =>
 
 test('the newest drop stays drawn and tappable during Undo while the Offline notice shows', async ({
   page,
-  context
+  context,
+  providers
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(
@@ -645,23 +649,22 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   await page.setViewportSize(size);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  const ready = page.getByText('Position ready');
+  const finding = page.getByText('Finding position');
   await deliverFix(page, MADE_UP_SEA);
-  await expect(ready).toBeVisible();
+  await expect(finding).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await expect(map.getByRole('region', { name: 'Map view' })).toBeVisible();
+  providers?.cutOff();
   await context.setOffline(true);
   await map.getByRole('button', { name: 'Street map', exact: true }).click();
-  const notice = map
-    .getByRole('status')
-    .filter({ hasText: "Offline. The map can't load." });
+  const notice = map.getByRole('status').filter({ hasText: 'Map offline' });
   await expect(notice).toBeVisible({ timeout: 15000 });
   await deliverFix(page, {
     ...MADE_UP_SEA,
     latitude: MADE_UP_SEA.latitude - 0.02
   });
-  await expect(ready).toBeVisible();
+  await expect(finding).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
   const newest = map.getByRole('button', {
@@ -681,6 +684,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   const expired = await newest.evaluate(footprintOf);
   await capture(`newest-${tag}-2-after-undo-expires`);
   keep('newest-during-undo.json', { size, view, covers, during, expired });
+  providers?.serve();
   await context.setOffline(false);
   expect(covers.toast).not.toBeNull();
   expect(covers.notice).not.toBeNull();
@@ -706,7 +710,8 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
 
 test('a single newest drop and its time label stay clear of Undo on a fresh Chart to Street switch', async ({
   page,
-  context
+  context,
+  liveProviders
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(
@@ -725,7 +730,7 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
   await page.setViewportSize(size);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   const pin = map.getByRole('button', { name: /^Pot 1,/ });
@@ -743,7 +748,7 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
   await street.click();
   const immediate = await measure();
   await capture(`single-${tag}-1-immediate`);
-  await expect(map).toContainText('OpenStreetMap');
+  if (liveProviders) await expect(map).toContainText('OpenStreetMap');
   await settledObservation(() => pin.evaluate(footprintOf));
   const settled = await measure();
   await capture(`single-${tag}-2-settled`);
@@ -794,14 +799,14 @@ test('Trip ended leaves on its own with the real clock running', async ({
   await context.setGeolocation(MADE_UP_SEA);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.getByRole('button', { name: 'End trip' }).click();
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
-  const ended = toastOf(page).getByText('Trip ended. It is under Past trips.');
+  const ended = toastOf(page).getByText('Trip ended');
   await expect(ended).toBeVisible();
   const shownAt = Date.now();
   await capture('1-trip-ended-shown');
@@ -881,7 +886,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await holdFixes(page);
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const sheet = page.getByRole('dialog');
-  const ready = page.getByText('Position ready');
+  const finding = page.getByText('Finding position');
   const names = ['Pot 1', 'Pot 2', 'Pot 3', 'Pot 4', 'Pot 5', 'Net 1'];
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -890,7 +895,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
       latitude: MADE_UP_SEA.latitude + index * 0.0012,
       longitude: MADE_UP_SEA.longitude + index * 0.0004
     });
-    await expect(ready).toBeVisible();
+    await expect(finding).toBeHidden();
     const kind = name.startsWith('Net') ? 'Net' : 'Pot';
     await page
       .getByRole('group', { name: 'Gear to drop' })
@@ -953,7 +958,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await capture('selected-2-single-focus-moved');
 
   await deliverFix(page, MADE_UP_SEA);
-  await expect(ready).toBeVisible();
+  await expect(finding).toBeHidden();
   await page
     .getByRole('group', { name: 'Gear to drop' })
     .getByText('Pot', { exact: true })

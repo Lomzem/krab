@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './recipe';
 import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
@@ -7,7 +8,7 @@ import { MADE_UP_SEA } from '../../playwright.config';
 
 const MORNING = new Date('2031-06-10T07:30:00-04:00');
 const TRIP_DATE = 'Tuesday, June 10, 2031';
-const STILL_IN = "1 drop is still in the water. It'll be saved as uncollected.";
+const STILL_IN = '1 still in the water';
 
 test.use({ timezoneId: 'America/New_York' });
 
@@ -19,7 +20,7 @@ const fishOneMorning = async (page: Page) => {
   await page.clock.install({ time: MORNING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
+  await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page
@@ -46,9 +47,7 @@ const confirmEnd = async (page: Page) => {
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
-  await expect(toastOf(page)).toContainText(
-    'Trip ended. It is under Past trips.'
-  );
+  await expect(toastOf(page)).toContainText('Trip ended');
 };
 
 test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip on the map as a past layer', async ({
@@ -70,7 +69,7 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   );
 
   await tab(page, 'Map').click();
-  await expect(mapArea).toContainText('Trip running. 1 in the water.');
+  await expect(mapArea).toContainText('1 in the water');
   await expect(endButton).toBeVisible();
   keep('indexeddb-before.json', await readTrips(page));
   log('Map shows the running trip bar with End trip');
@@ -94,7 +93,9 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   await confirmEnd(page);
   await expect(page.getByRole('button', { name: 'Drop net' })).toBeFocused();
   await expect(endButton).toHaveCount(0);
-  await expect(mapArea).toContainText('No trip running');
+  await tab(page, 'Gear').click();
+  await expect(page.getByRole('main')).toContainText('Nothing in the water');
+  await tab(page, 'Map').click();
   const ended = await readTrips(page);
   expect(ended).toHaveLength(1);
   expect(ended[0]?.endedAt).toEqual(expect.any(Number));
@@ -104,7 +105,7 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   ]);
   keep('indexeddb-ended.json', ended);
   log(
-    'End trip in the sheet; toast Trip ended; focus on Drop net; Map says No trip running; stored endedAt set, Net 1 still uncollected'
+    'End trip in the sheet; toast Trip ended; focus on Drop net; Gear says Nothing in the water; stored endedAt set, Net 1 still uncollected'
   );
   await capture('03-ended');
 
@@ -112,7 +113,7 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
     .getByRole('group', { name: 'Also show' })
     .getByRole('checkbox', { name: 'Past trips' });
   const pastGroup = mapArea.getByRole('button', {
-    name: 'Pot 1 +1 more. 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    name: 'Pot 1 +1 more, 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
     exact: true
   });
   const showPastLayer = async (on: boolean) => {
@@ -123,7 +124,7 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
     await expect(pastGroup).toHaveCount(on ? 1 : 0);
   };
   await expect(
-    mapArea.getByRole('img', { name: /^Your position/ })
+    mapArea.getByRole('img', { name: /^Current position/ })
   ).toBeVisible();
   await expect(pastGroup).toHaveCount(0);
   await mapArea.getByRole('button', { name: /^Filter/ }).click();
@@ -208,7 +209,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   await expect(pot1).toBeVisible();
   await expect(net1).toBeVisible();
   const detailGroup = detail.getByRole('button', {
-    name: 'Pot 1 +1 more. 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
+    name: 'Pot 1 +1 more, 2 gear here: Net 1, Pot 1; 1 of 2 uncollected',
     exact: true
   });
   await expect(detailGroup).toBeVisible();
@@ -218,9 +219,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   await capture('02-detail');
 
   await net1.click();
-  await expect(sheet).toContainText(
-    'Uncollected. The trip ended with this gear in the water.'
-  );
+  await expect(sheet).toContainText('Uncollected');
   await expect(
     sheet.getByRole('button', { name: 'Collect', exact: true })
   ).toHaveCount(0);
@@ -286,7 +285,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   await sheet.getByRole('button', { name: 'Delete trip' }).click();
   await expect(sheet).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip deleted');
-  await expect(main).toContainText('No past trips yet.');
+  await expect(main).toContainText('No past trips');
   await expect(
     main.getByRole('heading', { level: 1, name: 'Past trips' })
   ).toBeFocused();

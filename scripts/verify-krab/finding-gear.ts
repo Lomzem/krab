@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './recipe';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { doctor } from './doctor';
@@ -136,7 +137,8 @@ const surfaceOf = (rgba: number[] | null) => {
 
 test('finding gear on the Map tab and from the Gear list', async ({
   page,
-  context
+  context,
+  liveProviders
 }, info) => {
   const { log, capture, keep } = recorder(page, info, 'finding-gear', 'Map');
   const requested: string[] = [];
@@ -147,8 +149,8 @@ test('finding gear on the Map tab and from the Gear list', async ({
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Position ready')).toBeVisible();
-  log('fresh context; made-up mid-ocean fix; Position ready');
+  await expect(page.getByText('Finding position')).toBeHidden();
+  log('fresh context; made-up mid-ocean fix; Finding position clears');
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   log('tap Drop pot on the Map tab; saved toast visible');
@@ -156,11 +158,13 @@ test('finding gear on the Map tab and from the Gear list', async ({
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const pot = map.getByRole('button', { name: /^Pot 1,/ });
   await expect(pot).toBeVisible();
-  await expect(map.getByRole('img', { name: /^Your position/ })).toBeVisible();
+  await expect(
+    map.getByRole('img', { name: /^Current position/ })
+  ).toBeVisible();
   await expect(map.getByRole('heading', { name: /Nearest gear/ })).toHaveText(
     /Pot 1/
   );
-  await expect(map).toContainText('Not to be used for navigation');
+  await expect(map).toContainText('not for navigation');
   log('Map shows Pot 1, my position, the nearest card and NOAA attribution');
   await capture('01-map');
 
@@ -191,7 +195,7 @@ test('finding gear on the Map tab and from the Gear list', async ({
   const street = map.getByRole('button', { name: 'Street map' });
   await street.click();
   await expect(street).toHaveAttribute('aria-pressed', 'true');
-  await expect(map).toContainText('OpenStreetMap');
+  if (liveProviders) await expect(map).toContainText('OpenStreetMap');
   await map.getByRole('button', { name: 'Centre on my position' }).click();
   await expect(pot).toBeInViewport();
   log(
@@ -205,8 +209,10 @@ test('finding gear on the Map tab and from the Gear list', async ({
 });
 
 test('NOAA chart tiles line up with a public coastline at two zooms', async ({
-  page
+  page,
+  liveProviders
 }, info) => {
+  test.skip(!liveProviders, 'needs real NOAA tiles');
   const { log, keep } = recorder(page, info, 'finding-gear', 'Alignment');
   keep('doctor.json', doctor());
   await page.goto('/');

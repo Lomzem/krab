@@ -27,11 +27,13 @@ test('a pot dropped with a granted fix is listed under Gear and survives a reloa
     .getByRole('listitem')
     .filter({ hasText: 'Pot 1' });
   const gearTab = page.getByRole('button', { name: 'Gear', exact: true });
+  const turnOnLocation = page.getByRole('button', { name: 'Turn on location' });
 
   await page.goto('/');
+  await expect(turnOnLocation).toBeVisible();
   await expectAccessibleInBothThemes(page);
 
-  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await turnOnLocation.click();
   await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
