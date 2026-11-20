@@ -8,11 +8,13 @@
     kind = $bindable('pot'),
     button = $bindable(),
     denied,
+    busy = false,
     ondrop
   }: {
     kind?: Kind;
     button?: HTMLButtonElement;
     denied: boolean;
+    busy?: boolean;
     ondrop: () => void;
   } = $props();
 
@@ -43,7 +45,8 @@
   <button
     bind:this={button}
     type="button"
-    class="flex min-h-16 min-w-0 grow-999 basis-32 touch-manipulation flex-col items-center justify-center rounded-control bg-action px-3 py-2 text-control leading-tight font-semibold text-action-foreground compact:min-h-14 compact:py-1 {FOCUS} {PRESS} active:brightness-95"
+    aria-disabled={busy || undefined}
+    class="flex min-h-16 min-w-0 grow-999 basis-32 touch-manipulation flex-col items-center justify-center rounded-control bg-action px-3 py-2 text-control leading-tight font-semibold text-action-foreground compact:min-h-14 compact:py-1 {FOCUS} {PRESS} active:brightness-95 aria-disabled:opacity-60"
     onclick={ondrop}
   >
     <span class="flex items-center gap-2">

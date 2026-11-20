@@ -391,10 +391,13 @@ test('a drop with a fresh fix shows saving feedback only once saving has taken h
   await holdStorage(page);
   await dropPot.focus();
   await page.keyboard.press('Enter');
+  await expect(dropPot).toHaveAttribute('aria-disabled', 'true');
   await page.clock.runFor(499);
   await expect(saving).toHaveCount(0);
+  await expect(dropPot).toHaveAttribute('aria-disabled', 'true');
   await releaseStorage(page);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await expect(dropPot).not.toHaveAttribute('aria-disabled', 'true');
   await page.clock.runFor(1000);
   await expect(saving).toHaveCount(0);
   await expect(dropPot).toBeFocused();
