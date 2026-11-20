@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '#lib/icon/Icon.svelte';
-  import { FOCUS, MAP_FOCUS } from './controls';
+  import { FOCUS, MAP_FOCUS, PRESS } from './controls';
   import type { CompassState } from '#lib/features/compass/index.js';
   import type {
     Base,
@@ -336,7 +336,7 @@
             <button
               bind:this={filterButton}
               type="button"
-              class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-foreground hover:bg-muted {MAP_FOCUS}"
+              class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-foreground hover:bg-muted active:bg-muted {MAP_FOCUS} {PRESS}"
               aria-haspopup="dialog"
               aria-label="Filter, showing {filterSummary}"
               onclick={() => {

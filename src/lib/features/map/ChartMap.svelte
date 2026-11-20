@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '#lib/icon/Icon.svelte';
-  import { MAP_FOCUS } from '#lib/features/on-water/controls.js';
+  import { MAP_FOCUS, PRESS } from '#lib/features/on-water/controls.js';
   import {
     Map as MapLibre,
     Marker,
@@ -676,7 +676,7 @@
       {@render controls?.()}
       <button
         type="button"
-        class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-foreground hover:bg-muted {MAP_FOCUS} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+        class="flex min-h-11 touch-manipulation items-center justify-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-foreground hover:bg-muted active:bg-muted {MAP_FOCUS} {PRESS} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
         aria-label="Street map"
         aria-pressed={base === 'street'}
         onclick={() => {
@@ -691,7 +691,7 @@
       {#if places.length > 0}
         <button
           type="button"
-          class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted {MAP_FOCUS}"
+          class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted active:bg-muted {MAP_FOCUS} {PRESS}"
           aria-label="Show all gear"
           onclick={showAll}
         >
@@ -700,7 +700,7 @@
       {/if}
       <button
         type="button"
-        class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted {MAP_FOCUS} aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent"
+        class="flex size-11 touch-manipulation items-center justify-center rounded-control text-foreground hover:bg-muted active:bg-muted {MAP_FOCUS} {PRESS} aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent aria-disabled:active:bg-transparent"
         aria-label="Centre on my position"
         aria-disabled={me?.current ? undefined : 'true'}
         onclick={() => {
@@ -864,13 +864,13 @@
 
     {#if !failed}
       <div
-        class="flex-none border-l border-border px-1"
+        class="flex-none border-l border-border px-1.5"
         bind:offsetWidth={railWidth}
       >
         <div class="flex flex-col pt-1" bind:offsetHeight={railReach}>
           <button
             type="button"
-            class="relative flex size-11 touch-manipulation items-center justify-center rounded-t-control border border-border bg-card text-foreground focus-visible:z-10 {MAP_FOCUS}"
+            class="relative flex size-11 touch-manipulation items-center justify-center rounded-t-control border border-border bg-card text-foreground focus-visible:z-10 active:bg-muted {MAP_FOCUS} {PRESS} aria-disabled:active:bg-card"
             aria-label="Zoom in"
             aria-disabled={zoom >= MAX_ZOOM}
             onclick={() => {
@@ -882,7 +882,7 @@
           </button>
           <button
             type="button"
-            class="relative -mt-px flex size-11 touch-manipulation items-center justify-center rounded-b-control border border-border bg-card text-foreground focus-visible:z-10 {MAP_FOCUS}"
+            class="relative -mt-px flex size-11 touch-manipulation items-center justify-center rounded-b-control border border-border bg-card text-foreground focus-visible:z-10 active:bg-muted {MAP_FOCUS} {PRESS} aria-disabled:active:bg-card"
             aria-label="Zoom out"
             aria-disabled={zoom <= MIN_ZOOM}
             onclick={() => {
