@@ -27,6 +27,8 @@ type PolicyCase = {
   risk: string;
 };
 const lockfile = await readFile(join(source, 'bun.lock'), 'utf8');
+const workflow = (job: string) =>
+  `on: push\njobs:\n  a:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    steps:\n      - run: true\n  b:\n    runs-on: ubuntu-24.04\n${job}    steps:\n      - run: true\n`;
 const cases: PolicyCase[] = [
   {
     name: 'HTML inert data versus typed executable script',
@@ -490,6 +492,33 @@ const cases: PolicyCase[] = [
     command: 'lint',
     diagnostic: 'em or en dash',
     risk: 'Dashes join phrases into sentences in attribute copy'
+  },
+  {
+    name: 'CI job without a time limit',
+    file: '.github/workflows/ci.yml',
+    valid: workflow('    timeout-minutes: 5\n'),
+    invalid: workflow(''),
+    command: 'lint',
+    diagnostic: 'Job b must set timeout-minutes to at most 5',
+    risk: 'A new job runs on the 6-hour GitHub default'
+  },
+  {
+    name: 'CI job over the 5-minute limit',
+    file: '.github/workflows/ci.yml',
+    valid: workflow('    timeout-minutes: 4\n'),
+    invalid: workflow('    timeout-minutes: 6\n'),
+    command: 'lint',
+    diagnostic: 'Job b must set timeout-minutes to at most 5',
+    risk: 'A slow job raises its own limit instead of splitting'
+  },
+  {
+    name: 'CI job that waits for another job',
+    file: '.github/workflows/ci.yml',
+    valid: workflow('    timeout-minutes: 5\n'),
+    invalid: workflow('    timeout-minutes: 5\n    needs: a\n'),
+    command: 'lint',
+    diagnostic: 'Job b waits for another job',
+    risk: 'Chained jobs add their limits past 5 minutes'
   },
   {
     name: 'non-mutating formatting',

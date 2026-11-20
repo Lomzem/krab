@@ -4,7 +4,14 @@ import ts from 'typescript-eslint';
 import svelte from 'eslint-plugin-svelte';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
-import krab from './scripts/ui-copy.ts';
+import * as yaml from 'yaml-eslint-parser';
+import uiCopy from './scripts/ui-copy.ts';
+import { ciTimeLimit } from './scripts/ci-time-limit.ts';
+
+const krab = {
+  meta: uiCopy.meta,
+  rules: { ...uiCopy.rules, 'ci-time-limit': ciTimeLimit }
+};
 
 const EFFECT_ONLY = [
   {
@@ -64,6 +71,12 @@ export default defineConfig([
     ignores: ['**/*.test.ts', '**/*.d.ts'],
     plugins: { krab },
     rules: { 'krab/ui-copy': 'error' }
+  },
+  {
+    files: ['.github/workflows/*.{yml,yaml}'],
+    languageOptions: { parser: yaml },
+    plugins: { krab },
+    rules: { 'krab/ci-time-limit': 'error' }
   },
   {
     files: ['e2e/**/*.test.ts'],

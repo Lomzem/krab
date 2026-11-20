@@ -11,6 +11,7 @@ const fixtures = { liveProviders: false };
 export default defineConfig<ProviderSource>({
   ...journeys,
   testMatch: undefined,
+  workers: undefined,
   outputDir: '../test-results/verify-recipes/artifacts',
   reporter: 'list',
   projects: [
