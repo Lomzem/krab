@@ -322,7 +322,7 @@
     now = Date.now();
     mapFilter = filterToShow(mapFilter, water.trip, target, now);
     showOnMap = target.id;
-    tab = 'map';
+    void switchTo('map');
     closeSheet();
   };
 
