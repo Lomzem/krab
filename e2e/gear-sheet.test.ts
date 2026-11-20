@@ -324,6 +324,55 @@ test('while a sheet action is storing, the sheet ignores its other actions, and 
   await expect(label).toHaveValue('blue buoy');
 });
 
+type LastWrite = { lastWrite?: IDBTransaction };
+
+const recordWrites = (page: Page) =>
+  page.addInitScript(() => {
+    const database = IDBDatabase.prototype;
+    const begin = Reflect.get(database, 'transaction') as (
+      this: IDBDatabase,
+      ...args: unknown[]
+    ) => IDBTransaction;
+    Reflect.set(
+      database,
+      'transaction',
+      function (this: IDBDatabase, ...args: unknown[]) {
+        const tx = Reflect.apply(begin, this, args);
+        if (tx.mode === 'readwrite') (window as LastWrite).lastWrite = tx;
+        return tx;
+      }
+    );
+  });
+
+test('a Save that fails after Escape closed its sheet says so in a message', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const save = sheet.getByRole('button', { name: 'Save' });
+
+  await recordWrites(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+
+  await gearRow(page, 'Pot 1').click();
+  await sheet.getByLabel('Label').fill('red float');
+  await holdStorage(page);
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await page.evaluate(() => {
+    (window as LastWrite).lastWrite?.abort();
+  });
+  await releaseStorage(page);
+
+  await expect(toastOf(page)).toContainText("Couldn't save Pot 1");
+});
+
 test('on a 320 by 640 screen, tabbing from corrected Depth through Label and Bait after a refused Save shows all of Notes clear of the footer, and multiline notes save and reload intact', async ({
   page
 }) => {

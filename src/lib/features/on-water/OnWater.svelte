@@ -275,17 +275,23 @@
 
   const operate = async <A,>(
     work: () => Promise<A>,
-    settle: (result: A) => SaveProblem | null
+    settle: (result: A) => SaveProblem | null,
+    closed: (outcome: { result: A } | null) => void = () => {}
   ) => {
     const origin = sheet;
     if (!origin || busy) return;
     operation = { sheet: origin, pending: true, problem: null };
-    const settled = await work().then(
-      (result) => () => settle(result),
-      () => (): SaveProblem => 'storage'
+    const outcome = await work().then(
+      (result) => ({ result }),
+      () => null
     );
     if (operation.sheet !== origin) return;
-    const problem = sheet === origin ? settled() : null;
+    if (sheet !== origin) {
+      operation = { sheet: origin, pending: false, problem: null };
+      closed(outcome);
+      return;
+    }
+    const problem = outcome ? settle(outcome.result) : 'storage';
     operation = { sheet: origin, pending: false, problem };
   };
 
@@ -295,7 +301,14 @@
   };
 
   const save = (dropId: string, edit: DropEdit, nextKind: Kind | null) => {
-    void operate(() => water.save(dropId, edit, nextKind), closeWhenSaved);
+    const name = subject?.name;
+    void operate(
+      () => water.save(dropId, edit, nextKind),
+      closeWhenSaved,
+      (outcome) => {
+        if (outcome?.result !== null && name) water.saveLost(name);
+      }
+    );
   };
 
   const show = (target: Drop) => {
