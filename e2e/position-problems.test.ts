@@ -122,7 +122,7 @@ test('while getting a position, Cancel and Save without position are reachable 4
 
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Getting position' })
+    page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeFocused();
   const cancel = page.getByRole('button', { name: 'Cancel' });
   const save = page.getByRole('button', { name: 'Save without position' });
@@ -143,9 +143,9 @@ const resume = () => {
   document.dispatchEvent(new Event('visibilitychange'));
 };
 
-const gettingPositionShown = async (page: Page) => {
+const findingDropPositionShown = async (page: Page) => {
   await page.clock.runFor(0);
-  return page.getByRole('heading', { name: 'Getting position' }).count();
+  return page.getByRole('heading', { name: 'Finding drop position' }).count();
 };
 
 test('Finding position returns just after 5 seconds or on resume with a stale fix, and a drop waits', async ({
@@ -177,7 +177,61 @@ test('Finding position returns just after 5 seconds or on resume with a stale fi
   await expect(finding).toBeVisible();
 
   await page.getByRole('button', { name: 'Drop pot' }).click();
-  await expect.poll(() => gettingPositionShown(page)).toBe(1);
+  await expect.poll(() => findingDropPositionShown(page)).toBe(1);
+});
+
+test('a drop with no fix within 5 seconds saves without a position by itself, and a later fix never moves it', async ({
+  page
+}) => {
+  await holdFixes(page);
+  await page.clock.install({ time: START });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeVisible();
+  await page.clock.pauseAt(PAUSED);
+  const dropPot = page.getByRole('button', { name: 'Drop pot' });
+  const waiting = page.getByRole('heading', { name: 'Finding drop position' });
+
+  await dropPot.click();
+  await expect(waiting).toBeFocused();
+  await page.clock.runFor(4999);
+  await expect(waiting).toBeVisible();
+  await expect(toastOf(page)).toBeHidden();
+
+  await page.clock.runFor(1);
+  await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
+  await expect(waiting).toHaveCount(0);
+  await expect(dropPot).toBeFocused();
+
+  await deliverFix(page, MADE_UP_SEA, new Date('2031-03-04T06:00:05.500Z'));
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await dropPot.click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await expect(toastOf(page)).not.toContainText('no position');
+
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const row = (name: string) =>
+    page.getByRole('main').getByRole('listitem').filter({ hasText: name });
+  await expect(row('Pot 1')).toContainText('No position');
+  await expect(row('Pot 2')).not.toContainText('No position');
+});
+
+test('a fix taken just inside 5 seconds after the tap places the drop', async ({
+  page
+}) => {
+  await holdFixes(page);
+  await page.clock.install({ time: START });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeVisible();
+  await page.clock.pauseAt(PAUSED);
+
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await page.clock.runFor(4999);
+  await deliverFix(page, MADE_UP_SEA, new Date('2031-03-04T06:00:04.999Z'));
+
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await expect(toastOf(page)).not.toContainText('no position');
 });
 
 test('once a fix arrives, Cancel and Save without position give way to saving feedback at once, until the drop is saved', async ({
@@ -191,7 +245,7 @@ test('once a fix arrives, Cancel and Save without position give way to saving fe
   await page.clock.pauseAt(PAUSED);
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Getting position' })
+    page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeFocused();
 
   await holdStorage(page);

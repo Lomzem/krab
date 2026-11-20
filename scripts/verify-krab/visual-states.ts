@@ -75,12 +75,12 @@ test('visual inventory through a dense overnight trip', async ({
   await capture('05-empty-map');
   await tab('Drop pot').click();
   await expect(
-    page.getByRole('heading', { name: 'Getting position' })
+    page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeVisible();
   await capture('05b-getting-position');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Getting position' })
+    page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeHidden();
   log(
     'first-launch explanation, finding position, empty Gear, Past trips and Map'

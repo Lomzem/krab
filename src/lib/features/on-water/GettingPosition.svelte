@@ -13,7 +13,7 @@
 
 <section
   class="grid gap-3 border-t border-border bg-card p-4"
-  aria-labelledby="getting-position-title"
+  aria-labelledby="finding-drop-position-title"
 >
   <div class="flex items-center gap-3">
     <span
@@ -21,12 +21,12 @@
       aria-hidden="true"
     ></span>
     <h2
-      id="getting-position-title"
+      id="finding-drop-position-title"
       bind:this={heading}
       tabindex="-1"
       class="text-[18px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      Getting position
+      Finding drop position
     </h2>
   </div>
   <div class="grid grid-cols-2 gap-2">

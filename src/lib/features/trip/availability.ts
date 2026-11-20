@@ -19,3 +19,14 @@ export const availability = (
   }
   return { kind: 'finding' };
 };
+
+export const dropDeadline = (tapAt: number) => tapAt + FRESH_FIX_MS;
+
+export const availabilityForDrop = (
+  sighting: Sighting,
+  tapAt: number,
+  now: number
+): Availability =>
+  now >= dropDeadline(tapAt)
+    ? { kind: 'finding' }
+    : availability(sighting, tapAt);

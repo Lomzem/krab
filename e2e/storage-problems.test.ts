@@ -132,7 +132,7 @@ test('a double tap while storage is still opening makes one drop attempt, and it
       button.click();
     });
   await expect(
-    page.getByRole('heading', { name: 'Getting position' })
+    page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeFocused();
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(toastOf(page)).toContainText('Drop cancelled');
