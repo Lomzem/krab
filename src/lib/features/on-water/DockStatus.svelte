@@ -99,20 +99,26 @@
         <span class={LINE_2} aria-hidden="true">Nearest</span>
       {/if}
     </span>
-    <span class="flex flex-none items-center gap-1.5">
-      <span class="text-title font-semibold whitespace-nowrap tabular-nums"
-        ><span aria-hidden="true"
-          >{direction.distance} {direction.pointShort}</span
-        ><span class="sr-only"
-          >, {direction.distanceSpoken} {direction.point}</span
-        ></span
+    {#if Math.round(direction.feet) === 0}
+      <span class="flex-none text-title font-semibold whitespace-nowrap"
+        ><span class="sr-only">, </span>At gear</span
       >
-      <span class="size-6 flex-none text-foreground">
-        {#if compass.kind === 'usable'}
-          <BearingArrow degrees={arrowDeg(direction.bearingDeg, compass)} />
-        {/if}
+    {:else}
+      <span class="flex flex-none items-center gap-1.5">
+        <span class="text-title font-semibold whitespace-nowrap tabular-nums"
+          ><span aria-hidden="true"
+            >{direction.distance} {direction.pointShort}</span
+          ><span class="sr-only"
+            >, {direction.distanceSpoken} {direction.point}</span
+          ></span
+        >
+        <span class="size-6 flex-none text-foreground">
+          {#if compass.kind === 'usable'}
+            <BearingArrow degrees={arrowDeg(direction.bearingDeg, compass)} />
+          {/if}
+        </span>
       </span>
-    </span>
+    {/if}
   </button>
 {:else}
   <p class="flex min-h-14 w-full flex-col justify-center px-4 py-1">
