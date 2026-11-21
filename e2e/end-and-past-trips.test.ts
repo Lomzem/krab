@@ -81,7 +81,9 @@ test('ending a mixed trip preserves collected and uncollected gear on the main m
     name: 'End trip'
   });
   await endButton.click();
-  await expect(sheet).toHaveAccessibleDescription('1 still in the water');
+  await expect(sheet).toHaveAccessibleDescription(
+    '1 still in the water Kept in Past trips'
+  );
   await expect(
     sheet.getByRole('button', { name: 'Keep trip going' })
   ).toBeFocused();
@@ -392,4 +394,58 @@ test('past trips show what was just written even while storage reads fail, and h
   await main.getByRole('button', { name: 'Retry' }).click();
   await expect(pastTrip).toBeVisible();
   await expect(main).not.toContainText("Couldn't load past trips");
+});
+
+test('ending a trip with gear in the water says it is kept in Past trips and View ended trip opens that trip', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const main = page.getByRole('main');
+  const viewEnded = main.getByRole('button', { name: 'View ended trip' });
+
+  await startMixedTrip(page);
+  await tab(page, 'Gear').click();
+  await main.getByRole('button', { name: 'End trip' }).click();
+  await expect(sheet).toHaveAccessibleDescription(
+    '1 still in the water Kept in Past trips'
+  );
+  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(main).toContainText('Nothing in the water');
+  await expect(viewEnded).toBeVisible();
+  await expectAccessibleInBothThemes(page);
+
+  await viewEnded.click();
+  const detail = page.getByRole('region', { name: TRIP_DATE });
+  await expect(
+    detail.getByRole('heading', { level: 1, name: TRIP_DATE })
+  ).toBeFocused();
+  await expect(
+    detail.getByRole('button', { name: 'Net 1 Uncollected', exact: true })
+  ).toBeVisible();
+
+  await detail.getByRole('button', { name: 'Delete trip' }).click();
+  await sheet.getByRole('button', { name: 'Delete trip' }).click();
+  await expect(sheet).toBeHidden();
+  await tab(page, 'Gear').click();
+  await expect(viewEnded).toHaveCount(0);
+
+  await tab(page, 'Map').click();
+  await dropOf(page, 'Pot', 'Pot 1');
+  await tab(page, 'Gear').click();
+  await main.getByRole('button').filter({ hasText: 'Pot 1' }).click();
+  await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await main.getByRole('button', { name: 'End trip' }).click();
+  await expect(sheet).toHaveAccessibleDescription('Kept in Past trips');
+  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(viewEnded).toBeVisible();
+
+  await tab(page, 'Map').click();
+  await dropOf(page, 'Pot', 'Pot 1');
+  await toastOf(page).getByRole('button', { name: 'Undo' }).click();
+  await tab(page, 'Gear').click();
+  await expect(viewEnded).toHaveCount(0);
 });

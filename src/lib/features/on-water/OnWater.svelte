@@ -96,6 +96,7 @@
   let endButton = $state<HTMLButtonElement>();
   let endOpen = $state(false);
   let ending = $state(false);
+  let endedTripId = $state<string | null>(null);
   let pastTripId = $state<string | null>(null);
   let pastHeading = $state<HTMLHeadingElement>();
   let pastShow = $state<string | null>(null);
@@ -150,6 +151,16 @@
         )?.direction ?? null)
       : null
   );
+
+  const endedTrip = $derived(
+    !water.trip && endedTripId
+      ? (water.past.find((item) => item.id === endedTripId) ?? null)
+      : null
+  );
+
+  $effect(() => {
+    if (water.trip) endedTripId = null;
+  });
 
   $effect(() => {
     const timer = setInterval(() => {
@@ -372,7 +383,18 @@
     ending = true;
     const ended = await water.endTrip(trip.id);
     ending = false;
-    if (ended) endOpen = false;
+    if (ended) {
+      endedTripId = trip.id;
+      endOpen = false;
+    }
+  };
+
+  const viewEndedTrip = async () => {
+    if (!endedTrip) return;
+    pastTripId = endedTrip.id;
+    await switchTo('trips');
+    await tick();
+    pastHeading?.focus();
   };
 
   const endReturnFocus = () =>
@@ -458,6 +480,8 @@
           onend={() => {
             endOpen = true;
           }}
+          endedTrip={endedTrip !== null}
+          onviewended={() => void viewEndedTrip()}
           bind:endButton
           bind:heading={gearHeading}
         />
