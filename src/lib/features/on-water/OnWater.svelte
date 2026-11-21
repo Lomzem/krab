@@ -462,6 +462,11 @@
             ? water.notice.offer.dropId
             : null}
         />
+      {:else}
+        <section aria-labelledby="map-title">
+          <h1 id="map-title" class="sr-only">Map</h1>
+          <p class="px-4 pt-4 text-base text-muted-foreground">Loading trip</p>
+        </section>
       {/if}
     {:else if tab === 'gear'}
       {#if water.load === 'failed'}
@@ -485,6 +490,11 @@
           bind:endButton
           bind:heading={gearHeading}
         />
+      {:else}
+        <header class="px-4 pt-3 pb-2">
+          <h1 class="text-display font-semibold">Gear</h1>
+        </header>
+        <p class="px-4 text-base text-muted-foreground">Loading trip</p>
       {/if}
     {:else if water.load !== 'opening'}
       <PastTrips
@@ -623,6 +633,7 @@
           <DockStatus
             screen={tab}
             status={dockStatus}
+            loaded={water.load === 'ready'}
             trip={water.trip}
             {nearest}
             compass={$compass}
