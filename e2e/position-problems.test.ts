@@ -248,6 +248,126 @@ test('a stale fix shows as Last position with no distances, and Centre on my pos
   await expect(centre).not.toHaveAttribute('aria-disabled');
 });
 
+test('Drop again from a sheet on Gear shows Finding position with Cancel and Save without position on Gear', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const gearTab = page.getByRole('button', { name: 'Gear', exact: true });
+
+  await holdFixes(page);
+  await page.clock.install({ time: START });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await page.clock.pauseAt(PAUSED);
+  await deliverFix(page, MADE_UP_SEA, PAUSED);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+
+  await gearTab.click();
+  await page
+    .getByRole('main')
+    .getByRole('button')
+    .filter({ hasText: 'Pot 1' })
+    .click();
+  await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+  await page.clock.runFor(5001);
+  await sheet.getByRole('button', { name: 'Drop pot again here' }).click();
+
+  await expect(sheet).toBeHidden();
+  await expect(gearTab).toHaveAttribute('aria-current', 'page');
+  await expect(
+    page.getByRole('heading', { name: 'Finding drop position' })
+  ).toBeFocused();
+  const cancel = page.getByRole('button', { name: 'Cancel' });
+  const save = page.getByRole('button', { name: 'Save without position' });
+  await expectTouchTarget(cancel);
+  await expectTouchTarget(save);
+
+  await save.click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
+  await expect(
+    page.getByRole('heading', { name: 'Gear', level: 1 })
+  ).toBeFocused();
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('button')
+      .filter({ hasText: 'Pot 1' })
+      .filter({ hasText: 'in the water' })
+  ).toContainText('No position');
+});
+
+test('a stale fix says Finding position on Gear and in an open sheet, and distances return with a fresh fix', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const away = { ...MADE_UP_SEA, latitude: MADE_UP_SEA.latitude + 0.001 };
+
+  await holdFixes(page);
+  await page.clock.install({ time: START });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await page.clock.pauseAt(PAUSED);
+  await deliverFix(page, MADE_UP_SEA, PAUSED);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.clock.runFor(8001);
+  await expect(toastOf(page)).toBeHidden();
+
+  const later = new Date(PAUSED.getTime() + 8001);
+  await deliverFix(page, away, later);
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const row = page
+    .getByRole('main')
+    .getByRole('button')
+    .filter({ hasText: 'Pot 1' });
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await expect(row).toContainText('ft');
+
+  await row.click();
+  const statusRow = sheet
+    .locator('form > div > div')
+    .filter({ hasText: 'in the water' });
+  await expect(statusRow).toContainText('ft');
+  const readyHeight = (await statusRow.boundingBox())?.height;
+
+  await page.clock.runFor(5001);
+  await expect(statusRow.getByText('Finding position')).toBeVisible();
+  await expect(statusRow).not.toContainText('ft');
+  expect((await statusRow.boundingBox())?.height).toBe(readyHeight);
+
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(page.getByText('Finding position')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /^Nearest gear: / })
+  ).toHaveCount(0);
+
+  await deliverFix(page, away, new Date(later.getTime() + 5001));
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await expect(row).toContainText('ft');
+
+  await row.click();
+  await expect(sheet).toContainText('ft');
+  await expect(sheet.getByText('Finding position')).toBeHidden();
+
+  await denyLocation(page);
+  await expect(sheet.getByText('Location is off')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('button', { name: 'Drop pot without position' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped, no position');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page
+    .getByRole('main')
+    .getByRole('button')
+    .filter({ hasText: 'Pot 2' })
+    .click();
+  await expect(sheet.getByText('No position')).toBeVisible();
+});
+
 for (const width of [320, 393]) {
   test(`at ${String(width)} px wide, location turned off after a fix hides my position, and Drop says it saves without one in the same 64 px box`, async ({
     page

@@ -66,7 +66,19 @@
       }}>Show steps</button
     >
   </section>
-{:else if screen === 'gear'}{:else if status?.kind === 'finding'}
+{:else if screen === 'gear'}
+  {#if status?.kind === 'finding'}
+    <p
+      class="flex min-h-14 w-full items-center gap-2 px-4 py-1 text-sm text-muted-foreground"
+    >
+      <span
+        class="size-2 rounded-full border-2 border-muted-foreground"
+        aria-hidden="true"
+      ></span>
+      Finding position
+    </p>
+  {/if}
+{:else if status?.kind === 'finding'}
   <p class="flex min-h-14 w-full flex-col justify-center px-4 py-1">
     <span class={LINE_1}>{count}</span>
     <span class={LINE_2}>

@@ -125,11 +125,17 @@
   const nearest = $derived(
     water.trip ? nearestGear(gearInWater(water.trip, readiness.fix, now)) : null
   );
+  const panelShown = $derived(
+    tab === 'map' ||
+      (tab === 'gear' && (water.pending?.phase === 'acquiring' || savingShown))
+  );
   const rowShown = $derived(
     tab === 'map' ||
       water.notice !== null ||
-      (tab === 'gear' && rowStatus?.kind === 'denied')
+      (tab === 'gear' &&
+        (dockStatus?.kind === 'denied' || dockStatus?.kind === 'finding'))
   );
+  const dockShown = $derived(rowShown || panelShown);
   const sheetDirection = $derived(
     subject && water.trip
       ? (gearInWater(water.trip, readiness.fix, now).find(
@@ -216,7 +222,7 @@
     if (!saved || !dropReplaced) return;
     dropReplaced = false;
     await tick();
-    dropButton?.focus();
+    restingFocus()?.focus();
   };
 
   const drop = () => {
@@ -270,6 +276,7 @@
         );
 
   const sheetReturnFocus = () => {
+    if (water.pending?.phase === 'acquiring' || savingShown) return null;
     if (showOnMap !== null) return mapTabButton;
     if (pastShowNext !== null) {
       pastShow = pastShowNext;
@@ -506,13 +513,19 @@
         >
       {/if}
     {/snippet}
-    {#snippet direction()}
+    {#snippet direction(target: Drop)}
       {#if sheetDirection}
         <DirectionCue
           direction={sheetDirection}
           compass={$compass}
           ontoggle={toggleCompass}
         />
+      {:else if !target.position}
+        <p class="text-sm text-muted-foreground">No position</p>
+      {:else if readiness.status.kind === 'denied'}
+        <p class="text-sm text-muted-foreground">Location is off</p>
+      {:else if readiness.status.kind === 'finding'}
+        <p class="text-sm text-muted-foreground">Finding position</p>
       {/if}
     {/snippet}
     {#snippet endAction(
@@ -568,11 +581,11 @@
   <div
     class={[
       'grid grid-cols-1 border-t border-border bg-card',
-      !rowShown && 'hidden',
-      tab !== 'map' && 'pb-[env(safe-area-inset-bottom,0px)]'
+      !dockShown && 'hidden',
+      !panelShown && 'pb-[env(safe-area-inset-bottom,0px)]'
     ]}
   >
-    {#if tab === 'map'}
+    {#if panelShown}
       <div
         class="row-start-2 grid min-h-20 content-center px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] compact:min-h-18 compact:py-1 compact:pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]"
       >
@@ -586,7 +599,7 @@
           />
         {:else if savingShown}
           <SavingDrop />
-        {:else if explained}
+        {:else if tab === 'map' && explained}
           <section aria-label="Drop gear">
             <DropControl
               bind:kind
@@ -596,12 +609,18 @@
               ondrop={drop}
             />
           </section>
-        {:else}
+        {:else if tab === 'map'}
           <LocationIntro onallow={allowLocation} />
         {/if}
       </div>
     {/if}
-    <div class={['row-start-1', tab === 'map' && 'border-b border-border']}>
+    <div
+      class={[
+        'row-start-1',
+        panelShown && rowShown && 'border-b border-border',
+        !rowShown && 'hidden'
+      ]}
+    >
       <DockRow
         notice={water.notice}
         onundo={undo}

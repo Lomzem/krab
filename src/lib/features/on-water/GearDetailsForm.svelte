@@ -133,7 +133,7 @@
   {:else if collectedAt === null}
     <div class="grid gap-3">
       <div
-        class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2"
+        class="flex min-h-15 flex-wrap items-center justify-between gap-x-3 gap-y-2"
       >
         <p class="text-sm text-muted-foreground">
           <span aria-hidden="true">{inWater.short} in the water</span>
