@@ -1,4 +1,4 @@
-import type { BrowserContext, Locator, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page, Route } from '@playwright/test';
 import {
   expect,
   storedDropNames,
@@ -169,7 +169,8 @@ const chartMapButton = (page: Page) =>
   mapArea(page).getByRole('button', { name: 'Chart map' });
 const outageNotice = (page: Page, shown: string | RegExp) =>
   mapArea(page).getByRole('status').filter({ hasText: shown });
-const cannotLoad = (page: Page) => outageNotice(page, /^Map can't load$/);
+const cannotLoad = (page: Page) =>
+  outageNotice(page, /^Map can't load(?:\s*Retry map)?$/);
 const offline = (page: Page) => outageNotice(page, 'Map offline');
 const claimsACause = (page: Page) =>
   outageNotice(page, /Map offline|Map service not answering/);
@@ -286,6 +287,9 @@ test('while the browser is offline the Map tab says so for map tiles and the Str
   await streetMapButton(page).click();
   await expect(streetMapButton(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(offline(page)).toBeVisible();
+  await expect(
+    mapArea(page).getByRole('button', { name: 'Retry map' })
+  ).toHaveCount(0);
   await expect(cannotLoad(page)).toHaveCount(0);
   await expect(potOnMap(page)).toBeVisible();
   await expect(myPosition(page)).toBeVisible();
@@ -301,32 +305,54 @@ test('while the browser is offline the Map tab says so for map tiles and the Str
   await expect(potOnMap(page)).toBeVisible();
 });
 
-test('when NOAA answers map tiles busy or failing, the Map tab reports that the service is not answering, still shows gear and clears once a map tile arrives', async ({
+test('when NOAA answers map tiles busy or failing, the Map tab reports that the service is not answering, offers Retry map, still shows gear and clears once a map tile arrives', async ({
   context,
   page
 }) => {
-  let failWith: number | null = null;
+  const requested: string[] = [];
+  context.on('request', (request) => requested.push(request.url()));
+  let mode: number | 'hold' | null = null;
+  let held: Route[] = [];
   await context.route(CHART_TILE, async (route) => {
-    if (failWith === null) {
+    if (mode === null) {
       await route.fallback();
       return;
     }
-    await route.fulfill({ status: failWith, headers: CORS });
+    if (mode === 'hold') {
+      held.push(route);
+      return;
+    }
+    await route.fulfill({ status: mode, headers: CORS });
   });
   await dropPotAndOpenMap(page);
+  const retryMap = mapArea(page).getByRole('button', { name: 'Retry map' });
 
   for (const status of [429, 503]) {
-    failWith = status;
+    mode = status;
     await reconnect(context);
     await expect(notAnswering(page)).toBeVisible();
+    await expect(retryMap).toBeVisible();
     await expect(cannotLoad(page)).toHaveCount(0);
     await expect(offline(page)).toHaveCount(0);
     await expect(potOnMap(page)).toBeVisible();
     await expect(myPosition(page)).toBeVisible();
-    failWith = null;
-    await reconnect(context);
+    mode = 'hold';
+    const before = requested.length;
+    await retryMap.click();
+    await expect.poll(() => held.length).toBeGreaterThan(0);
+    mode = null;
+    const release = held;
+    held = [];
+    for (const route of release) await route.fallback();
     await expect(notAnswering(page)).toBeHidden();
+    await expect(retryMap).toHaveCount(0);
+    const retried = requested
+      .slice(before)
+      .filter((url) => url.includes('charttools'));
+    expect(retried.length).toBeGreaterThan(0);
+    for (const url of retried) expect(url).toMatch(CHART_TILE);
   }
+  expectNoPositionIn(requested);
 });
 
 test('a Street style the map service refuses or the map cannot use falls back to the plain map saying the service is not answering, gear still shown and no page error', async ({
@@ -448,12 +474,18 @@ test('a Street style that has not arrived after 10 seconds is cancelled and says
   await page.clock.install();
   await dropPotAndOpenMap(page);
 
+  const loading = outageNotice(page, 'Loading map');
+  const retryMap = mapArea(page).getByRole('button', { name: 'Retry map' });
   providers.hold();
   await streetMap.click();
   await expect.poll(() => providers.held()).toBeGreaterThan(0);
+  await expect(loading).toBeVisible();
+  await expect(retryMap).toHaveCount(0);
   await page.clock.fastForward(10_000);
   await expect.poll(() => cancelled.length).toBe(1);
+  await expect(loading).toHaveCount(0);
   await expect(cannotLoad(page)).toBeVisible();
+  await expect(retryMap).toBeVisible();
   await expect(claimsACause(page)).toHaveCount(0);
   await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
   await expect(potOnMap(page)).toBeVisible();
