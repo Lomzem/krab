@@ -605,6 +605,8 @@
               bind:kind
               bind:button={dropButton}
               denied={readiness.status.kind === 'denied'}
+              finding={water.notice !== null &&
+                readiness.status.kind === 'finding'}
               busy={water.pending !== null}
               ondrop={drop}
             />

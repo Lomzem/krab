@@ -402,6 +402,44 @@ for (const width of [320, 393]) {
   });
 }
 
+test("a fix that goes stale under a drop's Undo toast says Finding position on Drop in the same 64 px box", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await holdFixes(page);
+  await page.clock.install({ time: START });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await page.clock.pauseAt(PAUSED);
+  await deliverFix(page, MADE_UP_SEA, PAUSED);
+
+  const ready = page.getByRole('button', { name: 'Drop pot', exact: true });
+  const finding = page.getByRole('button', {
+    name: 'Drop pot Finding position',
+    exact: true
+  });
+  const readyBox = await ready.boundingBox();
+  expect(readyBox?.height).toBe(64);
+
+  await ready.click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.mouse.move(0, 0);
+
+  await page.clock.runFor(4999);
+  await expect(ready).toBeVisible();
+
+  await page.clock.runFor(2);
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await expect(finding).toBeVisible();
+  expect(await finding.boundingBox()).toEqual(readyBox);
+
+  await page.clock.runFor(3000);
+  await expect(toastOf(page)).toBeHidden();
+  await expect(ready).toBeVisible();
+  await expect(finding).toHaveCount(0);
+  await expect(page.getByText('Finding position')).toBeVisible();
+});
+
 test('a drop with no fix within 5 seconds saves without a position by itself, and a later fix never moves it', async ({
   page
 }) => {

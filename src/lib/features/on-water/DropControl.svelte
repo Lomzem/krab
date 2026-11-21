@@ -8,12 +8,14 @@
     kind = $bindable('pot'),
     button = $bindable(),
     denied,
+    finding = false,
     busy = false,
     ondrop
   }: {
     kind?: Kind;
     button?: HTMLButtonElement;
     denied: boolean;
+    finding?: boolean;
     busy?: boolean;
     ondrop: () => void;
   } = $props();
@@ -55,6 +57,8 @@
     </span>
     {#if denied}
       <span class="text-sm font-medium">without position</span>
+    {:else if finding}
+      <span class="text-sm font-medium">Finding position</span>
     {/if}
   </button>
 </div>
