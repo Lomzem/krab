@@ -11,7 +11,7 @@
     id="location-intro-title"
     class="min-w-0 flex-1 basis-32 text-control font-semibold"
   >
-    Krab needs location
+    Mark and find gear
   </h2>
   <button
     type="button"

@@ -40,7 +40,7 @@ test('visual inventory through a dense overnight trip', async ({
   await page.clock.pauseAt(EVENING);
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: 'Krab needs location' })
+    page.getByRole('heading', { name: 'Mark and find gear' })
   ).toBeVisible();
   await capture('01-location-explanation');
   await page.getByRole('button', { name: 'Turn on location' }).click();

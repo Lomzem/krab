@@ -21,7 +21,7 @@ test('placing a drop from Map survives reload', async ({
   log('evidence read before Krab starts rejects and creates no database');
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: 'Krab needs location' })
+    page.getByRole('heading', { name: 'Mark and find gear' })
   ).toBeVisible();
   await capture('01-location-explanation');
   log(
