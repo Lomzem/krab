@@ -619,6 +619,27 @@ test('with the page zoomed up to 200% on 320 and 393 wide screens in both themes
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeHidden();
+  for (const [width, height] of [
+    [320, 640],
+    [393, 852]
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await kinds.getByText('Pot', { exact: true }).click();
+    await expect(dropButton).toHaveAccessibleName('Drop pot');
+    const group = await kinds.boundingBox();
+    const net = await kinds.getByText('Net', { exact: true }).boundingBox();
+    expect(group).not.toBeNull();
+    expect(net).not.toBeNull();
+    expect((net?.y ?? 0) + (net?.height ?? 0)).toBeGreaterThanOrEqual(
+      (group?.y ?? 0) + (group?.height ?? 0) - 5
+    );
+    await page.touchscreen.tap(
+      (net?.x ?? 0) + (net?.width ?? 0) / 2,
+      (net?.y ?? 0) + (net?.height ?? 0) - 6
+    );
+    await expect(dropButton).toHaveAccessibleName('Drop net');
+  }
+  await kinds.getByText('Pot', { exact: true }).click();
   const steps = [];
   for (const width of [320, 393])
     for (const colorScheme of ['light', 'dark'] as const)

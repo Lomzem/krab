@@ -28,7 +28,7 @@
     <legend class="sr-only">Gear to drop</legend>
     {#each KINDS as option (option)}
       <label
-        class="flex min-w-16 flex-1 cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-[0.3125rem] px-2 text-base font-medium whitespace-nowrap text-muted-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-sm {CHOICE_FOCUS_INSET}"
+        class="flex min-h-14 min-w-16 flex-1 cursor-pointer touch-manipulation items-center justify-center gap-1 self-stretch rounded-[0.3125rem] px-2 text-base font-medium whitespace-nowrap text-muted-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-sm compact:min-h-12 {CHOICE_FOCUS_INSET}"
       >
         <input
           class="sr-only"
