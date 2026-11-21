@@ -38,6 +38,11 @@
   const direction = $derived(
     status?.kind === 'ready' ? (nearest?.direction ?? null) : null
   );
+  let pressedDropId: string | null = null;
+
+  $effect(() => {
+    if (!nearest) pressedDropId = null;
+  });
 </script>
 
 {#snippet roughLine()}
@@ -94,8 +99,17 @@
     type="button"
     class="flex min-h-14 w-full touch-manipulation items-center gap-3 py-1 pr-3 pl-4 text-left {FOCUS_INSET} {PRESS} active:bg-muted"
     data-drop={nearest.drop.id}
+    onpointerdown={() => {
+      pressedDropId = nearest.drop.id;
+    }}
+    onpointercancel={() => {
+      pressedDropId = null;
+    }}
     onclick={(event) => {
-      onopen(nearest.drop.id, event.currentTarget);
+      const target =
+        event.detail > 0 && pressedDropId ? pressedDropId : nearest.drop.id;
+      pressedDropId = null;
+      onopen(target, event.currentTarget);
     }}
   >
     <span class="flex-none text-foreground"

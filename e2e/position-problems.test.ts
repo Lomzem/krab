@@ -440,6 +440,56 @@ test("a fix that goes stale under a drop's Undo toast says Finding position on D
   await expect(page.getByText('Finding position')).toBeVisible();
 });
 
+test('a touch on the nearest gear opens that gear even when a new fix makes other gear nearest before release', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const nearest = page.getByRole('button', { name: /^Nearest gear: / });
+  const pot2Pos = { ...MADE_UP_SEA, latitude: MADE_UP_SEA.latitude + 0.002 };
+  const nearPot1 = { ...MADE_UP_SEA, latitude: MADE_UP_SEA.latitude + 0.0002 };
+  const nearPot2 = { ...MADE_UP_SEA, latitude: MADE_UP_SEA.latitude + 0.0019 };
+
+  await holdFixes(page);
+  await page.clock.install({ time: START });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await page.clock.pauseAt(PAUSED);
+
+  await deliverFix(page, MADE_UP_SEA, PAUSED);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+
+  await deliverFix(page, pot2Pos, PAUSED);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await page.mouse.move(0, 0);
+  await page.clock.runFor(8001);
+  await expect(toastOf(page)).toBeHidden();
+
+  const afterToast = new Date(PAUSED.getTime() + 8001);
+  await deliverFix(page, nearPot1, afterToast);
+  await expect(nearest).toContainText('Pot 1');
+
+  const box = await nearest.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(
+    (box?.x ?? 0) + (box?.width ?? 0) / 2,
+    (box?.y ?? 0) + (box?.height ?? 0) / 2
+  );
+  await page.mouse.down();
+  await deliverFix(page, nearPot2, new Date(afterToast.getTime() + 500));
+  await expect(nearest).toContainText('Pot 2');
+  await page.mouse.up();
+
+  await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await nearest.focus();
+  await page.keyboard.press('Enter');
+  await expect(sheet.getByRole('heading', { name: 'Pot 2' })).toBeVisible();
+});
+
 test('a drop with no fix within 5 seconds saves without a position by itself, and a later fix never moves it', async ({
   page
 }) => {
