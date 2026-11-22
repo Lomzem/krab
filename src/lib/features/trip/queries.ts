@@ -1,4 +1,10 @@
-import { compassPoint, distanceText, durationText } from './format';
+import {
+  compassPoint,
+  distanceText,
+  durationText,
+  shortDateRange,
+  shortTime
+} from './format';
 import { bearingDeg, distanceFt, metresToFeet, type LatLon } from './geo';
 import { gearName } from './rules';
 import type { Catch, Drop, Gear, Position, Trip } from './types';
@@ -249,13 +255,50 @@ export const tripDates = (trip: Trip) => {
   return `${first.toLocaleDateString('en-US', FULL_DATE)} to ${last.toLocaleDateString('en-US', FULL_DATE)}`;
 };
 
-export const pastTripCounts = (trip: Trip) => {
+const dropCount = (trip: Trip) => {
   const drops = trip.drops.length;
+  return `${String(drops)} ${drops === 1 ? 'drop' : 'drops'}`;
+};
+
+export const pastTripCounts = (trip: Trip) => {
   const uncollected = trip.drops.filter(isInWater).length;
-  const total = `${String(drops)} ${drops === 1 ? 'drop' : 'drops'}`;
+  const total = dropCount(trip);
   return uncollected === 0
     ? total
     : `${total}, ${String(uncollected)} uncollected`;
+};
+
+export type PastTripSummary = {
+  trip: Trip;
+  dates: string;
+  shortDates: string;
+  startTime: string | null;
+  counts: string;
+  dropCount: string;
+};
+
+export const pastTripSummaries = (
+  trips: readonly Trip[]
+): PastTripSummary[] => {
+  const rows = trips.map((trip) => {
+    const span = tripSpan(trip);
+    return {
+      trip,
+      span,
+      dates: tripDates(trip),
+      shortDates: shortDateRange(span.first, span.last),
+      counts: pastTripCounts(trip),
+      dropCount: dropCount(trip)
+    };
+  });
+  const byDate = new Map<string, number>();
+  for (const row of rows) {
+    byDate.set(row.dates, (byDate.get(row.dates) ?? 0) + 1);
+  }
+  return rows.map(({ span, ...row }) => ({
+    ...row,
+    startTime: (byDate.get(row.dates) ?? 0) > 1 ? shortTime(span.first) : null
+  }));
 };
 
 export type PastDaySelection = 'last' | 'earlier' | 'all';

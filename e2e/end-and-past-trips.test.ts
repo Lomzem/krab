@@ -351,7 +351,9 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   await expect(
     sheet.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
-  await expect(sheet).toHaveAccessibleDescription("Can't be undone");
+  await expect(sheet).toHaveAccessibleDescription(
+    `${TRIP_DATE}, 1 drop Can't be undone`
+  );
   await expect(sheet.getByRole('button', { name: 'Keep trip' })).toBeFocused();
   await expect(
     sheet.getByRole('button', { name: /^(Keep trip|Delete trip)$/ })
@@ -482,4 +484,79 @@ test('ending a trip with gear in the water says it is kept in Past trips and Vie
   await toastOf(page).getByRole('button', { name: 'Undo' }).click();
   await tab(page, 'Gear').click();
   await expect(viewEnded).toHaveCount(0);
+});
+
+test('two past trips on the same day show their start times, and Delete trip names the trip it removes', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const main = page.getByRole('main');
+  await page.clock.install({ time: MORNING });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await dropOf(page, 'Pot', 'Pot 1');
+  await dropOf(page, 'Net', 'Net 1');
+  await endTheTrip(page, '2 still in the water');
+
+  await page.clock.fastForward('05:45:00');
+  await tab(page, 'Map').click();
+  await dropOf(page, 'Pot', 'Pot 1');
+  await endTheTrip(page, '1 still in the water');
+
+  await tab(page, 'Past trips').click();
+  const afternoon = main.getByRole('button', {
+    name: `${TRIP_DATE}, 1:15 PM 1 drop, 1 uncollected`,
+    exact: true
+  });
+  const morning = main.getByRole('button', {
+    name: `${TRIP_DATE}, 7:30 AM 2 drops, 2 uncollected`,
+    exact: true
+  });
+  await expect(afternoon).toBeVisible();
+  await expect(afternoon).toContainText('Jun 10, 2031 · 1:15 PM');
+  await expect(morning).toBeVisible();
+  await expect(morning).toContainText('Jun 10, 2031 · 7:30 AM');
+  await expectAccessibleInBothThemes(page);
+
+  await morning.click();
+  const morningDetail = page.getByRole('region', {
+    name: `${TRIP_DATE}, 7:30 AM`
+  });
+  await expect(
+    morningDetail.getByRole('heading', {
+      level: 1,
+      name: `${TRIP_DATE}, 7:30 AM`
+    })
+  ).toContainText('Jun 10, 2031 · 7:30 AM');
+  await morningDetail.getByRole('button', { name: 'Delete trip' }).click();
+  await expect(
+    sheet.getByRole('heading', { name: 'Delete trip?' })
+  ).toBeVisible();
+  await expect(sheet).toContainText('Jun 10, 2031 · 7:30 AM · 2 drops');
+  await expect(sheet).toContainText("Can't be undone");
+  await expect(sheet).toHaveAccessibleDescription(
+    `${TRIP_DATE}, 7:30 AM, 2 drops Can't be undone`
+  );
+  await expect(sheet.getByRole('button', { name: 'Keep trip' })).toBeFocused();
+  await sheet.getByRole('button', { name: 'Delete trip' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(toastOf(page)).toContainText('Trip deleted');
+
+  const remaining = main.getByRole('button', {
+    name: `${TRIP_DATE} 1 drop, 1 uncollected`,
+    exact: true
+  });
+  await expect(remaining).toBeVisible();
+  await expect(remaining).not.toContainText('1:15 PM');
+  await remaining.click();
+  const remainingDetail = page.getByRole('region', { name: TRIP_DATE });
+  await remainingDetail.getByRole('button', { name: 'Delete trip' }).click();
+  await expect(sheet).toContainText('Jun 10, 2031 · 1 drop');
+  await expect(sheet).not.toContainText('1:15 PM');
+  await expect(sheet).toHaveAccessibleDescription(
+    `${TRIP_DATE}, 1 drop Can't be undone`
+  );
+  await sheet.getByRole('button', { name: 'Keep trip' }).click();
+  await expect(sheet).toBeHidden();
 });

@@ -6,12 +6,10 @@
     dayGroups,
     isMultiDay,
     pastDrops,
-    pastTripCounts,
-    shortDateRange,
-    tripDates,
-    tripSpan,
+    pastTripSummaries,
     type PastDaySelection,
     type PastDropRow,
+    type PastTripSummary,
     type Trip
   } from '#lib/features/trip/index.js';
   import DayMarker from './DayMarker.svelte';
@@ -74,7 +72,14 @@
   let keepButton = $state<HTMLButtonElement>();
   let list = $state<HTMLUListElement>();
 
-  const trip = $derived(past.find((item) => item.id === selected) ?? null);
+  const summaries = $derived(pastTripSummaries(past));
+  const summaryById = $derived(
+    new Map(summaries.map((item) => [item.trip.id, item]))
+  );
+  const current = $derived(
+    selected !== null ? (summaryById.get(selected) ?? null) : null
+  );
+  const trip = $derived(current?.trip ?? null);
   const multiDay = $derived(trip !== null && isMultiDay(trip));
   const rows = $derived(
     trip ? pastDrops(trip, multiDay ? selection : 'all') : []
@@ -129,9 +134,12 @@
     if (deleted) deleteOpen = false;
   };
 
-  const shortDates = (shown: Trip) => {
-    const { first, last } = tripSpan(shown);
-    return shortDateRange(first, last);
+  const tripTitle = (summary: PastTripSummary, short: boolean) => {
+    const dates = short ? summary.shortDates : summary.dates;
+    if (!summary.startTime) return dates;
+    return short
+      ? `${dates} · ${summary.startTime}`
+      : `${dates}, ${summary.startTime}`;
   };
 
   const pinDetails = (row: PastDropRow) =>
@@ -229,7 +237,7 @@
   </ul>
 {/snippet}
 
-{#if trip}
+{#if current}
   <section aria-labelledby="past-trip-title" class="pb-6">
     <div class="px-4 pt-3">
       <button
@@ -245,12 +253,12 @@
         tabindex="-1"
         class="mt-1 text-display font-semibold focus:outline-none"
       >
-        <span aria-hidden="true">{shortDates(trip)}</span><span class="sr-only"
-          >{tripDates(trip)}</span
+        <span aria-hidden="true">{tripTitle(current, true)}</span><span
+          class="sr-only">{tripTitle(current, false)}</span
         >
       </h1>
       <p class="pb-3 text-sm text-muted-foreground">
-        {pastTripCounts(trip)}
+        {current.counts}
       </p>
     </div>
 
@@ -377,24 +385,24 @@
       {/if}
     {:else}
       <ul bind:this={list} class="border-t border-border bg-card">
-        {#each past as item (item.id)}
+        {#each summaries as item (item.trip.id)}
           <li class="border-b border-border">
             <button
               type="button"
               class={rowClass}
-              data-trip={item.id}
+              data-trip={item.trip.id}
               onclick={() => {
-                openTrip(item.id);
+                openTrip(item.trip.id);
               }}
             >
               <div class="min-w-0 flex-1">
                 <p class="text-control leading-snug font-medium">
-                  <span aria-hidden="true">{shortDates(item)}</span><span
-                    class="sr-only">{tripDates(item)}</span
+                  <span aria-hidden="true">{tripTitle(item, true)}</span><span
+                    class="sr-only">{tripTitle(item, false)}</span
                   >
                 </p>
                 <p class="text-sm text-muted-foreground">
-                  {pastTripCounts(item)}
+                  {item.counts}
                 </p>
               </div>
               <Icon name="forward" size={20} class="text-muted-foreground" />
@@ -439,7 +447,18 @@
     <h2 id={DELETE_TITLE_ID} class="text-title font-semibold">Delete trip?</h2>
   {/snippet}
 
-  <p id={DELETE_NOTE_ID} class="text-base leading-normal">Can't be undone</p>
+  {#if current}
+    <div id={DELETE_NOTE_ID} class="space-y-1 text-base leading-normal">
+      <p class="font-medium">
+        <span aria-hidden="true"
+          >{tripTitle(current, true)} · {current.dropCount}</span
+        ><span class="sr-only"
+          >{tripTitle(current, false)}, {current.dropCount}</span
+        >
+      </p>
+      <p class="text-muted-foreground">Can't be undone</p>
+    </div>
+  {/if}
 
   {#snippet footer()}
     <button
