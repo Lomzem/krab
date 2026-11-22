@@ -4,6 +4,7 @@ import {
   expect,
   holdStorage,
   releaseStorage,
+  storedBaits,
   storedDrops,
   test,
   toastOf
@@ -472,14 +473,20 @@ test('on a 320 by 640 screen, tabbing from corrected Depth through Label and Bai
     .fill(
       'Fictional northern float beside the long outer channel marker with orange rope'
     );
-  await sheet.getByLabel('Bait').fill('Fictional bait');
+  await sheet.getByRole('button', { name: 'Add bait' }).click();
+  await sheet.getByLabel('Find or add bait').fill('Fictional bait');
+  await sheet.getByRole('option', { name: 'Add Fictional bait' }).click();
+  await expect(
+    sheet.getByRole('radio', { name: 'Fictional bait' })
+  ).toBeChecked();
   await depth.fill('-2');
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(depth).toBeFocused();
   await depth.fill('17.5');
   for (const field of [
     sheet.getByLabel('Label'),
-    sheet.getByLabel('Bait'),
+    sheet.getByRole('radio', { name: 'Fictional bait' }),
+    sheet.getByRole('button', { name: 'Other bait' }),
     notes
   ]) {
     await page.keyboard.press('Tab');
@@ -942,7 +949,123 @@ const keyboardRing = async (page: Page, control: Locator) => {
   });
 };
 
-test('Close, Save, Depth and a kind choice in the gear sheet show one 3 px focus ring 3 px out in both themes', async ({
+const activeOptionText = (search: Locator) =>
+  search.evaluate((input) => {
+    const id = input.getAttribute('aria-activedescendant');
+    const target = id ? document.getElementById(id) : null;
+    return target?.getAttribute('role') === 'option'
+      ? target.textContent.trim()
+      : null;
+  });
+
+const controlsListbox = (search: Locator) =>
+  search.evaluate((input) => {
+    const id = input.getAttribute('aria-controls');
+    const target = id ? document.getElementById(id) : null;
+    return target?.getAttribute('role') === 'listbox';
+  });
+
+test('an open bait search with typed text keeps Save from closing and asks before Escape discards it', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  const sheet = page.getByRole('dialog');
+  const search = sheet.getByLabel('Find or add bait');
+  const other = sheet.getByRole('button', { name: 'Other bait' });
+  const clear = sheet.getByRole('button', { name: 'Clear bait' });
+  const notes = sheet.getByLabel('Notes', { exact: true });
+  const save = sheet.getByRole('button', { name: 'Save' });
+  const keepEditing = sheet.getByRole('button', { name: 'Keep editing' });
+  const discard = sheet.getByRole('button', { name: 'Discard changes' });
+  const pot1 = gearRow(page, 'Pot 1');
+  const pot2 = gearRow(page, 'Pot 2');
+  const addBait = async (name: string) => {
+    await sheet.getByRole('button', { name: /^(Add|Other) bait$/ }).click();
+    await search.fill(name);
+    await sheet.getByRole('option', { name: `Add ${name}` }).click();
+    await save.click();
+    await expect(sheet).toBeHidden();
+  };
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  for (const name of ['Pot 1', 'Pot 2']) {
+    await page.getByRole('button', { name: 'Drop pot' }).click();
+    await expect(toastOf(page)).toContainText(`${name} dropped`);
+  }
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await pot1.click();
+  await addBait('Fish heads');
+  await pot2.click();
+  await addBait('Squid');
+
+  await pot1.click();
+  await other.click();
+  await expect(other).toHaveAttribute('aria-expanded', 'true');
+  await expect(other).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(pot1).toBeFocused();
+
+  await pot1.click();
+  await other.click();
+  await expect(other).toBeFocused();
+  const listBox = await sheet
+    .getByRole('listbox', { name: 'Saved baits' })
+    .boundingBox();
+  const inputBox = await search.boundingBox();
+  expect(listBox && inputBox).toBeTruthy();
+  expect((listBox?.y ?? 0) + (listBox?.height ?? 0)).toBeLessThanOrEqual(
+    inputBox?.y ?? 0
+  );
+  expect(await controlsListbox(search)).toBe(true);
+
+  await page.keyboard.press('Tab');
+  await expect(clear).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(search).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(notes).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(search).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(clear).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(other).toBeFocused();
+
+  await expectAccessibleInBothThemes(page);
+
+  await search.fill('fish');
+  expect(await controlsListbox(search)).toBe(true);
+  await expect.poll(() => activeOptionText(search)).toBe('Add fish');
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(() => activeOptionText(search)).toBe('Fish heads');
+  await page.keyboard.press('ArrowUp');
+  await expect.poll(() => activeOptionText(search)).toBe('Add fish');
+  await expectAccessibleInBothThemes(page);
+
+  await save.click();
+  await expect(sheet).toBeVisible();
+  await expect(search).toBeFocused();
+  await expect(search).toHaveAttribute('aria-invalid', 'true');
+  await expect(search).toHaveAccessibleDescription('Choose or add bait');
+
+  await page.keyboard.press('Escape');
+  await expect(keepEditing).toBeFocused();
+  await keepEditing.click();
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('fish');
+
+  await page.keyboard.press('Escape');
+  await expect(keepEditing).toBeFocused();
+  await discard.click();
+  await expect(sheet).toBeHidden();
+  await expect(pot1).toBeFocused();
+  expect(await storedBaits(page)).toEqual(['Fish heads', 'Squid']);
+});
+
+test('Close, Save, Depth, a kind choice and the bait controls show one 3 px focus ring 3 px out in both themes', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -952,11 +1075,20 @@ test('Close, Save, Depth and a kind choice in the gear sheet show one 3 px focus
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
+  await sheet.getByRole('button', { name: 'Add bait' }).click();
+  await sheet.getByLabel('Find or add bait').fill('Fish heads');
+  await page.keyboard.press('Enter');
+  await expect(sheet.getByRole('radio', { name: 'Fish heads' })).toBeChecked();
+  await sheet.getByRole('button', { name: 'Other bait' }).click();
   const controls = [
     sheet.getByRole('button', { name: 'Close' }),
     sheet.getByRole('button', { name: 'Save' }),
     sheet.getByLabel('Depth'),
-    sheet.getByRole('radio', { name: 'Pot' })
+    sheet.getByRole('radio', { name: 'Pot' }),
+    sheet.getByRole('radio', { name: 'Fish heads' }),
+    sheet.getByRole('button', { name: 'Other bait' }),
+    sheet.getByRole('button', { name: 'Clear bait' }),
+    sheet.getByLabel('Find or add bait')
   ];
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });

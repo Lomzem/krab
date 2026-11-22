@@ -133,6 +133,7 @@ export const releaseStorage = (page: Page) =>
 type StoredCatch = { kept: number; released: number } | null;
 
 type StoredTrip = {
+  startedAt: number;
   gear: { id: string; kind: string; number: number }[];
   drops: {
     id: string;
@@ -141,6 +142,7 @@ type StoredTrip = {
     position: { lat: number } | null;
     collectedAt: number | null;
     catch: StoredCatch;
+    bait: string;
   }[];
 };
 
@@ -210,3 +212,8 @@ const placementsOf = (trip: StoredTrip) => {
 
 export const storedPlacements = async (page: Page) =>
   (await storedTrips(page)).flatMap(placementsOf);
+
+export const storedBaits = async (page: Page) =>
+  (await storedTrips(page))
+    .toSorted((a, b) => a.startedAt - b.startedAt)
+    .flatMap((trip) => trip.drops.map((drop) => drop.bait));

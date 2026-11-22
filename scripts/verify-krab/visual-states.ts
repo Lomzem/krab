@@ -312,3 +312,84 @@ test('visual inventory with location denied', async ({
   keep('indexeddb-after.json', await readTrips(page));
   log('location denied, drop without position, Gear guidance');
 });
+
+test('visual inventory for bait picker', async ({ page }, info) => {
+  const { capture, keep, log } = recorder(
+    page,
+    info,
+    'visual-inventory',
+    'Bait'
+  );
+  keep('doctor.json', doctor());
+  await holdFixes(page);
+  await page.clock.install({ time: EVENING });
+  await page.clock.pauseAt(EVENING);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  for (let number = 1; number <= 5; number += 1) {
+    if (number > 1) await page.clock.fastForward('01:00');
+    await deliverFix(page, {
+      latitude: MADE_UP_SEA.latitude + number * 0.001,
+      longitude: MADE_UP_SEA.longitude
+    });
+    await expect(page.getByText('Finding position')).toBeHidden();
+    await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
+    await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
+  }
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const sheet = page.getByRole('dialog');
+  const gearRow = (name: string) =>
+    page
+      .getByRole('main')
+      .getByRole('button')
+      .filter({ hasText: new RegExp(`\\b${name}\\b`) });
+  const baitGroup = sheet.getByRole('group', { name: 'Bait' });
+  const search = sheet.getByLabel('Find or add bait');
+  const saveBait = async (pot: string, bait: string) => {
+    await gearRow(pot).click();
+    await sheet.getByRole('button', { name: /^(Add|Other) bait$/ }).click();
+    await search.fill(bait);
+    await sheet.getByRole('option', { name: `Add ${bait}` }).click();
+    await sheet.getByRole('button', { name: 'Save' }).click();
+    await expect(sheet).toBeHidden();
+  };
+
+  await gearRow('Pot 1').click();
+  await baitGroup.scrollIntoViewIfNeeded();
+  await capture('01-bait-blank');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await saveBait('Pot 1', 'Herring');
+  await saveBait('Pot 2', 'Squid');
+  await saveBait('Pot 3', 'Chicken');
+  await saveBait('Pot 4', 'Mackerel');
+
+  await gearRow('Pot 5').click();
+  await expect(baitGroup.getByRole('radio')).toHaveCount(3);
+  await baitGroup.scrollIntoViewIfNeeded();
+  await capture('02-bait-three-chips');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await gearRow('Pot 1').click();
+  await expect(baitGroup.getByRole('radio')).toHaveCount(4);
+  await expect(sheet.getByRole('radio', { name: 'Herring' })).toBeChecked();
+  await baitGroup.scrollIntoViewIfNeeded();
+  await capture('03-bait-fourth-chip');
+
+  await sheet.getByRole('button', { name: 'Other bait' }).click();
+  await search.scrollIntoViewIfNeeded();
+  await capture('04-bait-open-list');
+
+  await search.fill('Salmon heads');
+  await search.scrollIntoViewIfNeeded();
+  await capture('05-bait-unmatched-query');
+  await page.keyboard.press('Escape');
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(sheet).toBeHidden();
+  keep('indexeddb-after.json', await readTrips(page));
+  log(
+    'bait picker blank, three chips, fourth current chip, open list, and unmatched query'
+  );
+});

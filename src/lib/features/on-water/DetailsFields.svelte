@@ -1,4 +1,6 @@
 <script lang="ts">
+  import BaitField from './BaitField.svelte';
+  import type { BaitChoice, BaitSearch } from './bait-options';
   import { FOCUS } from './controls';
   import {
     depthAccepted,
@@ -10,9 +12,13 @@
 
   let {
     draft = $bindable(emptyDraft()),
+    baitSearch = $bindable({ query: '', refused: false }),
+    baits,
     idPrefix
   }: {
     draft?: DetailsDraft;
+    baitSearch?: BaitSearch;
+    baits: readonly BaitChoice[];
     idPrefix: string;
   } = $props();
 
@@ -61,16 +67,12 @@
       enterkeyhint="next"
     />
   </div>
-  <div class="grid gap-2">
-    <label class={label} for="{idPrefix}-bait">Bait</label>
-    <input
-      id="{idPrefix}-bait"
-      class={field}
-      bind:value={draft.bait}
-      autocomplete="off"
-      enterkeyhint="next"
-    />
-  </div>
+  <BaitField
+    bind:bait={draft.bait}
+    bind:search={baitSearch}
+    choices={baits}
+    {idPrefix}
+  />
   <div class="grid gap-2">
     <label class={label} for="{idPrefix}-notes">Notes</label>
     <textarea

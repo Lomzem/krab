@@ -9,6 +9,7 @@
     type DropEdit,
     type Kind
   } from '#lib/features/trip/index.js';
+  import { baitKey, type BaitSearch } from './bait-options';
   import CatchField from './CatchField.svelte';
   import { ACTION_BUTTON, PRIMARY_BUTTON } from './controls';
   import DetailsFields from './DetailsFields.svelte';
@@ -63,6 +64,9 @@
   });
   let draft = $state(initial().draft);
   let kind = $state(initial().kind);
+  const baits = untrack(() => subject.baits);
+  let baitSearch = $state<BaitSearch>({ query: '', refused: false });
+  const searching = $derived(baitKey(baitSearch.query) !== '');
   let catchDraft = $derived(
     collectedAt === null ? null : untrack(() => catchDraftOf(drop.catch))
   );
@@ -73,7 +77,9 @@
   let catchHeading = $state<HTMLHeadingElement>();
 
   $effect(() => {
-    ondirty?.(kind !== stored || draftChanged(drop, draft, catchDraft));
+    ondirty?.(
+      kind !== stored || searching || draftChanged(drop, draft, catchDraft)
+    );
   });
 
   $effect(() => {
@@ -118,6 +124,15 @@
   const save = (
     send: (dropId: string, edit: DropEdit, kind: Kind | null) => void
   ) => {
+    if (searching) {
+      baitSearch.refused = true;
+      void tick().then(() => {
+        const search = document.getElementById(`${idPrefix}-bait-search`);
+        search?.focus({ preventScroll: true });
+        search?.scrollIntoView({ block: 'nearest' });
+      });
+      return;
+    }
     send(drop.id, editOf(draft, catchDraft), kind === stored ? null : kind);
   };
 
@@ -187,5 +202,5 @@
     locked={!canChangeKind(subject.trip, drop.gearId)}
     {idPrefix}
   />
-  <DetailsFields bind:draft {idPrefix} />
+  <DetailsFields bind:draft bind:baitSearch {baits} {idPrefix} />
 </form>
