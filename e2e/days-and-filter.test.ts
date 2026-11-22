@@ -116,6 +116,7 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
   await expect(
     mapArea.getByRole('button', { name: 'Fit shown gear', exact: true })
   ).toBeVisible();
+  await deliverFix(page, MADE_UP_SEA);
   await expect(nearest('Pot 2')).toBeVisible();
 
   await tab('Gear').click();
