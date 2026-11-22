@@ -15,6 +15,7 @@ import {
   nearestGear,
   pastDrops,
   pastTripCounts,
+  pastTripSummaries,
   shortDateRange,
   tripDates,
   tripSpan,
@@ -1915,5 +1916,49 @@ it('dates and groups a past trip in the phone’s current time zone after the zo
   expect(statusByDay(ended)).toEqual([
     ['Day 1', [['Pot 1', 'Uncollected']]],
     ['Day 2', [['Pot 2', 'Uncollected']]]
+  ]);
+});
+
+it('adds start times only to past trips that share a date text, with singular and plural drop counts', async () => {
+  vi.stubEnv('TZ', 'America/New_York');
+  const { state, open } = withoutLocation();
+  const book = await open();
+  const finish = async (at: string) => {
+    const active = await run(activeIn(book));
+    state.now = Date.parse(at);
+    if (active) await run(book.endTrip(active.id));
+  };
+  await placeAt(book, state, '2031-06-10T06:05:00-04:00');
+  await placeAt(book, state, '2031-06-10T06:40:00-04:00');
+  await finish('2031-06-10T09:00:00-04:00');
+  await placeAt(book, state, '2031-06-10T14:15:00-04:00');
+  await finish('2031-06-10T16:00:00-04:00');
+  await placeAt(book, state, '2031-06-11T08:00:00-04:00');
+  await finish('2031-06-11T10:00:00-04:00');
+
+  const summaries = pastTripSummaries(await run(pastIn(book)));
+
+  expect(
+    summaries.map(({ dates, startTime, dropCount }) => ({
+      dates,
+      startTime,
+      dropCount
+    }))
+  ).toEqual([
+    {
+      dates: 'Wednesday, June 11, 2031',
+      startTime: null,
+      dropCount: '1 drop'
+    },
+    {
+      dates: 'Tuesday, June 10, 2031',
+      startTime: '2:15 PM',
+      dropCount: '1 drop'
+    },
+    {
+      dates: 'Tuesday, June 10, 2031',
+      startTime: '6:05 AM',
+      dropCount: '2 drops'
+    }
   ]);
 });

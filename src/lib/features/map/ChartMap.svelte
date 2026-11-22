@@ -61,6 +61,7 @@
     camera = $bindable(null),
     places,
     me,
+    locate = true,
     headingDeg = null,
     show,
     onshown,
@@ -74,6 +75,7 @@
     camera?: Camera | null;
     places: MapPlace[];
     me: MyPosition | null;
+    locate?: boolean;
     headingDeg?: number | null;
     show: string | null;
     onshown: () => void;
@@ -986,20 +988,24 @@
             <Icon name="show-all" />
           </button>
         {/if}
-        <button
-          type="button"
-          class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
-          aria-label="Centre on my position"
-          aria-disabled={me?.current ? undefined : 'true'}
-          onclick={() => {
-            if (!me?.current) return;
-            centreOn(me.at);
-            revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
-          }}
-        >
-          <Icon name="centre" />
-        </button>
-        <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
+        {#if locate}
+          <button
+            type="button"
+            class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
+            aria-label="Centre on my position"
+            aria-disabled={me?.current ? undefined : 'true'}
+            onclick={() => {
+              if (!me?.current) return;
+              centreOn(me.at);
+              revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
+            }}
+          >
+            <Icon name="centre" />
+          </button>
+        {/if}
+        {#if places.length > 0 || locate}
+          <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
+        {/if}
         <button
           type="button"
           class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"

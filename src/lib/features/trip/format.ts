@@ -69,5 +69,13 @@ const SHORT_DATE = new Intl.DateTimeFormat('en-US', {
   year: 'numeric'
 });
 
+const SHORT_TIME: Intl.DateTimeFormatOptions = {
+  hour: 'numeric',
+  minute: '2-digit'
+};
+
 export const shortDateRange = (first: number, last: number) =>
   SHORT_DATE.formatRange(first, last);
+
+export const shortTime = (at: number) =>
+  new Date(at).toLocaleTimeString('en-US', SHORT_TIME).replace(/\u202f/g, ' ');
