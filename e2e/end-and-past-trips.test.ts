@@ -280,6 +280,7 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
     .click();
   await expect(days.getByRole('radio', { name: 'All' })).toBeChecked();
   await expectShown([...pot1, ...pot2], []);
+  await expect(pot1[1]).toHaveAttribute('aria-haspopup', 'dialog');
   await chooseDays(days, 'Last day');
   await expectShown(pot2, pot1);
   await chooseDays(days, 'Earlier days');

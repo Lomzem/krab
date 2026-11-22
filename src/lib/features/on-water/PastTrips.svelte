@@ -255,6 +255,7 @@
                 type="button"
                 class="group grid size-11 place-items-center focus-visible:outline-none"
                 aria-label={spokenItem(item)}
+                aria-haspopup="dialog"
                 data-drop={id}
                 onclick={(event) => {
                   onopen(id, event.currentTarget, 'map');

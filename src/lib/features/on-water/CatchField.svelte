@@ -99,6 +99,7 @@
     </h3>
     <button
       type="button"
+      aria-pressed={nothing}
       class={[
         `flex min-h-11 touch-manipulation items-center gap-1 rounded-control border pr-2.5 pl-3 text-sm font-medium select-none ${FOCUS}`,
         nothing

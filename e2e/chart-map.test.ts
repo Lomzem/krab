@@ -526,6 +526,7 @@ test('gear on the map opens its sheet without Show on map; with my position else
   const sheet = page.getByRole('dialog');
   const showOnMap = sheet.getByRole('button', { name: 'Show on map' });
 
+  await expect(potOnMap(page)).toHaveAttribute('aria-haspopup', 'dialog');
   await potOnMap(page).click();
   await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
   await expect(showOnMap).toHaveCount(0);

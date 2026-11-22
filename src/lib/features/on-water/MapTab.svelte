@@ -352,6 +352,7 @@
               type="button"
               class="group grid size-11 place-items-center focus-visible:outline-none"
               aria-label={spokenItem(item)}
+              aria-haspopup="dialog"
               aria-current={selected || undefined}
               data-drop={id}
               onclick={(event) => {
