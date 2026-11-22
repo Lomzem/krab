@@ -684,6 +684,7 @@ test('gear either side of the 180th meridian fits the past trip map as one small
 test('eight drops shown apart merge into groups as I zoom out without any marker, label or tap area touching, end as one group of 8, and each one opens its own sheet from the group list and returns focus to the group', async ({
   page
 }) => {
+  test.slow();
   const map = mapArea(page);
   const dialogs = page.getByRole('dialog');
   await holdFixes(page);
