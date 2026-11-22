@@ -20,6 +20,6 @@
     type="button"
     class={PRIMARY_BUTTON}
     aria-disabled={retrying}
-    onclick={() => void retry()}>Retry</button
+    onclick={() => void retry()}>{retrying ? 'Loading trip' : 'Retry'}</button
   >
 </div>

@@ -16,7 +16,7 @@
   } from '#lib/features/trip/index.js';
   import DayMarker from './DayMarker.svelte';
   import GearHere from './GearHere.svelte';
-  import { inListOrder, type HereItem } from './gear-here';
+  import { inListOrder, spokenItem, type HereItem } from './gear-here';
   import {
     DAY_CHOICE,
     DESTRUCTIVE_BUTTON,
@@ -149,6 +149,7 @@
             day: row.day,
             uncollected: row.drop.collectedAt === null,
             name: row.name,
+            label: row.drop.label,
             details: pinDetails(row),
             summary: pinDetails(row).join(', ')
           }
@@ -253,7 +254,7 @@
               <button
                 type="button"
                 class="group grid size-11 place-items-center focus-visible:outline-none"
-                aria-label={[item.name, ...item.details].join(', ')}
+                aria-label={spokenItem(item)}
                 data-drop={id}
                 onclick={(event) => {
                   onopen(id, event.currentTarget, 'map');

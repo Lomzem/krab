@@ -1,7 +1,7 @@
 <script lang="ts">
   import { FOCUS_INSET, PRESS } from './controls';
   import type { MapPlace } from '#lib/features/map/index.js';
-  import type { HereItem } from './gear-here';
+  import { spokenItem, type HereItem } from './gear-here';
   import GearIcon from './GearIcon.svelte';
   import Sheet from './Sheet.svelte';
   import UncollectedMark from './UncollectedMark.svelte';
@@ -41,7 +41,7 @@
         <button
           type="button"
           class="flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left {FOCUS_INSET} {PRESS} active:bg-muted"
-          aria-label={[item.name, ...item.details].join(', ')}
+          aria-label={spokenItem(item)}
           onclick={() => {
             onpick(item.id);
           }}
@@ -62,7 +62,12 @@
           <span class="min-w-0 flex-1">
             <span class="block text-control leading-snug font-medium"
               >{item.name}</span
-            >
+            >{#if item.label}
+              <span
+                class="line-clamp-2 block text-base leading-snug [overflow-wrap:anywhere]"
+                >{item.label}</span
+              >
+            {/if}
             <span
               class="block text-sm leading-snug [overflow-wrap:anywhere] text-muted-foreground"
               >{item.summary}</span

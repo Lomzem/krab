@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DESTRUCTIVE_BUTTON, FOCUS, FOCUS_INSET, PRESS } from './controls';
+  import { FOCUS, FOCUS_INSET, PRESS, QUIET_BUTTON } from './controls';
   import {
     arrowDeg,
     BearingArrow,
@@ -26,6 +26,8 @@
     onopen,
     canEnd,
     onend,
+    endedTrip,
+    onviewended,
     endButton = $bindable(),
     heading = $bindable()
   }: {
@@ -36,6 +38,8 @@
     onopen: (dropId: string, opener: HTMLElement) => void;
     canEnd: boolean;
     onend: () => void;
+    endedTrip: boolean;
+    onviewended: () => void;
     endButton?: HTMLButtonElement;
     heading?: HTMLHeadingElement;
   } = $props();
@@ -49,21 +53,35 @@
   const rowClass = `flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left ${FOCUS_INSET} ${PRESS} active:bg-muted`;
 </script>
 
-<header class="px-4 pt-3 pb-2">
-  <h1
-    bind:this={heading}
-    tabindex="-1"
-    class="rounded-control text-display font-semibold {FOCUS}"
-  >
-    Gear
-  </h1>
-  {#if counts}
-    <p class="text-sm text-muted-foreground">
-      {counts.inWater}<span aria-hidden="true">&nbsp;·</span><span
-        class="sr-only">,</span
-      >
-      {counts.collected}
-    </p>
+<header class="flex items-start justify-between gap-3 px-4 pt-3 pb-2">
+  <div class="min-w-0">
+    <h1
+      bind:this={heading}
+      tabindex="-1"
+      class="rounded-control text-display font-semibold {FOCUS}"
+    >
+      Gear
+    </h1>
+    {#if counts}
+      <p class="text-sm text-muted-foreground">
+        {counts.inWater}<span aria-hidden="true">&nbsp;·</span><span
+          class="sr-only">,</span
+        >
+        {counts.collected}
+      </p>
+    {/if}
+  </div>
+  {#if trip}
+    <button
+      bind:this={endButton}
+      type="button"
+      class="inline-flex min-h-11 flex-none touch-manipulation items-center justify-center rounded-control border border-input bg-card px-3 text-base font-semibold text-foreground transition-opacity duration-0 {FOCUS} {PRESS} active:bg-muted aria-disabled:opacity-60 aria-disabled:delay-500"
+      aria-haspopup="dialog"
+      aria-disabled={!canEnd}
+      onclick={() => {
+        if (canEnd) onend();
+      }}>End trip</button
+    >
   {/if}
 </header>
 
@@ -123,20 +141,30 @@
         {/if}
       </div>
       {#if row.direction}
-        <div class="flex items-center gap-2 @max-2xs:ml-10">
-          <BearingArrow degrees={arrowDeg(row.direction.bearingDeg, compass)} />
-          <div class="text-right" aria-hidden="true">
-            <p class="text-title font-semibold whitespace-nowrap tabular-nums">
-              {row.direction.distance}
-            </p>
-            <p class="text-sm font-medium text-muted-foreground">
-              {row.direction.pointShort}
-            </p>
+        {#if row.direction.atGear}
+          <p class="text-title font-semibold whitespace-nowrap @max-2xs:ml-10">
+            At gear
+          </p>
+        {:else}
+          <div class="flex items-center gap-2 @max-2xs:ml-10">
+            <BearingArrow
+              degrees={arrowDeg(row.direction.bearingDeg, compass)}
+            />
+            <div class="text-right" aria-hidden="true">
+              <p
+                class="text-title font-semibold whitespace-nowrap tabular-nums"
+              >
+                {row.direction.distance}
+              </p>
+              <p class="text-sm font-medium text-muted-foreground">
+                {row.direction.pointShort}
+              </p>
+            </div>
+            <span class="sr-only"
+              >{row.direction.distanceSpoken} {row.direction.point}</span
+            >
           </div>
-          <span class="sr-only"
-            >{row.direction.distanceSpoken} {row.direction.point}</span
-          >
-        </div>
+        {/if}
       {:else if !row.drop.position}
         <p class="text-sm text-muted-foreground @max-[22rem]:ml-10">
           No position
@@ -170,61 +198,58 @@
 {/snippet}
 
 {#if trip}
-  {#if inWaterByDay.length > 0}
-    {#each inWaterByDay as group (group.day.number)}
-      <section aria-labelledby="day-{group.day.number}-title">
-        <h2
-          id="day-{group.day.number}-title"
-          class="px-4 pt-3 pb-1 text-control font-semibold"
-        >
-          <DayMarker day={group.day} size={22} />
-        </h2>
-        {@render gearRows(group.rows)}
-      </section>
-    {/each}
-  {:else}
-    {@render gearRows(rows)}
-  {/if}
-  {#if collected.length > 0}
-    <section aria-labelledby="collected-title">
-      <h2
-        id="collected-title"
-        class="px-4 pt-5 pb-1 text-control font-semibold"
-      >
-        Collected
-      </h2>
-      {#if collectedByDay.length > 0}
-        {#each collectedByDay as group (group.day.number)}
-          <section
-            aria-labelledby="collected-title collected-day-{group.day
-              .number}-title"
+  <div class="pb-6">
+    {#if inWaterByDay.length > 0}
+      {#each inWaterByDay as group (group.day.number)}
+        <section aria-labelledby="day-{group.day.number}-title">
+          <h2
+            id="day-{group.day.number}-title"
+            class="px-4 pt-3 pb-1 text-control font-semibold"
           >
-            <h3
-              id="collected-day-{group.day.number}-title"
-              class="px-4 pt-2 pb-1 text-sm font-medium text-muted-foreground"
+            <DayMarker day={group.day} size={22} />
+          </h2>
+          {@render gearRows(group.rows)}
+        </section>
+      {/each}
+    {:else}
+      {@render gearRows(rows)}
+    {/if}
+    {#if collected.length > 0}
+      <section aria-labelledby="collected-title">
+        <h2
+          id="collected-title"
+          class="px-4 pt-5 pb-1 text-control font-semibold"
+        >
+          Collected
+        </h2>
+        {#if collectedByDay.length > 0}
+          {#each collectedByDay as group (group.day.number)}
+            <section
+              aria-labelledby="collected-title collected-day-{group.day
+                .number}-title"
             >
-              <DayMarker day={group.day} size={20} />
-            </h3>
-            {@render collectedRows(group.rows)}
-          </section>
-        {/each}
-      {:else}
-        {@render collectedRows(collected)}
-      {/if}
-    </section>
-  {/if}
-  <div class="mx-4 mt-8 mb-6 border-t border-border pt-8">
-    <button
-      bind:this={endButton}
-      type="button"
-      class="w-full {DESTRUCTIVE_BUTTON} transition-opacity duration-0 aria-disabled:delay-500"
-      aria-haspopup="dialog"
-      aria-disabled={!canEnd}
-      onclick={() => {
-        if (canEnd) onend();
-      }}>End trip</button
-    >
+              <h3
+                id="collected-day-{group.day.number}-title"
+                class="px-4 pt-2 pb-1 text-sm font-medium text-muted-foreground"
+              >
+                <DayMarker day={group.day} size={20} />
+              </h3>
+              {@render collectedRows(group.rows)}
+            </section>
+          {/each}
+        {:else}
+          {@render collectedRows(collected)}
+        {/if}
+      </section>
+    {/if}
   </div>
 {:else}
-  <p class="px-4 text-base">Nothing in the water</p>
+  <div class="flex flex-col items-start gap-3 px-4 pb-6">
+    <p class="text-base">Nothing in the water</p>
+    {#if endedTrip}
+      <button type="button" class={QUIET_BUTTON} onclick={onviewended}
+        >View ended trip</button
+      >
+    {/if}
+  </div>
 {/if}

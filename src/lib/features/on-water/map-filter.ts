@@ -1,5 +1,6 @@
 import {
   dropsInDays,
+  isMultiDay,
   type DaySelection,
   type Drop,
   type Trip
@@ -33,3 +34,9 @@ export const filterToShow = (
     ? filter.days
     : 'all'
 });
+
+export const filterHides = (filter: MapFilter, trip: Trip | null) =>
+  trip !== null &&
+  ((filter.days !== 'all' && isMultiDay(trip)) ||
+    (!filter.collected &&
+      trip.drops.some((drop) => drop.collectedAt !== null)));

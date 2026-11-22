@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { groupChip, type HereItem } from './gear-here';
+import { groupChip, spokenItem, type HereItem } from './gear-here';
 
 const DAY_1 = { number: 1, text: 'Day 1' };
 const DAY_2 = { number: 2, text: 'Day 2' };
@@ -16,14 +16,15 @@ const pot = (
   day,
   uncollected,
   name: `Pot ${String(number)}`,
+  label: '',
   details: [],
   summary: ''
 });
 
-it('names a group by what it shows first, then every gear in it', () => {
+it('names a group by its lead gear, how many more, and status counts', () => {
   const chip = groupChip(pot(8, null), [pot(7, null), pot(8, null)]);
 
-  expect(chip.label).toBe('Pot 8 +1 more, 2 gear here: Pot 7, Pot 8');
+  expect(chip.label).toBe('Pot 8 +1 more here');
   expect(chip.more).toBe(1);
   expect(chip.uncollected).toBe(false);
 });
@@ -32,7 +33,7 @@ it('shows the day of a group whose gear all went in that day', () => {
   const chip = groupChip(pot(3, DAY_1), [pot(3, DAY_1), pot(4, DAY_1)]);
 
   expect(chip.face.day).toEqual(DAY_1);
-  expect(chip.label).toBe('Pot 3 Day 1 +1 more, 2 gear here: Pot 3, Pot 4');
+  expect(chip.label).toBe('Pot 3 Day 1 +1 more here');
 });
 
 it('shows no day on a group that spans days and says which days it holds', () => {
@@ -43,9 +44,7 @@ it('shows no day on a group that spans days and says which days it holds', () =>
   ]);
 
   expect(chip.face.day).toBeNull();
-  expect(chip.label).toBe(
-    'Pot 8 +2 more, 3 gear here on Day 1 and Day 2: Pot 1, Pot 2, Pot 8'
-  );
+  expect(chip.label).toBe('Pot 8 +2 more here on Day 1 and Day 2');
 });
 
 it('marks a group once when some of it is uncollected, and says how many', () => {
@@ -79,17 +78,32 @@ it('borders the +N segment like the rest of the group and names how many of each
 
   expect(mixed.face.layer).toBe('collected');
   expect(mixed.others).toBe('in-water');
-  expect(mixed.label).toBe(
-    'Pot 2 +2 more, 3 gear here: Pot 1, Pot 3, Pot 2; 2 in the water, 1 collected'
-  );
+  expect(mixed.label).toBe('Pot 2 +2 more here; 2 in the water, 1 collected');
   expect(done.others).toBe('collected');
-  expect(done.label).toBe('Pot 2 +1 more, 2 gear here: Pot 2, Pot 4');
+  expect(done.label).toBe('Pot 2 +1 more here');
   expect(active.others).toBe('in-water');
-  expect(active.label).toBe('Pot 1 +1 more, 2 gear here: Pot 1, Pot 3');
+  expect(active.label).toBe('Pot 1 +1 more here');
 });
 
 it('says a group that spans more than one spot is in this area, not here', () => {
   expect(
     groupChip(pot(1, null), [pot(1, null), pot(2, null)], true).label
-  ).toBe('Pot 1 +1 more, 2 gear in this area: Pot 1, Pot 2');
+  ).toBe('Pot 1 +1 more in this area');
+});
+
+it('carries the saved label into each item', () => {
+  expect(
+    spokenItem({
+      ...pot(2, null),
+      label: 'Red float',
+      details: ['12 min in the water']
+    })
+  ).toBe('Pot 2, Red float, 12 min in the water');
+  expect(
+    spokenItem({
+      ...pot(2, null),
+      label: '',
+      details: ['12 min in the water']
+    })
+  ).toBe('Pot 2, 12 min in the water');
 });

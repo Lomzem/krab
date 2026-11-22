@@ -576,7 +576,7 @@ test('a toast never hides the end of the Gear list: its last row scrolls clear w
   page
 }) => {
   await openWithPausedClock(page);
-  for (let number = 1; number <= 8; number += 1) {
+  for (let number = 1; number <= 10; number += 1) {
     await dropPot(page, `Pot ${String(number)}`);
   }
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
@@ -608,7 +608,7 @@ test('a toast never hides the end of the Gear list: its last row scrolls clear w
 
   await lastRow.click({ timeout: 5000 });
   await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(toastOf(page)).toContainText('Pot 8 dropped');
+  await expect(toastOf(page)).toContainText('Pot 10 dropped');
 });
 
 const openNewerStorageVersion = (page: Page) =>

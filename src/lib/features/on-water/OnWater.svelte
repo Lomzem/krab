@@ -14,6 +14,7 @@
   import type { Base, Camera } from '#lib/features/map/index.js';
   import {
     canUndoCollect,
+    dropsInDays,
     gearInWater,
     nearestGear,
     type Drop,
@@ -91,6 +92,7 @@
   let endButton = $state<HTMLButtonElement>();
   let endOpen = $state(false);
   let ending = $state(false);
+  let endedTripId = $state<string | null>(null);
   let pastTripId = $state<string | null>(null);
   let pastHeading = $state<HTMLHeadingElement>();
   let pastShow = $state<string | null>(null);
@@ -122,9 +124,17 @@
       ? null
       : rowStatus
   );
-  const nearest = $derived(
-    water.trip ? nearestGear(gearInWater(water.trip, readiness.fix, now)) : null
-  );
+  const nearest = $derived.by(() => {
+    if (!water.trip) return null;
+    const shown = new Set(
+      dropsInDays(water.trip, mapFilter.days, now).map(({ id }) => id)
+    );
+    return nearestGear(
+      gearInWater(water.trip, readiness.fix, now).filter(({ drop }) =>
+        shown.has(drop.id)
+      )
+    );
+  });
   const panelShown = $derived(
     tab === 'map' ||
       (tab === 'gear' && (water.pending?.phase === 'acquiring' || savingShown))
@@ -143,6 +153,16 @@
         )?.direction ?? null)
       : null
   );
+
+  const endedTrip = $derived(
+    !water.trip && endedTripId
+      ? (water.past.find((item) => item.id === endedTripId) ?? null)
+      : null
+  );
+
+  $effect(() => {
+    if (water.trip) endedTripId = null;
+  });
 
   $effect(() => {
     const timer = setInterval(() => {
@@ -377,7 +397,18 @@
     ending = true;
     const ended = await water.endTrip(trip.id);
     ending = false;
-    if (ended) endOpen = false;
+    if (ended) {
+      endedTripId = trip.id;
+      endOpen = false;
+    }
+  };
+
+  const viewEndedTrip = async () => {
+    if (!endedTrip) return;
+    pastTripId = endedTrip.id;
+    await switchTo('trips');
+    await tick();
+    pastHeading?.focus();
   };
 
   const endReturnFocus = () =>
@@ -445,6 +476,11 @@
             ? water.notice.offer.dropId
             : null}
         />
+      {:else}
+        <section aria-labelledby="map-title">
+          <h1 id="map-title" class="sr-only">Map</h1>
+          <p class="px-4 pt-4 text-base text-muted-foreground">Loading trip</p>
+        </section>
       {/if}
     {:else if tab === 'gear'}
       {#if water.load === 'failed'}
@@ -463,9 +499,16 @@
           onend={() => {
             endOpen = true;
           }}
+          endedTrip={endedTrip !== null}
+          onviewended={() => void viewEndedTrip()}
           bind:endButton
           bind:heading={gearHeading}
         />
+      {:else}
+        <header class="px-4 pt-3 pb-2">
+          <h1 class="text-display font-semibold">Gear</h1>
+        </header>
+        <p class="px-4 text-base text-muted-foreground">Loading trip</p>
       {/if}
     {:else if water.load !== 'opening'}
       <PastTrips
@@ -636,6 +679,7 @@
           <DockStatus
             screen={tab}
             status={dockStatus}
+            loaded={water.load === 'ready'}
             trip={water.trip}
             {nearest}
             compass={$compass}

@@ -5,14 +5,25 @@ import type { Catch, Drop, Gear, Position, Trip } from './types';
 
 const ROUGH_ACCURACY_M = 50;
 
-export type Direction = {
-  feet: number;
-  bearingDeg: number;
-  distance: string;
-  distanceSpoken: string;
-  point: string;
-  pointShort: string;
-};
+export type Direction =
+  | {
+      feet: number;
+      atGear: true;
+      bearingDeg: null;
+      distance: null;
+      distanceSpoken: null;
+      point: null;
+      pointShort: null;
+    }
+  | {
+      feet: number;
+      atGear: false;
+      bearingDeg: number;
+      distance: string;
+      distanceSpoken: string;
+      point: string;
+      pointShort: string;
+    };
 
 export type SpokenText = { short: string; spoken: string };
 
@@ -96,11 +107,23 @@ export const timeInWater = (drop: Drop, at: number) =>
 const directionTo = (from: LatLon | null, drop: Drop): Direction | null => {
   if (!from || !drop.position) return null;
   const feet = distanceFt(from, drop.position);
+  if (Math.round(feet) === 0) {
+    return {
+      feet,
+      atGear: true,
+      bearingDeg: null,
+      distance: null,
+      distanceSpoken: null,
+      point: null,
+      pointShort: null
+    };
+  }
   const bearing = bearingDeg(from, drop.position);
   const text = distanceText(feet);
   const [point, pointShort] = compassPoint(bearing);
   return {
     feet,
+    atGear: false,
     bearingDeg: bearing,
     distance: text.short,
     distanceSpoken: text.spoken,

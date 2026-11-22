@@ -14,6 +14,7 @@
   let {
     screen,
     status,
+    loaded = true,
     trip,
     nearest,
     compass,
@@ -22,6 +23,7 @@
   }: {
     screen: 'map' | 'gear';
     status: Availability | null;
+    loaded?: boolean;
     trip: Trip | null;
     nearest: GearRow | null;
     compass: CompassState;
@@ -31,9 +33,10 @@
 
   const LINE_1 = 'text-control font-semibold';
   const LINE_2 = 'flex items-center gap-1.5 text-sm text-muted-foreground';
-  const count = $derived(
-    trip ? gearCounts(trip).inWater : 'Nothing in the water'
-  );
+  const count = $derived.by(() => {
+    if (!loaded) return null;
+    return trip ? gearCounts(trip).inWater : 'Nothing in the water';
+  });
   const rough = $derived(status?.kind === 'ready' && roughness(status.fix));
   const direction = $derived(
     status?.kind === 'ready' ? (nearest?.direction ?? null) : null
@@ -85,7 +88,9 @@
   {/if}
 {:else if status?.kind === 'finding'}
   <p class="flex min-h-14 w-full flex-col justify-center px-4 py-1">
-    <span class={LINE_1}>{count}</span>
+    {#if count}
+      <span class={LINE_1}>{count}</span>
+    {/if}
     <span class={LINE_2}>
       <span
         class="size-2 rounded-full border-2 border-muted-foreground"
@@ -125,7 +130,7 @@
         <span class={LINE_2} aria-hidden="true">Nearest</span>
       {/if}
     </span>
-    {#if Math.round(direction.feet) === 0}
+    {#if direction.atGear}
       <span class="flex-none text-title font-semibold whitespace-nowrap"
         ><span class="sr-only">, </span>At gear</span
       >
@@ -148,7 +153,9 @@
   </button>
 {:else}
   <p class="flex min-h-14 w-full flex-col justify-center px-4 py-1">
-    <span class={LINE_1}>{count}</span>
+    {#if count}
+      <span class={LINE_1}>{count}</span>
+    {/if}
     {#if rough}
       {@render roughLine()}
     {/if}
