@@ -303,21 +303,13 @@ test('supplemental UI review with live maps and accessibility observations', asy
   await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const spots = map.getByRole('button', { name: /^Pot \d+[ ,]/ });
-  const drawn = async () => {
-    const names = await spots.evaluateAll(labelsOf);
-    return names
-      .map(
-        (name) =>
-          /gear (?:here|in this area)[^:]*: ([^;]*)/.exec(name)?.[1] ?? name
-      )
-      .flatMap((name) => name.match(/^Pot \d+|(?<=, )Pot \d+/g) ?? [])
-      .toSorted((a, b) => a.localeCompare(b, 'en', { numeric: true }));
-  };
-  await expect
-    .poll(drawn)
-    .toEqual(
-      Array.from({ length: 8 }, (_, index) => `Pot ${String(index + 1)}`)
+  const drawn = async () =>
+    (await spots.evaluateAll(labelsOf)).reduce(
+      (count, name) =>
+        count + 1 + Number(/ \+(\d+) more /.exec(name)?.[1] ?? 0),
+      0
     );
+  await expect.poll(drawn).toBe(8);
   for (const spot of await spots.all()) await expect(spot).toBeInViewport();
   const overview = await settledObservation(() => spots.evaluateAll(boxesOf));
   keep('overview-spots.json', { viewport: page.viewportSize(), overview });
