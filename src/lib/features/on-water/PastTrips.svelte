@@ -185,19 +185,24 @@
 </script>
 
 {#snippet dropRows(shown: PastDropRow[])}
-  <ul class="border-t border-border bg-card">
+  <ul class="@container border-t border-border bg-card">
     {#each shown as row (row.drop.id)}
       <li class="border-b border-border">
         <button
           type="button"
-          class={rowClass}
+          class={[rowClass, !row.drop.position && '@max-[22rem]:flex-wrap']}
           data-drop={row.drop.id}
           onclick={(event) => {
             onopen(row.drop.id, event.currentTarget, 'list');
           }}
         >
           <GearIcon kind={row.gear.kind} size={24} />
-          <div class="min-w-0 flex-1">
+          <div
+            class={[
+              'min-w-0 flex-1',
+              !row.drop.position && '@max-[22rem]:basis-[calc(100%-2.5rem)]'
+            ]}
+          >
             <p class="text-control leading-snug font-medium">{row.name}</p>
             {#if row.drop.label}
               <p
@@ -213,6 +218,11 @@
               {row.status}
             </p>
           </div>
+          {#if !row.drop.position}
+            <p class="text-sm text-muted-foreground @max-[22rem]:ml-10">
+              No position
+            </p>
+          {/if}
         </button>
       </li>
     {/each}
@@ -248,29 +258,36 @@
       {#await import('#lib/features/map/ChartMap.svelte')}
         <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
       {:then { default: ChartMap }}
-        <ChartMap {places} me={null} show={mapShow} {onshown}>
-          {#snippet pin(id: string)}
+        <ChartMap {places} me={null} locate={false} show={mapShow} {onshown}>
+          {#snippet pin(id: string, selected: boolean)}
             {#each itemOf(id) as item (item.id)}
               <button
                 type="button"
                 class="group grid size-11 place-items-center focus-visible:outline-none"
                 aria-label={spokenItem(item)}
                 aria-haspopup="dialog"
+                aria-current={selected || undefined}
                 data-drop={id}
                 onclick={(event) => {
                   onopen(id, event.currentTarget, 'map');
                 }}
               >
-                <PinChip face={item} />
+                <PinChip face={item} {selected} />
               </button>
             {/each}
           {/snippet}
-          {#snippet group(lead: string, ids: string[], apart: boolean)}
+          {#snippet group(
+            lead: string,
+            ids: string[],
+            apart: boolean,
+            selected: boolean
+          )}
             {#each itemOf(lead) as first (first.id)}
               <GroupPin
                 lead={first}
                 items={inListOrder(ids.flatMap(itemOf))}
                 {apart}
+                {selected}
                 onopen={(opener: HTMLElement) => {
                   hereOpener = opener;
                   hereApart = apart;

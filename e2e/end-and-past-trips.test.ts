@@ -48,12 +48,13 @@ const endTheTrip = async (page: Page, outcome: string) => {
   await expect(toastOf(page)).toContainText('Trip ended');
 };
 
-const startMixedTrip = async (page: Page) => {
+const startMixedTrip = async (page: Page, afterAllow?: () => Promise<void>) => {
   const sheet = page.getByRole('dialog');
   const main = page.getByRole('main');
   await page.clock.install({ time: MORNING });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
+  await afterAllow?.();
   await expect(page.getByText('Finding position')).toBeHidden();
   await dropOf(page, 'Pot', 'Pot 1');
   await dropOf(page, 'Net', 'Net 1');
@@ -150,17 +151,31 @@ test('ending a mixed trip preserves collected and uncollected gear on the main m
   await expect(pastGroup).toBeFocused();
 });
 
+const hasSelectedRing = (pin: Locator) =>
+  pin.evaluate((button) =>
+    [...button.querySelectorAll('span')].some((element) =>
+      getComputedStyle(element).boxShadow.includes(
+        'rgb(163, 37, 111) 0px 0px 0px 5px'
+      )
+    )
+  );
+
 test('a past trip lists its collected and uncollected gear, saves an edited catch, and identifies Show on map with restored focus', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
   const main = page.getByRole('main');
-  await startMixedTrip(page);
-  await endTheTrip(page, '1 still in the water');
+  await holdFixes(page);
+  await startMixedTrip(page, () => deliverFix(page, MADE_UP_SEA));
+  await page.clock.fastForward('00:06');
+  await page.getByRole('button', { name: 'Drop net' }).click();
+  await page.getByRole('button', { name: 'Save without position' }).click();
+  await expect(toastOf(page)).toContainText('Net 2 dropped');
+  await endTheTrip(page, '2 still in the water');
   await tab(page, 'Past trips').click();
   const pastTrip = main.getByRole('button', { name: new RegExp(TRIP_DATE) });
   await expect(pastTrip).toHaveAccessibleName(
-    `${TRIP_DATE} 2 drops, 1 uncollected`
+    `${TRIP_DATE} 3 drops, 2 uncollected`
   );
   await expectAccessibleInBothThemes(page);
   await pastTrip.click();
@@ -169,6 +184,9 @@ test('a past trip lists its collected and uncollected gear, saves an edited catc
   await expect(
     detail.getByRole('heading', { level: 1, name: TRIP_DATE })
   ).toBeFocused();
+  await expect(
+    detail.getByRole('button', { name: 'Centre on my position' })
+  ).toHaveCount(0);
   const pot1 = detail.getByRole('button', {
     name: 'Pot 1 2 kept, 0 released',
     exact: true
@@ -177,8 +195,13 @@ test('a past trip lists its collected and uncollected gear, saves an edited catc
     name: 'Net 1 Uncollected',
     exact: true
   });
+  const net2 = detail.getByRole('button', {
+    name: 'Net 2 Uncollected No position',
+    exact: true
+  });
   await expect(pot1).toBeVisible();
   await expect(net1).toBeVisible();
+  await expect(net2).toBeVisible();
   const detailGroup = detail.getByRole('button', {
     name: 'Pot 1 +1 more here; 1 of 2 uncollected',
     exact: true
@@ -228,6 +251,9 @@ test('a past trip lists its collected and uncollected gear, saves an edited catc
   await sheet.getByRole('button', { name: 'Show on map' }).click();
   await expect(sheet).toBeHidden();
   await expect(detailGroup).toBeFocused();
+  await detail.getByRole('button', { name: 'All past trips' }).focus();
+  await expect(detailGroup).toHaveAttribute('aria-current', 'true');
+  expect(await hasSelectedRing(detailGroup)).toBe(true);
   await detailGroup.click();
   await expect(
     sheet.getByRole('button', {
@@ -289,6 +315,13 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   await expectShown([...pot1, ...pot2], []);
 
   await named('Pot 2 Uncollected').click();
+  await sheet.getByRole('button', { name: 'Show on map' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(pot2[1]).toBeFocused();
+  await detail.getByRole('button', { name: 'All past trips' }).focus();
+  await expect(pot2[1]).toHaveAttribute('aria-current', 'true');
+  expect(await hasSelectedRing(pot2[1])).toBe(true);
+  await pot2[1].click();
   await sheet.getByRole('button', { name: 'Delete drop' }).click();
   await expect(sheet).toBeHidden();
   await expect(toastOf(page)).toContainText('Pot 2 deleted');
