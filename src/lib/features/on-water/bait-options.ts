@@ -2,6 +2,8 @@ import type { Drop } from '#lib/features/trip/index.js';
 
 export type BaitChoice = { key: string; label: string };
 
+export type BaitSearch = { query: string; refused: boolean };
+
 type BaitSource = {
   id: string;
   drops: readonly Pick<Drop, 'id' | 'placedAt' | 'bait'>[];

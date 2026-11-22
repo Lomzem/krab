@@ -1,6 +1,12 @@
 import type { Page } from '@playwright/test';
 import { animationsSettled } from './settled';
-import { expect, storedCollections, test, toastOf } from './fixtures';
+import {
+  expect,
+  storedBaits,
+  storedCollections,
+  test,
+  toastOf
+} from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 import { failStorage, injectStorageFaults } from './storage-faults';
 
@@ -134,16 +140,29 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await gearTab(page).click();
 
   await inWaterRow(page, 'Pot 1').click();
-  await sheet.getByLabel('Bait').fill('herring');
+  await sheet.getByRole('button', { name: 'Add bait' }).click();
+  await sheet.getByLabel('Find or add bait').fill('herring');
+  await sheet.getByRole('option', { name: 'Add herring' }).click();
+  await expect(sheet.getByRole('radio', { name: 'herring' })).toBeChecked();
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await sheet.getByRole('button', { name: 'One more kept' }).click();
+  await sheet.getByRole('button', { name: 'Other bait' }).click();
+  const search = sheet.getByLabel('Find or add bait');
+  await search.fill('squid');
+  await dropAgain.click();
+  await expect(search).toBeFocused();
+  await expect(search).toHaveAccessibleDescription('Choose or add bait');
+  expect(await storedBaits(page)).toEqual(['']);
+  await sheet.getByRole('button', { name: 'Other bait' }).click();
+  await expect(search).toBeHidden();
   await dropAgain.click();
   await expect(sheet).toBeHidden();
+  expect(await storedBaits(page)).toEqual(['herring', 'herring']);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
 
   await expect(collectedRow(page, 'Pot 1')).toContainText('1 kept, 0 released');
   await collectedRow(page, 'Pot 1').click();
-  await expect(sheet.getByLabel('Bait')).toHaveValue('herring');
+  await expect(sheet.getByRole('radio', { name: 'herring' })).toBeChecked();
   await expect(dropAgain).toHaveCount(0);
   await expect(sheet.getByRole('button', { name: 'Undo collect' })).toHaveCount(
     0
@@ -154,7 +173,7 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await page.keyboard.press('Escape');
 
   await inWaterRow(page, 'Pot 1').click();
-  await expect(sheet.getByLabel('Bait')).toHaveValue('herring');
+  await expect(sheet.getByRole('radio', { name: 'herring' })).toBeChecked();
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await sheet.getByRole('button', { name: 'Nothing caught' }).click();
   await sheet.getByRole('button', { name: 'Undo collect' }).click();

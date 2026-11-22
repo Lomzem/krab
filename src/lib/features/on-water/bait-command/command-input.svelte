@@ -23,6 +23,7 @@
         FOCUS,
         className
       ]}
+      aria-labelledby={restProps['aria-labelledby']}
       role={controls ? 'combobox' : undefined}
       aria-autocomplete={controls ? 'list' : undefined}
       aria-expanded={controls ? 'true' : undefined}
