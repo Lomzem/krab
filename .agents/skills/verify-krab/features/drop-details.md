@@ -5,7 +5,7 @@ Open a dropped pot or net in its gear sheet to add a label, bait, depth and note
 ## Sub-features
 
 - `details-draft`: edits stay a draft; Escape or Close leaves the stored drop unchanged.
-- `details-save`: Save in the footer stores label, bait, depth (ft) and notes, closes the sheet and survives reload.
+- `details-save`: Save in the footer stores label, bait (chosen from chips or added through the inline picker), depth (ft) and notes, closes the sheet and survives reload.
 - `details-depth`: a negative or non-numeric depth keeps the sheet open, marks Depth invalid and focuses it.
 - `details-kind`: the selected kind shows a check like the Drop control's, with its space reserved so nothing shifts. Switching kind gives the next number of the new kind (Net 1 becomes Pot 2 after Pot 1) and is refused once the gear has been dropped again.
 - `details-delete`: Delete drop removes the row at once, shows `{name} deleted`, and Undo restores the same record in its original position. Deleting a trip's only drop removes the trip; Undo brings back the same trip. Deleting a drop that is already gone, for example deleted in another tab, closes the sheet without an error.

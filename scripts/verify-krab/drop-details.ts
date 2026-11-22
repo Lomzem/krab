@@ -91,15 +91,22 @@ test('drop details stay a draft until Save, refuse a bad depth, save and survive
 
   await label.fill('red float');
   await depth.fill('12.5');
+  await sheet.getByRole('button', { name: 'Add bait' }).click();
+  await sheet.getByLabel('Find or add bait').fill('Chicken');
+  await sheet.getByRole('option', { name: 'Add Chicken' }).click();
+  await expect(sheet.getByRole('radio', { name: 'Chicken' })).toBeChecked();
   await save.click();
   await expect(sheet).toBeHidden();
   expect(await storedPot1()).toMatchObject({
     label: 'red float',
+    bait: 'Chicken',
     depthFt: 12.5
   });
   const saved = await readTrips(page);
   keep('indexeddb-details-saved.json', saved);
-  log('Label red float, Depth 12.5, Save; stored drop has both');
+  log(
+    'Label red float, Depth 12.5, Bait Chicken, Save; stored drop has all three'
+  );
   await capture('04-saved');
 
   await page.reload();
@@ -107,9 +114,10 @@ test('drop details stay a draft until Save, refuse a bad depth, save and survive
   await pot1.click();
   await expect(label).toHaveValue('red float');
   await expect(depth).toHaveValue('12.5');
+  await expect(sheet.getByRole('radio', { name: 'Chicken' })).toBeChecked();
   expect(await readTrips(page)).toEqual(saved);
   await page.keyboard.press('Escape');
-  log('reload, reopen Pot 1; same Label and Depth; IndexedDB unchanged');
+  log('reload, reopen Pot 1; same Label, Depth and Bait; IndexedDB unchanged');
   await capture('05-restored');
 
   await gearRow(page, 'Net 1').click();
