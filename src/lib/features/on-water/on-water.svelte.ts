@@ -139,10 +139,11 @@ export class OnWater {
   load = $state<Load>('opening');
   #notice = $state.raw<Notice | null>(null);
   #unsaved = $state.raw<readonly Unsaved[]>([]);
+  #retrying = $state(false);
   readonly notice = $derived.by((): Notice | null => {
     if (this.#notice) return this.#notice;
     const oldest = this.#unsaved.at(0);
-    if (!oldest) return null;
+    if (!oldest || this.#retrying) return null;
     return {
       key: oldest.key,
       text: unsavedText(this.#unsaved.length),
@@ -206,12 +207,26 @@ export class OnWater {
 
   async retry(key: number) {
     const entry = this.#unsaved.find((unsaved) => unsaved.key === key);
-    if (!entry) return;
+    if (!entry || this.#retrying) return;
+    this.#retrying = true;
+    const outcome = await Effect.runPromise(Effect.result(entry.retry)).finally(
+      () => {
+        this.#retrying = false;
+      }
+    );
+    if (Result.isFailure(outcome) && outcome.failure._tag === 'DropNotSaved') {
+      this.#noticeKey += 1;
+      const again = { key: this.#noticeKey, retry: outcome.failure.retry };
+      this.#unsaved = this.#unsaved.map((unsaved) =>
+        unsaved === entry ? again : unsaved
+      );
+      return;
+    }
     this.#unsaved = this.#unsaved.filter((unsaved) => unsaved !== entry);
-    this.#settle(await Effect.runPromise(Effect.result(entry.retry)), true);
+    this.#settle(outcome);
   }
 
-  #settle(outcome: Result.Result<PlacedDrop, DropFailure>, retried = false) {
+  #settle(outcome: Result.Result<PlacedDrop, DropFailure>) {
     if (Result.isFailure(outcome)) {
       const failure = outcome.failure;
       if (failure._tag === 'DropCancelled') {
@@ -225,9 +240,7 @@ export class OnWater {
       this.#noticeKey += 1;
       const entry = { key: this.#noticeKey, retry: failure.retry };
       this.#notice = null;
-      this.#unsaved = retried
-        ? [entry, ...this.#unsaved]
-        : [...this.#unsaved, entry];
+      this.#unsaved = [...this.#unsaved, entry];
       return;
     }
     const placed = outcome.success;
@@ -363,6 +376,7 @@ export class OnWater {
       return false;
     }
     if (Result.isFailure(ended)) void this.reload();
+    this.#unsaved = [];
     this.#say('Trip ended');
     return true;
   }

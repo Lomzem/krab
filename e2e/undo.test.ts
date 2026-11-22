@@ -824,3 +824,35 @@ test('two failed drops share one Retry that saves the oldest, then offers the ot
   await expect(toastOf(page)).toBeHidden();
   expect(await storedDrops(page)).toBe(1);
 });
+
+test("ending the trip retires a failed drop's Retry so it never saves into the next trip", async ({
+  page
+}) => {
+  const failedSave = toastOf(page).filter({
+    hasText: "Couldn't save the drop"
+  });
+  await openWithHeldFixesAndFaults(page);
+  const dropPot = page.getByRole('button', { name: 'Drop pot' });
+  await dropPot.click();
+  await shownOnceStored(
+    page,
+    toastOf(page).filter({ hasText: 'Pot 1 dropped' })
+  );
+  await page.clock.runFor(8000);
+
+  await failStorage(page, 'writes');
+  await dropPot.click();
+  await shownOnceStored(page, failedSave);
+  await failStorage(page, null);
+
+  const sheet = page.getByRole('dialog');
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('button', { name: 'End trip' }).click();
+  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await shownOnceStored(page, toastOf(page).filter({ hasText: 'Trip ended' }));
+  await page.clock.runFor(4000);
+  await expect(failedSave).toBeHidden();
+  expect(await storedPlacements(page)).toEqual([
+    { kind: 'pot', placedAt: PAUSED.getTime(), lat: FIRST_FIX.latitude }
+  ]);
+});

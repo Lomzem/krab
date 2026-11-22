@@ -296,13 +296,13 @@
         );
 
   const sheetReturnFocus = () => {
-    if (water.pending?.phase === 'acquiring' || savingShown) return null;
-    if (showOnMap !== null) return mapTabButton;
     if (pastShowNext !== null) {
       pastShow = pastShowNext;
       pastShowNext = null;
       return null;
     }
+    if (water.pending?.phase === 'acquiring' || savingShown) return null;
+    if (showOnMap !== null) return mapTabButton;
     if (returnTo?.isConnected) return returnTo;
     return shownDrop(returnDrop) ?? restingFocus();
   };
