@@ -862,3 +862,40 @@ test("ending the trip retires a failed drop's Retry so it never saves into the n
     { kind: 'pot', placedAt: PAUSED.getTime(), lat: FIRST_FIX.latitude }
   ]);
 });
+
+test("End trip waits while a failed drop's Retry is saving, so the retried drop stays in its trip", async ({
+  page
+}) => {
+  const failedSave = toastOf(page).filter({
+    hasText: "Couldn't save the drop"
+  });
+  await openWithHeldFixesAndFaults(page);
+  const dropPot = page.getByRole('button', { name: 'Drop pot' });
+  await dropPot.click();
+  await shownOnceStored(
+    page,
+    toastOf(page).filter({ hasText: 'Pot 1 dropped' })
+  );
+  await page.clock.runFor(8000);
+  await deliverFix(page, SECOND_FIX, new Date(PAUSED.getTime() + 8000));
+
+  await failStorage(page, 'writes');
+  await dropPot.click();
+  await shownOnceStored(page, failedSave);
+  await failStorage(page, null);
+
+  const sheet = page.getByRole('dialog');
+  const confirmEnd = sheet.getByRole('button', { name: 'End trip' });
+  await holdStorage(page);
+  await failedSave.getByRole('button', { name: 'Retry' }).click();
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('button', { name: 'End trip' }).click();
+  await confirmEnd.click();
+  await releaseStorage(page);
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await expect(confirmEnd).toBeVisible();
+  expect(await storedDrops(page)).toBe(2);
+
+  await confirmEnd.click();
+  await expect(toastOf(page)).toContainText('Trip ended');
+});
