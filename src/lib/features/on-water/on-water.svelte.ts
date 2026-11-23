@@ -370,7 +370,7 @@ export class OnWater {
   }
 
   async endTrip(tripId: string) {
-    if (this.pending || this.#ending) return false;
+    if (this.pending || this.#ending || this.#retrying) return false;
     this.#ending = true;
     const ended = await resultOf(this.#book.endTrip(tripId)).finally(() => {
       this.#ending = false;

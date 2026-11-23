@@ -184,6 +184,11 @@
     return stop;
   };
 
+  export const absorbPress = () => {
+    endDoublePress();
+    if (lastPress) endDoublePress = absorbDoublePress(lastPress);
+  };
+
   $effect(() => () => {
     endDoublePress();
   });

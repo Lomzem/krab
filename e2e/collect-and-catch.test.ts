@@ -214,6 +214,16 @@ test('Undo collect on gear with a saved catch asks first and Keep catch keeps it
     { collected: true, catch: { kept: 0, released: 0 } }
   ]);
 
+  await sheet.getByRole('button', { name: 'One more kept' }).click();
+  await undoCollect.click();
+  await sheet.getByRole('button', { name: 'Discard changes' }).dblclick();
+  await expect(keepCatch).toBeFocused();
+  await expect(countOf(page, 'Kept')).toContainText('Kept: 0');
+  expect(await storedCollections(page)).toEqual([
+    { collected: true, catch: { kept: 0, released: 0 } }
+  ]);
+  await keepCatch.click();
+
   await undoCollect.click();
   await loss.getByRole('button', { name: 'Undo collect' }).click();
   await expect(

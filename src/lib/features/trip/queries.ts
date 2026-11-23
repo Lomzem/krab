@@ -284,7 +284,6 @@ export const pastTripSummaries = (
     const span = tripSpan(trip);
     return {
       trip,
-      span,
       dates: tripDates(trip),
       shortDates: shortDateRange(span.first, span.last),
       counts: pastTripCounts(trip),
@@ -295,9 +294,10 @@ export const pastTripSummaries = (
   for (const row of rows) {
     byDate.set(row.dates, (byDate.get(row.dates) ?? 0) + 1);
   }
-  return rows.map(({ span, ...row }) => ({
+  return rows.map((row) => ({
     ...row,
-    startTime: (byDate.get(row.dates) ?? 0) > 1 ? shortTime(span.first) : null
+    startTime:
+      (byDate.get(row.dates) ?? 0) > 1 ? shortTime(row.trip.startedAt) : null
   }));
 };
 

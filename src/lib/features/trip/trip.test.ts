@@ -1928,8 +1928,10 @@ it('adds start times only to past trips that share a date text, with singular an
     state.now = Date.parse(at);
     if (active) await run(book.endTrip(active.id));
   };
-  await placeAt(book, state, '2031-06-10T06:05:00-04:00');
+  const earliest = await placeAt(book, state, '2031-06-10T06:05:00-04:00');
   await placeAt(book, state, '2031-06-10T06:40:00-04:00');
+  await placeAt(book, state, '2031-06-10T07:10:00-04:00');
+  await run(book.deleteDrop(earliest.drop.id));
   await finish('2031-06-10T09:00:00-04:00');
   await placeAt(book, state, '2031-06-10T14:15:00-04:00');
   await finish('2031-06-10T16:00:00-04:00');

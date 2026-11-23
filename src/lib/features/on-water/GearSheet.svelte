@@ -98,6 +98,7 @@
   let editingFocus: Element | null = null;
   let askGroup = $state<HTMLDivElement>();
   let keepButton = $state<HTMLButtonElement>();
+  let sheet = $state<{ absorbPress: () => void }>();
 
   const ask = (exit: () => void, loss: Loss = 'draft') => {
     const active = document.activeElement;
@@ -123,7 +124,9 @@
   };
 
   const confirmCatchLoss = (exit: () => void) => {
-    if (!busy) ask(exit, 'catch');
+    if (busy) return;
+    sheet?.absorbPress();
+    ask(exit, 'catch');
   };
 
   const storing =
@@ -206,6 +209,7 @@
 </script>
 
 <Sheet
+  bind:this={sheet}
   {open}
   titleId={TITLE_ID}
   onclose={() => {
