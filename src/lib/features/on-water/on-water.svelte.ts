@@ -140,10 +140,11 @@ export class OnWater {
   #notice = $state.raw<Notice | null>(null);
   #unsaved = $state.raw<readonly Unsaved[]>([]);
   #retrying = $state(false);
+  #ending = $state(false);
   readonly notice = $derived.by((): Notice | null => {
     if (this.#notice) return this.#notice;
     const oldest = this.#unsaved.at(0);
-    if (!oldest || this.#retrying) return null;
+    if (!oldest || this.#retrying || this.#ending) return null;
     return {
       key: oldest.key,
       text: unsavedText(this.#unsaved.length),
@@ -207,7 +208,7 @@ export class OnWater {
 
   async retry(key: number) {
     const entry = this.#unsaved.find((unsaved) => unsaved.key === key);
-    if (!entry || this.#retrying) return;
+    if (!entry || this.#retrying || this.#ending) return;
     this.#retrying = true;
     const outcome = await Effect.runPromise(Effect.result(entry.retry)).finally(
       () => {
@@ -369,8 +370,11 @@ export class OnWater {
   }
 
   async endTrip(tripId: string) {
-    if (this.pending) return false;
-    const ended = await resultOf(this.#book.endTrip(tripId));
+    if (this.pending || this.#ending) return false;
+    this.#ending = true;
+    const ended = await resultOf(this.#book.endTrip(tripId)).finally(() => {
+      this.#ending = false;
+    });
     if (Result.isFailure(ended) && ended.failure._tag === 'StorageFailed') {
       this.#say("Couldn't end the trip");
       return false;
