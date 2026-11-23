@@ -19,9 +19,13 @@
     type Trip
   } from '#lib/features/trip/index.js';
   import GearHere from './GearHere.svelte';
-  import { inListOrder, type HereItem } from './gear-here';
+  import { inListOrder, spokenItem, type HereItem } from './gear-here';
   import GroupPin from './GroupPin.svelte';
-  import { DEFAULT_MAP_FILTER, type MapFilter } from './map-filter';
+  import {
+    DEFAULT_MAP_FILTER,
+    filterHides,
+    type MapFilter
+  } from './map-filter';
   import MapFilterSheet from './MapFilterSheet.svelte';
   import PinChip from './PinChip.svelte';
   import { chipBoxes } from './pin-chip';
@@ -103,9 +107,10 @@
     earlier: 'earlier days only',
     all: 'all days'
   } as const;
+  const hides = $derived(filterHides(filter, trip));
   const filterSummary = $derived(
     [
-      'gear in the water',
+      trip && 'gear in the water',
       filter.collected && 'collected gear',
       past.length > 0 && filter.past && 'past trips',
       filter.timeInWater && 'time in the water',
@@ -166,7 +171,10 @@
   const pinDetails = (row: GearRow) =>
     present([
       row.day?.text,
-      row.direction && `${row.direction.distanceSpoken} ${row.direction.point}`,
+      row.direction &&
+        (row.direction.atGear
+          ? 'At gear'
+          : `${row.direction.distanceSpoken} ${row.direction.point}`),
       `in the water for ${row.timeInWater.spoken}`,
       row.rough && `rough position, within about ${row.rough.spoken}`
     ]);
@@ -174,7 +182,10 @@
   const pinSummary = (row: GearRow) =>
     present([
       row.day?.text,
-      row.direction && `${row.direction.distance} ${row.direction.pointShort}`,
+      row.direction &&
+        (row.direction.atGear
+          ? 'At gear'
+          : `${row.direction.distance} ${row.direction.pointShort}`),
       `${row.timeInWater.short} in the water`,
       row.rough && `rough, within ${row.rough.short}`
     ]).join(', ');
@@ -183,9 +194,6 @@
 
   const collectedDetails = (row: CollectedRow) =>
     present([row.day?.text, 'collected', row.catchText]);
-
-  const label = (name: string, details: string[]) =>
-    [name, ...details].join(', ');
 
   const itemOf = (id: string): HereItem[] => {
     const row = rowsById.get(id);
@@ -199,6 +207,7 @@
           day: row.day,
           uncollected: false,
           name: row.name,
+          label: row.drop.label,
           details: pinDetails(row),
           summary: pinSummary(row)
         }
@@ -215,6 +224,7 @@
           day: done.day,
           uncollected: false,
           name: done.name,
+          label: done.drop.label,
           details: collectedDetails(done),
           summary: collectedDetails(done).join(', ')
         }
@@ -231,6 +241,7 @@
           day: null,
           uncollected: ended.drop.collectedAt === null,
           name: ended.name,
+          label: ended.drop.label,
           details: pastDetails(ended),
           summary: pastDetails(ended).join(', ')
         }
@@ -292,13 +303,15 @@
         {show}
         {onshown}
         keepClear={newest}
+        fitLabel={hides ? 'Fit shown gear' : 'Show all gear'}
       >
         {#snippet controls()}
           {#if trip || past.length > 0}
             <button
               bind:this={filterButton}
               type="button"
-              class={CAPSULE_BUTTON}
+              class="relative {CAPSULE_BUTTON} data-active:bg-accent data-active:text-accent-foreground"
+              data-active={hides || undefined}
               aria-haspopup="dialog"
               aria-label="Filter, showing {filterSummary}"
               onclick={() => {
@@ -306,6 +319,12 @@
               }}
             >
               <Icon name="filter" />
+              {#if hides}
+                <span
+                  class="absolute top-2 right-2 size-2 rounded-full bg-action"
+                  aria-hidden="true"
+                ></span>
+              {/if}
             </button>
           {/if}
           {#if compassShown}
@@ -332,7 +351,8 @@
             <button
               type="button"
               class="group grid size-11 place-items-center focus-visible:outline-none"
-              aria-label={label(item.name, item.details)}
+              aria-label={spokenItem(item)}
+              aria-haspopup="dialog"
               aria-current={selected || undefined}
               data-drop={id}
               onclick={(event) => {

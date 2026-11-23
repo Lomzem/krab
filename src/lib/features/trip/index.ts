@@ -86,7 +86,7 @@ export {
   type DropTarget,
   type FoundDrop
 } from './rules';
-export { compassPoint, shortDateRange } from './format';
+export { compassPoint, shortDateRange, shortTime } from './format';
 export { availability, type Availability } from './availability';
 export {
   catchText,
@@ -100,6 +100,7 @@ export {
   nearestGear,
   pastDrops,
   pastTripCounts,
+  pastTripSummaries,
   roughness,
   timeInWater,
   tripDates,
@@ -112,6 +113,7 @@ export {
   type GearRow,
   type PastDaySelection,
   type PastDropRow,
+  type PastTripSummary,
   type SpokenText
 } from './queries';
 export type { LatLon } from './geo';

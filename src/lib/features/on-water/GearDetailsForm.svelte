@@ -9,6 +9,7 @@
     type DropEdit,
     type Kind
   } from '#lib/features/trip/index.js';
+  import { baitKey, type BaitSearch } from './bait-options';
   import CatchField from './CatchField.svelte';
   import { ACTION_BUTTON, PRIMARY_BUTTON } from './controls';
   import DetailsFields from './DetailsFields.svelte';
@@ -31,6 +32,7 @@
     onsave,
     oncollect,
     ondropagain,
+    denied = false,
     direction,
     ondirty,
     inert = false,
@@ -43,6 +45,7 @@
     onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     oncollect?: (dropId: string) => void;
     ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
+    denied?: boolean;
     direction?: Snippet<[Drop]>;
     ondirty?: (dirty: boolean) => void;
     inert?: boolean;
@@ -61,6 +64,9 @@
   });
   let draft = $state(initial().draft);
   let kind = $state(initial().kind);
+  const baits = untrack(() => subject.baits);
+  let baitSearch = $state<BaitSearch>({ query: '', refused: false });
+  const searching = $derived(baitKey(baitSearch.query) !== '');
   let catchDraft = $derived(
     collectedAt === null ? null : untrack(() => catchDraftOf(drop.catch))
   );
@@ -71,7 +77,9 @@
   let catchHeading = $state<HTMLHeadingElement>();
 
   $effect(() => {
-    ondirty?.(kind !== stored || draftChanged(drop, draft, catchDraft));
+    ondirty?.(
+      kind !== stored || searching || draftChanged(drop, draft, catchDraft)
+    );
   });
 
   $effect(() => {
@@ -116,6 +124,15 @@
   const save = (
     send: (dropId: string, edit: DropEdit, kind: Kind | null) => void
   ) => {
+    if (searching) {
+      baitSearch.refused = true;
+      void tick().then(() => {
+        const search = document.getElementById(`${idPrefix}-bait-search`);
+        search?.focus({ preventScroll: true });
+        search?.scrollIntoView({ block: 'nearest' });
+      });
+      return;
+    }
     send(drop.id, editOf(draft, catchDraft), kind === stored ? null : kind);
   };
 
@@ -131,7 +148,7 @@
   {:else if collectedAt === null}
     <div class="grid gap-3">
       <div
-        class="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2"
+        class="flex min-h-15 flex-wrap items-center justify-between gap-x-3 gap-y-2"
       >
         <p class="text-sm text-muted-foreground">
           <span aria-hidden="true">{inWater.short} in the water</span>
@@ -168,8 +185,14 @@
         aria-disabled={busy}
         onclick={() => {
           save(ondropagain);
-        }}>Drop {KIND_NAMES[stored].toLowerCase()} again here</button
+        }}
       >
+        {#if denied}
+          Drop {KIND_NAMES[stored].toLowerCase()} again without position
+        {:else}
+          Drop {KIND_NAMES[stored].toLowerCase()} again here
+        {/if}
+      </button>
     {/if}
   {/if}
   {@render children?.()}
@@ -179,5 +202,5 @@
     locked={!canChangeKind(subject.trip, drop.gearId)}
     {idPrefix}
   />
-  <DetailsFields bind:draft {idPrefix} />
+  <DetailsFields bind:draft bind:baitSearch {baits} {idPrefix} />
 </form>

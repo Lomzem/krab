@@ -68,19 +68,25 @@ test('a trip whose stored records fail to read shows that it could not load, not
   await failStorage(page, 'reads');
   await page.reload();
   await expect(main).toContainText(TRIP_LOAD_FAILED);
+  await expect(page.getByText(EMPTY_GEAR)).toHaveCount(0);
   await expect(main.getByRole('region', { name: 'Map view' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Drop pot' })).toBeVisible();
   await expectAccessibleInBothThemes(page);
   await tab(page, 'Gear').click();
   await expect(main).toContainText(TRIP_LOAD_FAILED);
-  await expect(main).not.toContainText(EMPTY_GEAR);
+  await expect(page.getByText(EMPTY_GEAR)).toHaveCount(0);
   await tab(page, 'Past trips').click();
   await expect(main).toContainText(PAST_LOAD_FAILED);
   await expect(main).not.toContainText('No past trips');
 
   await tab(page, 'Gear').click();
   await failStorage(page, null);
+  await holdNextRead(page);
   await main.getByRole('button', { name: 'Retry' }).click();
+  await expect(
+    main.getByRole('button', { name: 'Loading trip' })
+  ).toBeVisible();
+  await releaseHeldRead(page);
   await expect(inWaterRow(page, 'Pot 1')).toBeVisible();
   await expect(main).not.toContainText(TRIP_LOAD_FAILED);
   await tab(page, 'Past trips').click();
@@ -127,6 +133,8 @@ test('a double tap while storage is still opening makes one drop attempt, and it
   await holdFixes(page);
   await holdFirstOpen(page);
   await page.goto('/');
+  await expect(page.getByRole('main')).toContainText('Loading trip');
+  await expect(page.getByText(EMPTY_GEAR)).toHaveCount(0);
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeVisible();
   await page
@@ -159,6 +167,8 @@ test('a drop tapped while storage is still opening keeps the tap time and the fi
   await holdFirstOpen(page);
   await page.clock.install({ time: MORNING });
   await page.goto('/');
+  await expect(page.getByRole('main')).toContainText('Loading trip');
+  await expect(page.getByText(EMPTY_GEAR)).toHaveCount(0);
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await deliverFix(page, MADE_UP_SEA);
   await expect(page.getByText('Finding position')).toBeHidden();

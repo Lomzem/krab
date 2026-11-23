@@ -1,18 +1,35 @@
-import { compassPoint, distanceText, durationText } from './format';
+import {
+  compassPoint,
+  distanceText,
+  durationText,
+  shortDateRange,
+  shortTime
+} from './format';
 import { bearingDeg, distanceFt, metresToFeet, type LatLon } from './geo';
 import { gearName } from './rules';
 import type { Catch, Drop, Gear, Position, Trip } from './types';
 
 const ROUGH_ACCURACY_M = 50;
 
-export type Direction = {
-  feet: number;
-  bearingDeg: number;
-  distance: string;
-  distanceSpoken: string;
-  point: string;
-  pointShort: string;
-};
+export type Direction =
+  | {
+      feet: number;
+      atGear: true;
+      bearingDeg: null;
+      distance: null;
+      distanceSpoken: null;
+      point: null;
+      pointShort: null;
+    }
+  | {
+      feet: number;
+      atGear: false;
+      bearingDeg: number;
+      distance: string;
+      distanceSpoken: string;
+      point: string;
+      pointShort: string;
+    };
 
 export type SpokenText = { short: string; spoken: string };
 
@@ -96,11 +113,23 @@ export const timeInWater = (drop: Drop, at: number) =>
 const directionTo = (from: LatLon | null, drop: Drop): Direction | null => {
   if (!from || !drop.position) return null;
   const feet = distanceFt(from, drop.position);
+  if (Math.round(feet) === 0) {
+    return {
+      feet,
+      atGear: true,
+      bearingDeg: null,
+      distance: null,
+      distanceSpoken: null,
+      point: null,
+      pointShort: null
+    };
+  }
   const bearing = bearingDeg(from, drop.position);
   const text = distanceText(feet);
   const [point, pointShort] = compassPoint(bearing);
   return {
     feet,
+    atGear: false,
     bearingDeg: bearing,
     distance: text.short,
     distanceSpoken: text.spoken,
@@ -226,13 +255,50 @@ export const tripDates = (trip: Trip) => {
   return `${first.toLocaleDateString('en-US', FULL_DATE)} to ${last.toLocaleDateString('en-US', FULL_DATE)}`;
 };
 
-export const pastTripCounts = (trip: Trip) => {
+const dropCount = (trip: Trip) => {
   const drops = trip.drops.length;
+  return `${String(drops)} ${drops === 1 ? 'drop' : 'drops'}`;
+};
+
+export const pastTripCounts = (trip: Trip) => {
   const uncollected = trip.drops.filter(isInWater).length;
-  const total = `${String(drops)} ${drops === 1 ? 'drop' : 'drops'}`;
+  const total = dropCount(trip);
   return uncollected === 0
     ? total
     : `${total}, ${String(uncollected)} uncollected`;
+};
+
+export type PastTripSummary = {
+  trip: Trip;
+  dates: string;
+  shortDates: string;
+  startTime: string | null;
+  counts: string;
+  dropCount: string;
+};
+
+export const pastTripSummaries = (
+  trips: readonly Trip[]
+): PastTripSummary[] => {
+  const rows = trips.map((trip) => {
+    const span = tripSpan(trip);
+    return {
+      trip,
+      dates: tripDates(trip),
+      shortDates: shortDateRange(span.first, span.last),
+      counts: pastTripCounts(trip),
+      dropCount: dropCount(trip)
+    };
+  });
+  const byDate = new Map<string, number>();
+  for (const row of rows) {
+    byDate.set(row.dates, (byDate.get(row.dates) ?? 0) + 1);
+  }
+  return rows.map((row) => ({
+    ...row,
+    startTime:
+      (byDate.get(row.dates) ?? 0) > 1 ? shortTime(row.trip.startedAt) : null
+  }));
 };
 
 export type PastDaySelection = 'last' | 'earlier' | 'all';

@@ -8,11 +8,15 @@
     kind = $bindable('pot'),
     button = $bindable(),
     denied,
+    finding = false,
+    busy = false,
     ondrop
   }: {
     kind?: Kind;
     button?: HTMLButtonElement;
     denied: boolean;
+    finding?: boolean;
+    busy?: boolean;
     ondrop: () => void;
   } = $props();
 
@@ -26,7 +30,7 @@
     <legend class="sr-only">Gear to drop</legend>
     {#each KINDS as option (option)}
       <label
-        class="flex min-w-16 flex-1 cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-[0.3125rem] px-2 text-base font-medium whitespace-nowrap text-muted-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-sm {CHOICE_FOCUS_INSET}"
+        class="flex min-h-14 min-w-16 flex-1 cursor-pointer touch-manipulation items-center justify-center gap-1 self-stretch rounded-[0.3125rem] px-2 text-base font-medium whitespace-nowrap text-muted-foreground has-checked:bg-card has-checked:text-foreground has-checked:shadow-sm compact:min-h-12 {CHOICE_FOCUS_INSET}"
       >
         <input
           class="sr-only"
@@ -43,7 +47,8 @@
   <button
     bind:this={button}
     type="button"
-    class="flex min-h-16 min-w-0 grow-999 basis-32 touch-manipulation flex-col items-center justify-center rounded-control bg-action px-3 py-2 text-control leading-tight font-semibold text-action-foreground compact:min-h-14 compact:py-1 {FOCUS} {PRESS} active:brightness-95"
+    aria-disabled={busy || undefined}
+    class="flex min-h-16 min-w-0 grow-999 basis-32 touch-manipulation flex-col items-center justify-center rounded-control bg-action px-3 py-2 text-control leading-tight font-semibold text-action-foreground compact:min-h-14 compact:py-1 {FOCUS} {PRESS} active:brightness-95 aria-disabled:opacity-60"
     onclick={ondrop}
   >
     <span class="flex items-center gap-2">
@@ -52,6 +57,8 @@
     </span>
     {#if denied}
       <span class="text-sm font-medium">without position</span>
+    {:else if finding}
+      <span class="text-sm font-medium">Finding position</span>
     {/if}
   </button>
 </div>

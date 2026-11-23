@@ -21,7 +21,7 @@ test('placing a drop from Map survives reload', async ({
   log('evidence read before Krab starts rejects and creates no database');
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: 'Krab needs location' })
+    page.getByRole('heading', { name: 'Mark and find gear' })
   ).toBeVisible();
   await capture('01-location-explanation');
   log(
@@ -43,8 +43,8 @@ test('placing a drop from Map survives reload', async ({
     .getByRole('main')
     .getByRole('listitem')
     .filter({ hasText: 'Pot 1' });
-  await expect(row).toContainText('0 ft');
-  log('Gear lists Pot 1 at 0 ft');
+  await expect(row).toContainText('At gear');
+  log('Gear lists Pot 1 at gear');
   const before = await readTrips(page);
   expect(before).toHaveLength(1);
   expect(before[0]?.drops[0]?.position).toEqual({
@@ -56,7 +56,7 @@ test('placing a drop from Map survives reload', async ({
   await capture('04-gear');
   await page.reload();
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
-  await expect(row).toContainText('0 ft');
+  await expect(row).toContainText('At gear');
   const after = await readTrips(page);
   expect(after).toEqual(before);
   keep('indexeddb-after.json', after);

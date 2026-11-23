@@ -4,7 +4,7 @@
   import { watchVisibility } from '#lib/page-visibility.js';
   import { FOCUS_INVERSE } from './controls';
   import { Countdown } from './countdown';
-  import type { Notice, Offer, Retry, Undo } from './on-water.svelte';
+  import type { Notice, Offer, Undo } from './on-water.svelte';
 
   const SHOWN_MS: Record<Offer['action'], number | null> = {
     none: 4000,
@@ -27,7 +27,7 @@
   }: {
     notice: Notice | null;
     onundo: (undo: Undo) => void;
-    onretry: (retry: Retry) => void;
+    onretry: (key: number) => void;
     ondismiss: (key: number) => void;
     blocked?: boolean;
     children?: Snippet;
@@ -150,13 +150,12 @@
             }}>Undo</button
           >
         {:else if notice.offer.action === 'retry'}
-          {@const retry = notice.offer.retry}
           {@const key = notice.key}
           <button
             type="button"
             class="{ACTION} text-inverse-action underline underline-offset-4 {FOCUS_INVERSE}"
             onclick={() => {
-              onretry(retry);
+              onretry(key);
             }}>Retry</button
           >
           <button

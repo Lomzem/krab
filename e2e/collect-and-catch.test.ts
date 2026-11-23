@@ -1,6 +1,12 @@
 import type { Page } from '@playwright/test';
 import { animationsSettled } from './settled';
-import { expect, storedCollections, test, toastOf } from './fixtures';
+import {
+  expect,
+  storedBaits,
+  storedCollections,
+  test,
+  toastOf
+} from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
 import { failStorage, injectStorageFaults } from './storage-faults';
 
@@ -134,16 +140,29 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await gearTab(page).click();
 
   await inWaterRow(page, 'Pot 1').click();
-  await sheet.getByLabel('Bait').fill('herring');
+  await sheet.getByRole('button', { name: 'Add bait' }).click();
+  await sheet.getByLabel('Find or add bait').fill('herring');
+  await sheet.getByRole('option', { name: 'Add herring' }).click();
+  await expect(sheet.getByRole('radio', { name: 'herring' })).toBeChecked();
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await sheet.getByRole('button', { name: 'One more kept' }).click();
+  await sheet.getByRole('button', { name: 'Other bait' }).click();
+  const search = sheet.getByLabel('Find or add bait');
+  await search.fill('squid');
+  await dropAgain.click();
+  await expect(search).toBeFocused();
+  await expect(search).toHaveAccessibleDescription('Choose or add bait');
+  expect(await storedBaits(page)).toEqual(['']);
+  await sheet.getByRole('button', { name: 'Other bait' }).click();
+  await expect(search).toBeHidden();
   await dropAgain.click();
   await expect(sheet).toBeHidden();
+  expect(await storedBaits(page)).toEqual(['herring', 'herring']);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
 
   await expect(collectedRow(page, 'Pot 1')).toContainText('1 kept, 0 released');
   await collectedRow(page, 'Pot 1').click();
-  await expect(sheet.getByLabel('Bait')).toHaveValue('herring');
+  await expect(sheet.getByRole('radio', { name: 'herring' })).toBeChecked();
   await expect(dropAgain).toHaveCount(0);
   await expect(sheet.getByRole('button', { name: 'Undo collect' })).toHaveCount(
     0
@@ -154,10 +173,11 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await page.keyboard.press('Escape');
 
   await inWaterRow(page, 'Pot 1').click();
-  await expect(sheet.getByLabel('Bait')).toHaveValue('herring');
+  await expect(sheet.getByRole('radio', { name: 'herring' })).toBeChecked();
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await sheet.getByRole('button', { name: 'Nothing caught' }).click();
   await sheet.getByRole('button', { name: 'Undo collect' }).click();
+  await sheet.getByRole('button', { name: 'Discard changes' }).click();
 
   await expect(
     sheet.getByRole('button', { name: 'Collect', exact: true })
@@ -168,6 +188,51 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await expect(page.getByRole('region', { name: 'Collected' })).toContainText(
     'Pot 1'
   );
+});
+
+test('Undo collect on gear with a saved catch asks first and Keep catch keeps it', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const loss = sheet.getByRole('group', { name: 'Clears the catch' });
+  const keepCatch = loss.getByRole('button', { name: 'Keep catch' });
+  const undoCollect = sheet.getByRole('button', { name: 'Undo collect' });
+
+  await collectPot(page);
+  await sheet.getByRole('button', { name: 'Nothing caught' }).click();
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  await collectedRow(page, 'Pot 1').click();
+
+  await undoCollect.click();
+  await expect(keepCatch).toBeFocused();
+  await expectAccessibleInBothThemes(page);
+  await keepCatch.click();
+  await expect(loss).toBeHidden();
+  await expect(undoCollect).toBeFocused();
+  expect(await storedCollections(page)).toEqual([
+    { collected: true, catch: { kept: 0, released: 0 } }
+  ]);
+
+  await sheet.getByRole('button', { name: 'One more kept' }).click();
+  await undoCollect.click();
+  await sheet.getByRole('button', { name: 'Discard changes' }).dblclick();
+  await expect(keepCatch).toBeFocused();
+  await expect(countOf(page, 'Kept')).toContainText('Kept: 0');
+  expect(await storedCollections(page)).toEqual([
+    { collected: true, catch: { kept: 0, released: 0 } }
+  ]);
+  await keepCatch.click();
+
+  await undoCollect.click();
+  await loss.getByRole('button', { name: 'Undo collect' }).click();
+  await expect(
+    sheet.getByRole('button', { name: 'Collect', exact: true })
+  ).toBeFocused();
+  await expect(toastOf(page)).toContainText('Pot 1 back in, catch cleared');
+  expect(await storedCollections(page)).toEqual([
+    { collected: false, catch: null }
+  ]);
 });
 
 const collectPot = async (page: Page) => {
@@ -480,7 +545,14 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   await expect(collectedRow(page, 'Pot 1')).toContainText('Catch not recorded');
 
   await collectedRow(page, 'Pot 1').click();
-  await sheet.getByRole('button', { name: 'Nothing caught' }).click();
+  const nothingCaught = sheet.getByRole('button', { name: 'Nothing caught' });
+  await expect(nothingCaught).toHaveAttribute('aria-pressed', 'false');
+  await nothingCaught.click();
+  await expect(nothingCaught).toHaveAttribute('aria-pressed', 'true');
+  await sheet.getByRole('button', { name: 'Clear catch' }).click();
+  await expect(nothingCaught).toHaveAttribute('aria-pressed', 'false');
+  await nothingCaught.click();
+  await expect(nothingCaught).toHaveAttribute('aria-pressed', 'true');
   await save.click();
   await expect(sheet).toBeHidden();
   await reopen();

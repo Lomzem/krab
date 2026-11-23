@@ -15,6 +15,7 @@ import {
   nearestGear,
   pastDrops,
   pastTripCounts,
+  pastTripSummaries,
   shortDateRange,
   tripDates,
   tripSpan,
@@ -761,6 +762,27 @@ it('sorts by great-circle distance with bearing, compass point and distance text
   expect(bearings[3]).toBeCloseTo(45, 3);
   expect(bearings[4]).toBeCloseTo(180, 3);
   expect(rows[2]?.direction?.feet).toBeCloseTo(392.9, 1);
+});
+
+it('marks gear under 0.5 ft away as at gear with no bearing', async () => {
+  const { state, open } = harness();
+  const book = await open();
+  await dropAt(book, state, 'pot', { north: 0, east: 0 });
+  await dropAt(book, state, 'pot', { north: 0.000001, east: 0 });
+  const last = await dropAt(book, state, 'net', { north: 0.000002, east: 0 });
+
+  const rows = gearInWater(last.trip, SEA, state.now);
+
+  expect(rows[0]?.direction).toMatchObject({ atGear: true, bearingDeg: null });
+  expect(rows[1]?.direction).toMatchObject({ atGear: true, bearingDeg: null });
+  expect(rows[1]?.direction?.feet).toBeLessThan(0.5);
+  expect(rows[2]?.direction?.feet).toBeGreaterThanOrEqual(0.5);
+  expect(rows[2]?.direction).toMatchObject({
+    atGear: false,
+    distance: '1 ft',
+    point: 'north'
+  });
+  expect(rows[2]?.direction?.bearingDeg).toBeCloseTo(0, 3);
 });
 
 it('finds the nearest gear in the water with a position, skipping a closer collected drop even once its gear is dropped again, or none without my position', async () => {
@@ -1894,5 +1916,51 @@ it('dates and groups a past trip in the phone’s current time zone after the zo
   expect(statusByDay(ended)).toEqual([
     ['Day 1', [['Pot 1', 'Uncollected']]],
     ['Day 2', [['Pot 2', 'Uncollected']]]
+  ]);
+});
+
+it('adds start times only to past trips that share a date text, with singular and plural drop counts', async () => {
+  vi.stubEnv('TZ', 'America/New_York');
+  const { state, open } = withoutLocation();
+  const book = await open();
+  const finish = async (at: string) => {
+    const active = await run(activeIn(book));
+    state.now = Date.parse(at);
+    if (active) await run(book.endTrip(active.id));
+  };
+  const earliest = await placeAt(book, state, '2031-06-10T06:05:00-04:00');
+  await placeAt(book, state, '2031-06-10T06:40:00-04:00');
+  await placeAt(book, state, '2031-06-10T07:10:00-04:00');
+  await run(book.deleteDrop(earliest.drop.id));
+  await finish('2031-06-10T09:00:00-04:00');
+  await placeAt(book, state, '2031-06-10T14:15:00-04:00');
+  await finish('2031-06-10T16:00:00-04:00');
+  await placeAt(book, state, '2031-06-11T08:00:00-04:00');
+  await finish('2031-06-11T10:00:00-04:00');
+
+  const summaries = pastTripSummaries(await run(pastIn(book)));
+
+  expect(
+    summaries.map(({ dates, startTime, dropCount }) => ({
+      dates,
+      startTime,
+      dropCount
+    }))
+  ).toEqual([
+    {
+      dates: 'Wednesday, June 11, 2031',
+      startTime: null,
+      dropCount: '1 drop'
+    },
+    {
+      dates: 'Tuesday, June 10, 2031',
+      startTime: '2:15 PM',
+      dropCount: '1 drop'
+    },
+    {
+      dates: 'Tuesday, June 10, 2031',
+      startTime: '6:05 AM',
+      dropCount: '2 drops'
+    }
   ]);
 });

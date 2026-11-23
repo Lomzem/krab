@@ -28,6 +28,26 @@
   const TITLE_ID = 'gear-sheet-title';
   const FORM_ID = 'gear-sheet-form';
   const UNSAVED_ID = 'gear-sheet-unsaved';
+  const CATCH_LOSS_ID = 'gear-sheet-catch-loss';
+
+  type Loss = 'draft' | 'catch';
+  const ASKS: Record<
+    Loss,
+    { id: string; text: string; keep: string; go: string }
+  > = {
+    draft: {
+      id: UNSAVED_ID,
+      text: 'Unsaved changes',
+      keep: 'Keep editing',
+      go: 'Discard changes'
+    },
+    catch: {
+      id: CATCH_LOSS_ID,
+      text: 'Clears the catch',
+      keep: 'Keep catch',
+      go: 'Undo collect'
+    }
+  };
 
   let {
     subject,
@@ -37,6 +57,7 @@
     onsave,
     oncollect,
     ondropagain,
+    denied = false,
     returnFocus,
     notice,
     actions,
@@ -50,11 +71,14 @@
     onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     oncollect?: (dropId: string) => void;
     ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
+    denied?: boolean;
     returnFocus: () => HTMLElement | null | undefined;
     notice: Notice | null;
     actions?: Snippet<[Drop, (exit: () => void) => void]>;
     direction?: Snippet<[Drop]>;
-    endAction?: Snippet<[Drop]>;
+    endAction?: Snippet<
+      [Drop, (exit: () => void) => void, (exit: () => void) => void]
+    >;
   } = $props();
 
   const failure = $derived.by(() => {
@@ -67,15 +91,19 @@
   const open = $derived(subject !== null);
   const busy = $derived(operation?.pending ?? false);
   let dirty = $state<boolean>(false);
-  let asking = $state<(() => void) | null>(null);
+  let asking = $state<{ exit: () => void; loss: Loss } | null>(null);
+  let resets = $state(0);
   let waiting: (() => void) | null = null;
   let saving = $state<boolean>(false);
   let editingFocus: Element | null = null;
+  let askGroup = $state<HTMLDivElement>();
   let keepButton = $state<HTMLButtonElement>();
+  let sheet = $state<{ absorbPress: () => void }>();
 
-  const ask = (exit: () => void) => {
-    editingFocus = document.activeElement;
-    asking = exit;
+  const ask = (exit: () => void, loss: Loss = 'draft') => {
+    const active = document.activeElement;
+    if (active && !askGroup?.contains(active)) editingFocus = active;
+    asking = { exit, loss };
     void tick().then(() => keepButton?.focus());
   };
 
@@ -89,9 +117,16 @@
   };
 
   const discard = () => {
-    const exit = asking;
+    const shown = asking;
     asking = null;
-    exit?.();
+    if (shown?.loss === 'draft') resets += 1;
+    shown?.exit();
+  };
+
+  const confirmCatchLoss = (exit: () => void) => {
+    if (busy) return;
+    sheet?.absorbPress();
+    ask(exit, 'catch');
   };
 
   const storing =
@@ -174,6 +209,7 @@
 </script>
 
 <Sheet
+  bind:this={sheet}
   {open}
   titleId={TITLE_ID}
   onclose={() => {
@@ -184,6 +220,7 @@
   }}
   {returnFocus}
   {notice}
+  bodyInert={asking !== null}
 >
   {#snippet heading()}
     {#if subject}
@@ -194,6 +231,13 @@
         <GearIcon kind={subject.gear.kind} size={24} />
         {subject.name}
       </h2>
+      {#if subject.drop.label}
+        <p
+          class="mt-1 line-clamp-2 text-base leading-snug [overflow-wrap:anywhere]"
+        >
+          {subject.drop.label}
+        </p>
+      {/if}
       {#if subject.day}
         <p class="mt-1 text-sm font-medium text-muted-foreground">
           <DayMarker day={subject.day} />
@@ -203,7 +247,7 @@
   {/snippet}
 
   {#if subject}
-    {#key subject.drop.id}
+    {#key `${subject.drop.id}/${String(resets)}`}
       <GearDetailsForm
         ondirty={(next: boolean) => {
           dirty = next;
@@ -216,6 +260,7 @@
         onsave={storing(onsave)}
         {oncollect}
         ondropagain={ondropagain && storing(ondropagain)}
+        {denied}
         {direction}
       >
         {@render actions?.(subject.drop, leave)}
@@ -225,27 +270,30 @@
 
   {#snippet footer()}
     {#if asking}
+      {@const shown = ASKS[asking.loss]}
       <div
+        bind:this={askGroup}
         role="group"
-        aria-labelledby={UNSAVED_ID}
+        aria-labelledby={shown.id}
         class="flex basis-full flex-wrap gap-2"
       >
-        <p id={UNSAVED_ID} class="basis-full text-base font-medium">
-          Unsaved changes
+        <p id={shown.id} class="basis-full text-base font-medium">
+          {shown.text}
         </p>
         <button
           bind:this={keepButton}
           type="button"
           class="flex-1 basis-36 {QUIET_BUTTON}"
-          onclick={keepEditing}>Keep editing</button
+          onclick={keepEditing}>{shown.keep}</button
         >
         <button
           type="button"
           class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
-          onclick={discard}>Discard changes</button
+          onclick={discard}>{shown.go}</button
         >
       </div>
-    {:else}
+    {/if}
+    <div class={asking ? 'hidden' : 'contents'}>
       {#if failure}
         <p
           role="alert"
@@ -262,8 +310,8 @@
         >Save</button
       >
       {#if subject}
-        {@render endAction?.(subject.drop)}
+        {@render endAction?.(subject.drop, leave, confirmCatchLoss)}
       {/if}
-    {/if}
+    </div>
   {/snippet}
 </Sheet>

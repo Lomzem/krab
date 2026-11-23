@@ -61,18 +61,21 @@
     camera = $bindable(null),
     places,
     me,
+    locate = true,
     headingDeg = null,
     show,
     onshown,
     pin,
     group,
     controls,
-    keepClear = null
+    keepClear = null,
+    fitLabel = 'Show all gear'
   }: {
     base?: Base;
     camera?: Camera | null;
     places: MapPlace[];
     me: MyPosition | null;
+    locate?: boolean;
     headingDeg?: number | null;
     show: string | null;
     onshown: () => void;
@@ -82,6 +85,7 @@
     >;
     controls?: Snippet;
     keepClear?: string | null;
+    fitLabel?: string;
   } = $props();
 
   let container = $state<HTMLDivElement>();
@@ -89,6 +93,8 @@
   let ready = $state(false);
   let failed = $state(false);
   let availability = $state<'available' | Outage>('available');
+  let loadingStyle = $state(false);
+  let online = $state(true);
   let generation = 0;
   let request: AbortController | null = null;
   let awaitingStyle = false;
@@ -97,7 +103,16 @@
   let overview = untrack(() => camera === null);
   let framePending = false;
   let capsule = $state<HTMLDivElement>();
-  let notice = $state<HTMLParagraphElement>();
+  let notice = $state<HTMLDivElement>();
+  const noticeText = $derived.by(() => {
+    if (loadingStyle) return 'Loading map';
+    return availability === 'available' ? null : OUTAGE_NOTICE[availability];
+  });
+  const canRetry = $derived(
+    !loadingStyle &&
+      online &&
+      (availability === 'unexplained' || availability === 'not-answering')
+  );
   let chip = $state<HTMLButtonElement>();
   let creditsPanel = $state<HTMLDivElement>();
   let creditsOpen = $state(false);
@@ -509,6 +524,7 @@
     generation += 1;
     request?.abort();
     request = null;
+    loadingStyle = false;
     awaitingStyle = false;
     baseSources = new Set();
     return generation;
@@ -518,9 +534,11 @@
     const current = startGeneration();
     const loading = new AbortController();
     request = loading;
+    loadingStyle = wanted === 'street';
     const next = await baseStyle(wanted, latest, loading.signal);
     if (!map || current !== generation) return;
     request = null;
+    loadingStyle = false;
     map.setStyle(next.style, { diff: false });
     rendered = wanted;
     awaitingStyle = true;
@@ -686,16 +704,23 @@
     });
     if (chip) refit.observe(chip);
     if (capsule) refit.observe(capsule);
+    online = navigator.onLine;
     const reconnect = () => {
+      online = true;
       void apply(base);
     };
+    const disconnect = () => {
+      online = false;
+    };
     window.addEventListener('online', reconnect);
+    window.addEventListener('offline', disconnect);
     framePending = overview;
     ready = true;
     return () => {
       startGeneration();
       refit.disconnect();
       window.removeEventListener('online', reconnect);
+      window.removeEventListener('offline', disconnect);
       markers.clear();
       created.remove();
       map = null;
@@ -912,14 +937,23 @@
   {/if}
 
   {#if !failed}
-    {#if availability !== 'available'}
-      <p
+    {#if noticeText}
+      <div
         bind:this={notice}
-        class="z-10 col-start-1 row-start-1 m-3 self-start justify-self-start rounded-control border border-input bg-card px-2.5 py-1.5 text-sm leading-tight font-medium text-foreground"
         role="status"
+        class="z-10 col-start-1 row-start-1 m-3 flex max-w-[calc(100%-5.5rem)] flex-wrap items-center gap-x-1 self-start justify-self-start rounded-control border border-input bg-card px-2.5 py-1.5 text-sm leading-tight font-medium text-foreground short-map:max-w-[calc(100%-8.5rem)]"
       >
-        {OUTAGE_NOTICE[availability]}
-      </p>
+        <p>{noticeText}</p>
+        {#if canRetry}
+          <button
+            type="button"
+            class="-my-1.5 -mr-1.5 flex min-h-11 touch-manipulation items-center rounded-control px-2 text-sm font-semibold text-action underline underline-offset-4 {FOCUS_INSET} {PRESS} active:bg-muted"
+            onclick={() => {
+              void apply(base);
+            }}>Retry map</button
+          >
+        {/if}
+      </div>
     {/if}
 
     <div
@@ -948,26 +982,30 @@
           <button
             type="button"
             class={ICON_BUTTON}
-            aria-label="Show all gear"
+            aria-label={fitLabel}
             onclick={showAll}
           >
             <Icon name="show-all" />
           </button>
         {/if}
-        <button
-          type="button"
-          class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
-          aria-label="Centre on my position"
-          aria-disabled={me?.current ? undefined : 'true'}
-          onclick={() => {
-            if (!me?.current) return;
-            centreOn(me.at);
-            revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
-          }}
-        >
-          <Icon name="centre" />
-        </button>
-        <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
+        {#if locate}
+          <button
+            type="button"
+            class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
+            aria-label="Centre on my position"
+            aria-disabled={me?.current ? undefined : 'true'}
+            onclick={() => {
+              if (!me?.current) return;
+              centreOn(me.at);
+              revealDrawn(drawnOf({ at: me.at, box: MY_EXTENT }));
+            }}
+          >
+            <Icon name="centre" />
+          </button>
+        {/if}
+        {#if places.length > 0 || locate}
+          <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
+        {/if}
         <button
           type="button"
           class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"

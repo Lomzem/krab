@@ -4,9 +4,13 @@ import type { ChipFace } from './pin-chip';
 export type HereItem = ChipFace & {
   id: string;
   name: string;
+  label: string;
   details: string[];
   summary: string;
 };
+
+export const spokenItem = (item: HereItem) =>
+  [item.name, item.label, ...item.details].filter(Boolean).join(', ');
 
 const LAYER_RANK: readonly MapPlace['layer'][] = [
   'in-water',
@@ -68,9 +72,8 @@ export const groupChip = (
     more,
     uncollected: uncollected > 0,
     label: [
-      `${shown}, ${String(items.length)} gear ${apart ? 'in this area' : 'here'}`,
+      `${shown} ${apart ? 'in this area' : 'here'}`,
       day === null && spread.length > 1 && ` on ${listed(spread)}`,
-      `: ${items.map((item) => item.name).join(', ')}`,
       layers.length > 1 && `; ${layers.join(', ')}`,
       uncollected > 0 && `; ${status}`
     ]

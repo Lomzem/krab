@@ -14,6 +14,7 @@
   import type { Base, Camera } from '#lib/features/map/index.js';
   import {
     canUndoCollect,
+    dropsInDays,
     gearInWater,
     nearestGear,
     type Drop,
@@ -47,12 +48,7 @@
   import { DEFAULT_MAP_FILTER, filterToShow } from './map-filter';
   import MapTab from './MapTab.svelte';
   import PastTrips from './PastTrips.svelte';
-  import {
-    OnWater,
-    type Retry,
-    type SaveProblem,
-    type Undo
-  } from './on-water.svelte';
+  import { OnWater, type SaveProblem, type Undo } from './on-water.svelte';
   import {
     locationExplained,
     rememberLocationExplained,
@@ -80,6 +76,7 @@
   let kind = $state(savedKind());
   let explained = $state(locationExplained());
   let now = $state(Date.now());
+  let acquireNow = $state(Date.now());
   let dropButton = $state<HTMLButtonElement>();
   let sheet = $state.raw<SheetOrigin | null>(null);
   let base = $state<Base>('chart');
@@ -95,6 +92,7 @@
   let endButton = $state<HTMLButtonElement>();
   let endOpen = $state(false);
   let ending = $state(false);
+  let endedTripId = $state<string | null>(null);
   let pastTripId = $state<string | null>(null);
   let pastHeading = $state<HTMLHeadingElement>();
   let pastShow = $state<string | null>(null);
@@ -126,14 +124,28 @@
       ? null
       : rowStatus
   );
-  const nearest = $derived(
-    water.trip ? nearestGear(gearInWater(water.trip, readiness.fix, now)) : null
+  const nearest = $derived.by(() => {
+    if (!water.trip) return null;
+    const shown = new Set(
+      dropsInDays(water.trip, mapFilter.days, now).map(({ id }) => id)
+    );
+    return nearestGear(
+      gearInWater(water.trip, readiness.fix, now).filter(({ drop }) =>
+        shown.has(drop.id)
+      )
+    );
+  });
+  const panelShown = $derived(
+    tab === 'map' ||
+      (tab === 'gear' && (water.pending?.phase === 'acquiring' || savingShown))
   );
   const rowShown = $derived(
     tab === 'map' ||
       water.notice !== null ||
-      (tab === 'gear' && rowStatus?.kind === 'denied')
+      (tab === 'gear' &&
+        (dockStatus?.kind === 'denied' || dockStatus?.kind === 'finding'))
   );
+  const dockShown = $derived(rowShown || panelShown);
   const sheetDirection = $derived(
     subject && water.trip
       ? (gearInWater(water.trip, readiness.fix, now).find(
@@ -142,10 +154,31 @@
       : null
   );
 
+  const endedTrip = $derived(
+    !water.trip && endedTripId
+      ? (water.past.find((item) => item.id === endedTripId) ?? null)
+      : null
+  );
+
+  $effect(() => {
+    if (water.trip) endedTripId = null;
+  });
+
   $effect(() => {
     const timer = setInterval(() => {
       now = Date.now();
     }, TICK_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  });
+
+  $effect(() => {
+    if (water.pending?.phase !== 'acquiring') return;
+    acquireNow = Date.now();
+    const timer = setInterval(() => {
+      acquireNow = Date.now();
+    }, 1000);
     return () => {
       clearInterval(timer);
     };
@@ -209,7 +242,7 @@
     if (!saved || !dropReplaced) return;
     dropReplaced = false;
     await tick();
-    dropButton?.focus();
+    restingFocus()?.focus();
   };
 
   const drop = () => {
@@ -223,8 +256,8 @@
     return dropButton;
   };
 
-  const retry = (target: Retry) => {
-    void water.retry(target).then(() => {
+  const retry = (key: number) => {
+    void water.retry(key).then(() => {
       restingFocus()?.focus();
     });
   };
@@ -263,12 +296,13 @@
         );
 
   const sheetReturnFocus = () => {
-    if (showOnMap !== null) return mapTabButton;
     if (pastShowNext !== null) {
       pastShow = pastShowNext;
       pastShowNext = null;
       return null;
     }
+    if (water.pending?.phase === 'acquiring' || savingShown) return null;
+    if (showOnMap !== null) return mapTabButton;
     if (returnTo?.isConnected) return returnTo;
     return shownDrop(returnDrop) ?? restingFocus();
   };
@@ -363,7 +397,18 @@
     ending = true;
     const ended = await water.endTrip(trip.id);
     ending = false;
-    if (ended) endOpen = false;
+    if (ended) {
+      endedTripId = trip.id;
+      endOpen = false;
+    }
+  };
+
+  const viewEndedTrip = async () => {
+    if (!endedTrip) return;
+    pastTripId = endedTrip.id;
+    await switchTo('trips');
+    await tick();
+    pastHeading?.focus();
   };
 
   const endReturnFocus = () =>
@@ -431,6 +476,11 @@
             ? water.notice.offer.dropId
             : null}
         />
+      {:else}
+        <section aria-labelledby="map-title">
+          <h1 id="map-title" class="sr-only">Map</h1>
+          <p class="px-4 pt-4 text-base text-muted-foreground">Loading trip</p>
+        </section>
       {/if}
     {:else if tab === 'gear'}
       {#if water.load === 'failed'}
@@ -449,9 +499,16 @@
           onend={() => {
             endOpen = true;
           }}
+          endedTrip={endedTrip !== null}
+          onviewended={() => void viewEndedTrip()}
           bind:endButton
           bind:heading={gearHeading}
         />
+      {:else}
+        <header class="px-4 pt-3 pb-2">
+          <h1 class="text-display font-semibold">Gear</h1>
+        </header>
+        <p class="px-4 text-base text-muted-foreground">Loading trip</p>
       {/if}
     {:else if water.load !== 'opening'}
       <PastTrips
@@ -481,6 +538,7 @@
     onsave={save}
     oncollect={collect}
     ondropagain={dropAgain}
+    denied={readiness.status.kind === 'denied'}
     returnFocus={sheetReturnFocus}
     notice={water.notice}
   >
@@ -498,24 +556,41 @@
         >
       {/if}
     {/snippet}
-    {#snippet direction()}
+    {#snippet direction(target: Drop)}
       {#if sheetDirection}
         <DirectionCue
           direction={sheetDirection}
           compass={$compass}
           ontoggle={toggleCompass}
         />
+      {:else if !target.position}
+        <p class="text-sm text-muted-foreground">No position</p>
+      {:else if readiness.status.kind === 'denied'}
+        <p class="text-sm text-muted-foreground">Location is off</p>
+      {:else if readiness.status.kind === 'finding'}
+        <p class="text-sm text-muted-foreground">Finding position</p>
       {/if}
     {/snippet}
-    {#snippet endAction(target: Drop)}
+    {#snippet endAction(
+      target: Drop,
+      leave: (exit: () => void) => void,
+      confirmCatchLoss: (exit: () => void) => void
+    )}
       {#if subject && canUndoCollect(subject.trip, target)}
         {@const { name } = subject}
+        {@const putBack = () => {
+          undoCollect(target.id, name);
+        }}
         <button
           type="button"
           class="grow {QUIET_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
-            undoCollect(target.id, name);
+            if (busy) return;
+            leave(() => {
+              if (target.catch) confirmCatchLoss(putBack);
+              else putBack();
+            });
           }}>Undo collect</button
         >
       {:else}
@@ -524,7 +599,10 @@
           class="grow {DESTRUCTIVE_TEXT_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
-            deleteDrop(target.id);
+            if (busy) return;
+            leave(() => {
+              deleteDrop(target.id);
+            });
           }}>Delete drop</button
         >
       {/if}
@@ -546,37 +624,48 @@
   <div
     class={[
       'grid grid-cols-1 border-t border-border bg-card',
-      !rowShown && 'hidden',
-      tab !== 'map' && 'pb-[env(safe-area-inset-bottom,0px)]'
+      !dockShown && 'hidden',
+      !panelShown && 'pb-[env(safe-area-inset-bottom,0px)]'
     ]}
   >
-    {#if tab === 'map'}
+    {#if panelShown}
       <div
         class="row-start-2 grid min-h-20 content-center px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] compact:min-h-18 compact:py-1 compact:pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]"
       >
         {#if water.pending?.phase === 'acquiring'}
           {@const { attempt } = water.pending}
           <GettingPosition
+            deadline={attempt.deadline}
+            now={acquireNow}
             oncancel={attempt.cancel}
             onskip={attempt.saveWithoutPosition}
           />
         {:else if savingShown}
           <SavingDrop />
-        {:else if explained}
+        {:else if tab === 'map' && explained}
           <section aria-label="Drop gear">
             <DropControl
               bind:kind
               bind:button={dropButton}
               denied={readiness.status.kind === 'denied'}
+              finding={water.notice !== null &&
+                readiness.status.kind === 'finding'}
+              busy={water.pending !== null}
               ondrop={drop}
             />
           </section>
-        {:else}
+        {:else if tab === 'map'}
           <LocationIntro onallow={allowLocation} />
         {/if}
       </div>
     {/if}
-    <div class={['row-start-1', tab === 'map' && 'border-b border-border']}>
+    <div
+      class={[
+        'row-start-1',
+        panelShown && rowShown && 'border-b border-border',
+        !rowShown && 'hidden'
+      ]}
+    >
       <DockRow
         notice={water.notice}
         onundo={undo}
@@ -590,6 +679,7 @@
           <DockStatus
             screen={tab}
             status={dockStatus}
+            loaded={water.load === 'ready'}
             trip={water.trip}
             {nearest}
             compass={$compass}

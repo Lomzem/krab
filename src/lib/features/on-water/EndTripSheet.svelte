@@ -5,7 +5,7 @@
   import type { Notice } from './on-water.svelte';
 
   const TITLE_ID = 'end-trip-title';
-  const LEFT_ID = 'end-trip-left';
+  const NOTE_ID = 'end-trip-note';
 
   let {
     trip,
@@ -35,7 +35,7 @@
 <Sheet
   {open}
   titleId={TITLE_ID}
-  describedBy={uncollected > 0 ? LEFT_ID : undefined}
+  describedBy={NOTE_ID}
   initialFocus={() => keep}
   {onclose}
   {returnFocus}
@@ -45,11 +45,12 @@
     <h2 id={TITLE_ID} class="text-title font-semibold">End trip?</h2>
   {/snippet}
 
-  {#if uncollected > 0}
-    <p id={LEFT_ID} class="text-base leading-normal">
-      {uncollected} still in the water
-    </p>
-  {/if}
+  <div id={NOTE_ID} class="space-y-1 text-base leading-normal">
+    {#if uncollected > 0}
+      <p>{uncollected} still in the water</p>
+    {/if}
+    <p class="text-muted-foreground">Kept in Past trips</p>
+  </div>
 
   {#snippet footer()}
     <button

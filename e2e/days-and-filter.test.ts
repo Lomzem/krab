@@ -82,6 +82,19 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
   ] as const) {
     await expect(pin(name)).toContainText(day, { useInnerText: true });
   }
+  const filterButton = mapArea.getByRole('button', { name: /^Filter/ });
+  const filterFill = () =>
+    filterButton.evaluate((button) => getComputedStyle(button).backgroundColor);
+  const nearest = (name: string) =>
+    page.getByRole('button', { name: new RegExp(`^Nearest gear: ${name}\\b`) });
+  await page.clock.fastForward(10_000);
+  await expect(toastOf(page)).toBeHidden();
+  await deliverFix(page, MADE_UP_SEA);
+  await expect(nearest('Pot 1')).toBeVisible();
+  await expect(
+    mapArea.getByRole('button', { name: 'Show all gear', exact: true })
+  ).toBeVisible();
+  const unfilteredFill = await filterFill();
   await openFilter();
   await expectAccessibleInBothThemes(page);
   for (const toggle of [
@@ -97,6 +110,14 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
   await closeFilter();
   await expect(pin(/^Pot 1,/)).toHaveCount(0);
   await expect(pin(/^Pot 2,/)).toBeVisible();
+  expect(await filterFill(), 'the Filter button shows it hides gear').not.toBe(
+    unfilteredFill
+  );
+  await expect(
+    mapArea.getByRole('button', { name: 'Fit shown gear', exact: true })
+  ).toBeVisible();
+  await deliverFix(page, MADE_UP_SEA);
+  await expect(nearest('Pot 2')).toBeVisible();
 
   await tab('Gear').click();
   await day1.getByRole('button', { name: /Pot 1/ }).click();

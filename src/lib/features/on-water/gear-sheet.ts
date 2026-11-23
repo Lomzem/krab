@@ -7,6 +7,7 @@ import {
   type Gear,
   type Trip
 } from '#lib/features/trip/index.js';
+import { baitChoices, type BaitChoice } from './bait-options';
 import type { SaveProblem } from './on-water.svelte';
 
 export type SheetSubject = {
@@ -15,6 +16,7 @@ export type SheetSubject = {
   gear: Gear;
   name: string;
   day: Day | null;
+  baits: BaitChoice[];
 };
 
 export type SheetOrigin = {
@@ -38,7 +40,8 @@ export const sheetSubject = (
     found && {
       ...found,
       name: gearName(found.gear),
-      day: dayOf(found.trip, found.drop)
+      day: dayOf(found.trip, found.drop),
+      baits: baitChoices(trips, found.trip.id)
     }
   );
 };

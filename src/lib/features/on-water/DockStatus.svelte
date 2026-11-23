@@ -14,6 +14,7 @@
   let {
     screen,
     status,
+    loaded = true,
     trip,
     nearest,
     compass,
@@ -22,6 +23,7 @@
   }: {
     screen: 'map' | 'gear';
     status: Availability | null;
+    loaded?: boolean;
     trip: Trip | null;
     nearest: GearRow | null;
     compass: CompassState;
@@ -31,13 +33,19 @@
 
   const LINE_1 = 'text-control font-semibold';
   const LINE_2 = 'flex items-center gap-1.5 text-sm text-muted-foreground';
-  const count = $derived(
-    trip ? gearCounts(trip).inWater : 'Nothing in the water'
-  );
+  const count = $derived.by(() => {
+    if (!loaded) return null;
+    return trip ? gearCounts(trip).inWater : 'Nothing in the water';
+  });
   const rough = $derived(status?.kind === 'ready' && roughness(status.fix));
   const direction = $derived(
     status?.kind === 'ready' ? (nearest?.direction ?? null) : null
   );
+  let pressedDropId: string | null = null;
+
+  $effect(() => {
+    if (!nearest) pressedDropId = null;
+  });
 </script>
 
 {#snippet roughLine()}
@@ -66,9 +74,23 @@
       }}>Show steps</button
     >
   </section>
-{:else if screen === 'gear'}{:else if status?.kind === 'finding'}
+{:else if screen === 'gear'}
+  {#if status?.kind === 'finding'}
+    <p
+      class="flex min-h-14 w-full items-center gap-2 px-4 py-1 text-sm text-muted-foreground"
+    >
+      <span
+        class="size-2 rounded-full border-2 border-muted-foreground"
+        aria-hidden="true"
+      ></span>
+      Finding position
+    </p>
+  {/if}
+{:else if status?.kind === 'finding'}
   <p class="flex min-h-14 w-full flex-col justify-center px-4 py-1">
-    <span class={LINE_1}>{count}</span>
+    {#if count}
+      <span class={LINE_1}>{count}</span>
+    {/if}
     <span class={LINE_2}>
       <span
         class="size-2 rounded-full border-2 border-muted-foreground"
@@ -82,8 +104,17 @@
     type="button"
     class="flex min-h-14 w-full touch-manipulation items-center gap-3 py-1 pr-3 pl-4 text-left {FOCUS_INSET} {PRESS} active:bg-muted"
     data-drop={nearest.drop.id}
+    onpointerdown={() => {
+      pressedDropId = nearest.drop.id;
+    }}
+    onpointercancel={() => {
+      pressedDropId = null;
+    }}
     onclick={(event) => {
-      onopen(nearest.drop.id, event.currentTarget);
+      const target =
+        event.detail > 0 && pressedDropId ? pressedDropId : nearest.drop.id;
+      pressedDropId = null;
+      onopen(target, event.currentTarget);
     }}
   >
     <span class="flex-none text-foreground"
@@ -99,7 +130,7 @@
         <span class={LINE_2} aria-hidden="true">Nearest</span>
       {/if}
     </span>
-    {#if Math.round(direction.feet) === 0}
+    {#if direction.atGear}
       <span class="flex-none text-title font-semibold whitespace-nowrap"
         ><span class="sr-only">, </span>At gear</span
       >
@@ -122,7 +153,9 @@
   </button>
 {:else}
   <p class="flex min-h-14 w-full flex-col justify-center px-4 py-1">
-    <span class={LINE_1}>{count}</span>
+    {#if count}
+      <span class={LINE_1}>{count}</span>
+    {/if}
     {#if rough}
       {@render roughLine()}
     {/if}

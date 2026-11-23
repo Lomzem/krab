@@ -133,7 +133,17 @@ export const releaseStorage = (page: Page) =>
 type StoredCatch = { kept: number; released: number } | null;
 
 type StoredTrip = {
-  drops: { collectedAt: number | null; catch: StoredCatch }[];
+  startedAt: number;
+  gear: { id: string; kind: string; number: number }[];
+  drops: {
+    id: string;
+    gearId: string;
+    placedAt: number;
+    position: { lat: number } | null;
+    collectedAt: number | null;
+    catch: StoredCatch;
+    bait: string;
+  }[];
 };
 
 const storedTrips = (page: Page) =>
@@ -173,6 +183,16 @@ const storedTrips = (page: Page) =>
 export const storedDrops = async (page: Page) =>
   (await storedTrips(page)).reduce((sum, trip) => sum + trip.drops.length, 0);
 
+const dropNames = (trip: StoredTrip) =>
+  trip.drops.map((drop) => {
+    const gear = trip.gear.find(({ id }) => id === drop.gearId);
+    const kind = gear?.kind === 'net' ? 'Net' : 'Pot';
+    return [drop.id, `${kind} ${String(gear?.number)}`] as const;
+  });
+
+export const storedDropNames = async (page: Page) =>
+  Object.fromEntries((await storedTrips(page)).flatMap(dropNames));
+
 export const storedCollections = async (page: Page) =>
   (await storedTrips(page)).flatMap((trip) =>
     trip.drops.map((drop) => ({
@@ -180,3 +200,20 @@ export const storedCollections = async (page: Page) =>
       catch: drop.catch
     }))
   );
+
+const placementsOf = (trip: StoredTrip) => {
+  const kinds = new Map(trip.gear.map((gear) => [gear.id, gear.kind]));
+  return trip.drops.map((drop) => ({
+    kind: kinds.get(drop.gearId),
+    placedAt: drop.placedAt,
+    lat: drop.position?.lat ?? null
+  }));
+};
+
+export const storedPlacements = async (page: Page) =>
+  (await storedTrips(page)).flatMap(placementsOf);
+
+export const storedBaits = async (page: Page) =>
+  (await storedTrips(page))
+    .toSorted((a, b) => a.startedAt - b.startedAt)
+    .flatMap((trip) => trip.drops.map((drop) => drop.bait));
