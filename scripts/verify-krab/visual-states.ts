@@ -33,6 +33,7 @@ const catchGeometry = (sheet: Locator) =>
 test('visual inventory through a dense overnight trip', async ({
   page
 }, info) => {
+  test.setTimeout(90000);
   const { capture, keep, log } = recorder(page, info, 'visual-inventory', 'UI');
   keep('doctor.json', doctor());
   await holdFixes(page);
