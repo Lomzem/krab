@@ -1,6 +1,6 @@
 # Krab
 
-A client-rendered SvelteKit app for keeping track of crab pots and nets on the water. It drops gear at the phone's location, records bait, depth and catch for each drop, and lists gear in the water with distance, direction and time in the water. The Map tab shows drops on NOAA charts or OpenFreeMap streets. Ending a trip keeps it under Past trips, where its days and drops can be reviewed on the map or the trip deleted. After one online load, Krab launches and restores the active trip with no signal.
+A client-rendered SvelteKit app for keeping track of crab pots and nets on the water. It drops gear at the phone's location, records bait and depth for each drop and catch for each collected drop, and lists gear in the water with distance, direction and time in the water. The Map tab shows drops on NOAA charts or OpenFreeMap streets. Ending a trip keeps it under Past trips, where its days and drops can be reviewed on the map or the trip deleted. After one online load, Krab launches and restores the active trip with no signal.
 
 All trip data stays on the phone in IndexedDB. There is no account, cloud database or authentication, and clearing or evicting the site's data loses the active trip and past trips. Map provider requests carry no position. Read [GLOSSARY.md](GLOSSARY.md) before product work.
 
@@ -51,7 +51,7 @@ CodeRabbit automatic reviews are off in `.coderabbit.yaml`. Request a manual rev
 
 ## Offline shell
 
-The service worker in `src/service-worker/index.ts` keeps one `krab-shell-<version>` cache of the app shell, immutable build files and static assets. It serves only same-origin `GET` requests; map tiles and other third-party requests go to the network. It never touches IndexedDB. A new build installs in the background, has no `skipWaiting`, and takes over on the next launch after every Krab page has closed. While a trip is active and Krab is visible, Krab holds a screen wake lock. Use the [device checklist](.agents/skills/verify-krab/features/device-checks.md) for Home Screen installation, offline launch, updates and wake lock on a real iPhone.
+The service worker in `src/service-worker/index.ts` keeps one `krab-shell-<version>` cache of the app shell, immutable build files and static assets. It serves only same-origin `GET` requests; map tiles and other third-party requests go to the network. It never touches IndexedDB. A new build installs in the background, has no `skipWaiting`, and takes over on the next launch after every Krab page has closed. While a trip is active and Krab is visible, Krab requests a screen wake lock, which the browser may not support or may refuse. Use the [device checklist](.agents/skills/verify-krab/features/device-checks.md) for Home Screen installation, offline launch, updates and wake lock on a real iPhone.
 
 ## Deploy
 
@@ -69,14 +69,16 @@ Deploy command:
 bunx wrangler deploy
 ```
 
-After a deploy, check the worker headers and body, and one immutable asset:
+After a deploy, check the app shell, the worker headers and body, and one immutable asset:
 
 ```sh
+curl -sI https://krab.lomzem.dev/
 curl -sI https://krab.lomzem.dev/service-worker.js
 curl -s https://krab.lomzem.dev/service-worker.js | head -c 200
+curl -sI "https://krab.lomzem.dev$(curl -s https://krab.lomzem.dev/ | grep -o '/_app/immutable/[^"]*\.js' | head -n 1)"
 ```
 
-The worker must have a JavaScript `Content-Type` and `Cache-Control: no-cache`, and its body must be the worker, not the HTML fallback. An `/_app/immutable/` asset must have `Cache-Control: public, max-age=31536000, immutable`.
+`/` must answer `200` directly with an HTML `Content-Type`, because the worker rejects a redirected app shell. The worker must have a JavaScript `Content-Type` and `Cache-Control: no-cache`, and its body must be the worker, not the HTML fallback. The immutable asset must have `Cache-Control: public, max-age=31536000, immutable`.
 
 ### Service worker kill switch
 
