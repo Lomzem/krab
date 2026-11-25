@@ -1,8 +1,0 @@
-node_modules/
-.svelte-kit/
-build/
-.scratch/
-bun.lock
-
-.tools/
-test-results/

@@ -66,7 +66,12 @@ const unsavedText = (count: number) =>
 export type Load = 'opening' | 'ready' | 'failed';
 
 export type SaveProblem =
-  'depth' | 'catch' | 'uncollected' | 'kind' | 'gone' | 'storage';
+  | 'depth'
+  | 'catch'
+  | 'uncollected'
+  | 'kind'
+  | 'gone'
+  | 'storage';
 
 type SaveFailure =
   | DropNotFound

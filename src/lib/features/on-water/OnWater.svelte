@@ -307,7 +307,7 @@
     return shownDrop(returnDrop) ?? restingFocus();
   };
 
-  const operate = async <A,>(
+  const operate = async <A>(
     work: () => Promise<A>,
     settle: (result: A) => SaveProblem | null,
     closed: (outcome: { result: A } | null) => void = () => {}

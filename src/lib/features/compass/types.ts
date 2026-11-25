@@ -23,7 +23,10 @@ export type CompassChoice = {
 };
 
 export type Unavailable =
-  'denied' | 'unsupported' | 'out-of-model' | 'no-position';
+  | 'denied'
+  | 'unsupported'
+  | 'out-of-model'
+  | 'no-position';
 
 export type CompassState =
   | { kind: 'off' }
