@@ -6,11 +6,14 @@
 - Extract shared modules when multiple features need them.
 - Keep framework routes thin; compose feature modules there.
 
+## Comments
+
+Code comments and lint or type suppressions follow `$no-comments`. Keep legal notices, public API contracts, formatter directives, concise evidence of external constraints, and suppressions of style-only or faulty rules with their reason. Fix the code behind a correctness or safety finding instead of suppressing it. Delete narration, headings, commented-out code, and stale rationale.
+
 ## Rules
 
 | Rule                                                                                                                                                                                                                                                                                                                                      | Enforced by                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| New maintained language or container surfaces accept legitimate data and reject comments through the existing policy owner: extend `scripts/policy.test.ts` rather than adding another policy suite.                                                                                                                                      | `bun run test:policy` and `bun run lint` (`scripts/check-comments.ts`), both in CI                                                                                                                                                                                                                                                                                                                                                                            |
 | Claimed independent contracts get sensitive proof at their primary boundary. UI timing such as Undo lifetime and holds is proven through the real toast with a controlled clock, without test-only production seams.                                                                                                                      | Undo lifetime and holds, and Retry/Dismiss persistence and dispatch: `e2e/undo.test.ts` under `bun run test:e2e` (CI) and `bun run test:e2e:container`. Compass sensor listening while visible and its permission outcomes: `src/lib/features/compass/sensor.test.ts` under `bun run test:unit` (CI); the real iPhone prompt and sensor delivery stay a manual device check. Other contracts: review applies the test-audit gate                              |
 | Replaying a failed drop's Retry converges to one drop and one gear allocation.                                                                                                                                                                                                                                                            | "replaying its Retry saves that drop once under one number" in `src/lib/features/trip/trip.test.ts` under `bun run test:unit` (CI)                                                                                                                                                                                                                                                                                                                            |
 | Location acquisition and displayed readiness, including my marker, distances and directions, use one availability policy (`src/lib/features/trip/availability.ts`), including expiry and denial.                                                                                                                                          | "uses a fix exactly 5 s old" and "denied, even over a fresh fix" in `src/lib/features/trip/trip.test.ts` under `bun run test:unit` (CI); "Finding position returns just after 5 seconds or on resume with a stale fix, and a drop waits", "a stale fix shows as Last position with no distances…" and "…location turned off after a fix hides my position…" in `e2e/position-problems.test.ts` under `bun run test:e2e` (CI) and `bun run test:e2e:container` |
@@ -30,15 +33,15 @@
 
 ### Issue tracker
 
-Track issues and specs locally under `.scratch/<feature>/`. Before creating, reading, or updating tickets, read `docs/agents/issue-tracker.md`.
+Track each feature locally under `.scratch/<feature>/`: the spec at `spec.md` and one ticket per file at `issues/<NN>-<slug>.md`, numbered from `01`. Record triage state in a `Status:` line near the top and blockers in a `Blocked by:` line. Append discussion under a `## Comments` heading at the bottom.
 
 ### Triage labels
 
-Use the five default triage labels. Before assigning or changing triage status, read `docs/agents/triage-labels.md`.
+Use the five canonical triage labels as written: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`.
 
-### Domain docs
+### Domain vocabulary
 
-Use a single-context layout: root `GLOSSARY.md` and `docs/adr/`. Before exploring the codebase, read `docs/agents/domain.md`.
+Before exploring the codebase, read the root `GLOSSARY.md`, and use its terms in issues, tests, and code. Record decisions in code, executable checks, `README.md`, or this file.
 
 ### UI review
 

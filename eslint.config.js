@@ -41,7 +41,6 @@ export default defineConfig([
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,svelte}'],
     extends: [js.configs.recommended],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
-    linterOptions: { noInlineConfig: true },
     rules: {
       'no-restricted-syntax': ['error', ...EFFECT_ONLY],
       'max-depth': ['error', 3],
@@ -63,8 +62,7 @@ export default defineConfig([
   svelte.configs.recommended,
   {
     files: ['**/*.svelte', '**/*.svelte.ts'],
-    languageOptions: { parserOptions: { parser: ts.parser } },
-    rules: { 'svelte/comment-directive': 'off' }
+    languageOptions: { parserOptions: { parser: ts.parser } }
   },
   {
     files: ['src/**/*.svelte', 'src/lib/**/*.ts'],

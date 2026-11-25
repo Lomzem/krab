@@ -34,4 +34,4 @@ Coverage includes offline Map/Gear restoration, waiting updates and next-launch 
 - In container WebKit, `page.goto` hung on port 4190, while ports 4174–4178 worked. Keep new hosts in that range.
 - Close every page before expecting the new build. Reload alone keeps the waiting worker waiting, which is the intended behaviour.
 - The visually hidden Net radio didn't respond to `check()` in time before the toast expired; the wake lock recipe drops a second pot instead.
-- The kill switch in `docs/offline.md` has no browser recipe; it was checked by hand once. `src/service-worker/worker.test.ts` runs its activation.
+- The kill switch in the root `README.md` has no browser recipe; it was checked by hand once. `src/service-worker/worker.test.ts` runs its activation.

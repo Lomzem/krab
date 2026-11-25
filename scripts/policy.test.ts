@@ -26,196 +26,9 @@ type PolicyCase = {
   diagnostic: string;
   risk: string;
 };
-const lockfile = await readFile(join(source, 'bun.lock'), 'utf8');
 const workflow = (job: string) =>
   `on: push\njobs:\n  a:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    steps:\n      - run: true\n  b:\n    runs-on: ubuntu-24.04\n${job}    steps:\n      - run: true\n`;
 const cases: PolicyCase[] = [
-  {
-    name: 'HTML inert data versus typed executable script',
-    file: 'probe.html',
-    valid:
-      '<script type="text/plain">This is data: https://example.invalid/*data*/</script>',
-    invalid:
-      '<script type="text/javascript; charset=utf-8">/* forbidden */const data = "safe";</script>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Unknown data types are parsed as JavaScript or executable MIME types escape checking'
-  },
-  {
-    name: 'HTML JSON data script',
-    file: 'probe.html',
-    valid:
-      '<script type="application/json">{"url":"https://example.invalid/*data*/"}</script>',
-    invalid:
-      '<script type="application/json">{/* forbidden */"url":"safe"}</script>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Plain JSON data misses the structured data parser'
-  },
-  {
-    name: 'HTML JSON-LD data script',
-    file: 'probe.html',
-    valid:
-      '<script type="application/ld+json">{"url":"https://example.invalid/*data*/"}</script>',
-    invalid:
-      '<script type="application/ld+json">{/* forbidden */"url":"safe"}</script>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'JSON data is parsed as JavaScript or exempted from comment checking'
-  },
-  {
-    name: 'maintained Bun JSONC lockfile',
-    file: 'bun.lock',
-    valid: lockfile,
-    invalid: '// forbidden\n' + lockfile,
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Maintained text lockfile is excluded as generated output'
-  },
-  {
-    name: 'Svelte style directive CSS',
-    file: 'src/Probe.svelte',
-    valid: `<script lang="ts">const color = 'red'; const data = '/* data */';</script><p style:color={color} style:--data="'{data}https://example.invalid/*data*/'">safe</p>`,
-    invalid: '<p style:color="/* forbidden */ red">safe</p>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Style directives escape inline CSS checking'
-  },
-  {
-    name: 'Svelte inline CSS with expressions',
-    file: 'src/Probe.svelte',
-    valid: `<script lang="ts">const color = 'red'; const data = '/* data */';</script><p style="color: {color}; --data: '{data}https://example.invalid/*data*/'">safe</p>`,
-    invalid: '<p style="color: /* forbidden */ red">safe</p>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Svelte inline declarations bypass CSS checking or expressions become CSS'
-  },
-  {
-    name: 'HTML inline CSS',
-    file: 'probe.html',
-    valid: `<p style="--data: 'https://example.invalid/*data*/'; color: red">safe</p>`,
-    invalid: '<p style="color: /* forbidden */ red">safe</p>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'HTML style attributes escape stylesheet inspection'
-  },
-  {
-    name: 'HTML embedded CSS',
-    file: 'probe.html',
-    valid: '<style>a { content: "https://example.invalid/*data*/"; }</style>',
-    invalid: '<style>/* comment */a { color: red; }</style>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'HTML parser leaves stylesheets as raw text'
-  },
-  {
-    name: 'standalone CSS',
-    file: 'probe.css',
-    valid: 'a { background: url("https://example.invalid/a"); }',
-    invalid: 'a { color: /* comment */red; }',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Only component styles are inspected'
-  },
-  {
-    name: 'script comments cannot disable ESLint',
-    file: 'src/probe.ts',
-    valid: 'export const url = "https://example.invalid/*data*/";\n',
-    invalid: '// eslint-disable\nexport const url = "safe";\n',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Inline configuration or missing script rule permits comments'
-  },
-  {
-    name: 'tooling JavaScript comments',
-    file: 'probe.js',
-    valid: 'export const data = "/* string */";\n',
-    invalid: '/* comment */\nexport const data = "safe";\n',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Only application TypeScript is covered'
-  },
-  {
-    name: 'Svelte script directives',
-    file: 'src/Probe.svelte',
-    valid: '<script lang="ts">const data = "// text";</script><p>{data}</p>',
-    invalid:
-      '<script lang="ts">// @ts-nocheck\nconst data = "safe";</script><p>{data}</p>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Embedded script comments or type suppressions bypass policy'
-  },
-  {
-    name: 'Svelte markup suppressions',
-    file: 'src/Probe.svelte',
-    valid: '<p data-text="&lt;!-- data --&gt;">safe</p>',
-    invalid:
-      '<!-- svelte-ignore a11y_no_static_element_interactions --><p>safe</p>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Svelte processor consumes comments before reporting'
-  },
-  {
-    name: 'Svelte embedded CSS',
-    file: 'src/Probe.svelte',
-    valid: '<p>safe</p><style>p::after { content: "/* text */"; }</style>',
-    invalid: '<p>safe</p><style>/* comment */p { color: red; }</style>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'Markup parser treats stylesheet contents as raw text'
-  },
-  {
-    name: 'HTML markup',
-    file: 'probe.html',
-    valid: '<p data-url="https://example.invalid/">safe</p>',
-    invalid: '<!-- comment --><p>safe</p>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'App shell falls outside Svelte linting'
-  },
-  {
-    name: 'HTML executable script',
-    file: 'probe.html',
-    valid: '<script>const data = "https://example.invalid/*text*/";</script>',
-    invalid: '<script>/* comment */const data = "safe";</script>',
-    command: 'lint',
-    diagnostic: 'policy/no-comments',
-    risk: 'HTML parser leaves executable scripts as raw text'
-  },
-  ...[
-    [
-      'JSON configuration',
-      'probe.json',
-      '{"url":"https://example.invalid/"}',
-      '{/* comment */"url":"safe"}'
-    ],
-    [
-      'YAML configuration',
-      'probe.yaml',
-      'url: "https://example.invalid/#data"',
-      '# comment\nurl: safe'
-    ],
-    [
-      'TOML configuration',
-      'probe.toml',
-      'url = "https://example.invalid/#data"',
-      '# comment\nurl = "safe"'
-    ],
-    [
-      'ignore configuration',
-      '.probeignore',
-      '\\#literal\nhttps://example.invalid/',
-      '# comment\n/build/'
-    ]
-  ].map(([name = '', file = '', valid = '', invalid = '']) => ({
-    name,
-    file,
-    valid,
-    invalid,
-    command: 'lint' as const,
-    diagnostic: 'policy/no-comments',
-    risk: 'Configuration parser is absent or confuses strings with comments'
-  })),
   {
     name: 'explicit any in an application feature',
     file: 'src/lib/features/on-water/probe.ts',
@@ -569,23 +382,15 @@ await cp(source, root, {
 await symlink(join(source, 'node_modules'), join(root, 'node_modules'));
 const fixtures = cases.map((row, index) => ({
   ...row,
-  file:
-    row.file === 'bun.lock'
-      ? row.file
-      : join(dirname(row.file), `policy-${String(index)}-${basename(row.file)}`)
+  file: join(dirname(row.file), `policy-${String(index)}-${basename(row.file)}`)
 }));
 const batches = [
-  fixtures.filter((row) => row.diagnostic === 'policy/no-comments'),
-  fixtures.filter(
-    (row) => row.command === 'lint' && row.diagnostic !== 'policy/no-comments'
-  ),
+  fixtures.filter((row) => row.command === 'lint'),
   fixtures.filter((row) => row.command === 'check'),
   fixtures.filter((row) => row.command === 'format:check')
 ];
 function diagnosticFor(row: PolicyCase, output: string) {
   if (row.command !== 'lint') return output;
-  if (row.diagnostic === 'policy/no-comments')
-    return output.split('\n').find((line) => line.startsWith(`${row.file}:`));
   return output
     .split('\n\n')
     .find((block) => block.includes(join(root, row.file)));
@@ -618,9 +423,7 @@ for (const batch of batches) {
     }
   }
   for (const row of batch) {
-    if (row.file === 'bun.lock')
-      await writeFile(join(root, row.file), lockfile);
-    else await rm(join(root, row.file));
+    await rm(join(root, row.file));
     console.log(`PASS ${row.name}`);
   }
 }

@@ -1,12 +1,12 @@
 # Krab
 
-A client-rendered SvelteKit app for keeping track of crab pots and nets on the water. It currently drops gear at the phone's location, lists gear in the water with distance, direction and time in the water, and restores the active trip from IndexedDB after a reload.
+A client-rendered SvelteKit app for keeping track of crab pots and nets on the water. It drops gear at the phone's location, records bait, depth and catch for each drop, and lists gear in the water with distance, direction and time in the water. The Map tab shows drops on NOAA charts or OpenFreeMap streets. Ending a trip keeps it under Past trips, where its days and drops can be reviewed on the map or the trip deleted. After one online load, Krab launches and restores the active trip with no signal.
+
+All trip data stays on the phone in IndexedDB. There is no account, cloud database or authentication, and clearing or evicting the site's data loses the active trip and past trips. Map provider requests carry no position. Read [GLOSSARY.md](GLOSSARY.md) before product work.
 
 ## Setup
 
-Install [Bun](https://bun.sh/docs/installation) **1.4.4** and Node.js **26.13.0** (recorded in `.node-version`). Bun manages packages and developer commands; the tooling also invokes Node. The minimum is Node >=22.18.0: SvelteKit needs 22.17.0, and the verification helpers run TypeScript files directly with `node`, which Node 22 does by default from 22.18.0. No environment file, cloud account, API key, or service credentials are needed.
-
-From a fresh checkout:
+Install [Bun](https://bun.sh/docs/installation) **1.4.4** and Node.js **26.13.0** (recorded in `.node-version`; the minimum is 22.18.0, which runs TypeScript files directly). No environment file, cloud account, API key or service credential is needed.
 
 ```sh
 bun install --frozen-lockfile
@@ -14,89 +14,81 @@ bun run setup:security
 bun run dev --host 127.0.0.1
 ```
 
-Open the local URL printed by Vite. Stop it with Ctrl-C. Installation runs `prepare` to synchronize SvelteKit types and activate Lefthook. `setup:security` installs the pinned native scanner and reinstalls the hook. Complete both steps before committing. Code policy commands are available below.
+Installation runs `prepare`, which synchronizes SvelteKit types and activates Lefthook. `setup:security` downloads the [official Gitleaks 8.30.1 release](https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1), verifies its pinned SHA-256, installs it in the ignored `.tools/gitleaks` and reinstalls the hook. Complete both steps before committing, and run setup again after moving the checkout.
 
-## Verification and static output
+## Checks
+
+| Command                          | Behavior                                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `bun run format`                 | Format source, configuration and Markdown; sort Tailwind classes                                             |
+| `bun run format:check`           | Check formatting without rewriting files                                                                     |
+| `bun run lint`                   | Run ESLint with strict type-aware rules, the UI copy rule and the CI time limit rule                         |
+| `bun run check`                  | Synchronize SvelteKit and type-check the project and the service worker                                      |
+| `bun run test:unit`              | Run the Vitest suites under `src/**/*.test.ts` and `scripts/verify-krab/**/*.test.ts`                        |
+| `bun run test:policy`            | Run paired valid and invalid probes through `lint`, `check` and `format:check` in a disposable copy          |
+| `bun run test:security`          | Prove the commit hook and the staged and history secret scans in disposable repositories                     |
+| `bun run build`                  | Write the static site, with its `index.html` fallback, to `build/`                                           |
+| `bun run check:assets`           | Check the emitted manifest, icons and installation metadata in `build/`                                      |
+| `bun run build:next`             | Keep the current `build/` as `.svelte-kit/previous-build`, then build a newer version for the update test    |
+| `bun run test:e2e`               | Run the Playwright WebKit suite (iPhone emulation, axe WCAG 2.2 AA in both themes) against existing builds   |
+| `bun run test:recipes`           | Run the verify-krab journey recipes against the built app with the e2e provider fixtures                     |
+| `bun run test:e2e:container`     | Build twice, then run `test:e2e` in the `mcr.microsoft.com/playwright:v<version>-noble` image (needs Docker) |
+| `bun run test:recipes:container` | Build twice, then run `test:recipes` in the same image                                                       |
+
+WebKit does not launch natively on every Linux host, so run the browser suites locally through the container commands. Test output goes to the ignored `test-results/`.
+
+Every commit runs `secrets:staged`, `format:check`, `lint`, `check` and `test:unit` through Lefthook. Both secret scans pass `--redact=100` and print only path, line and rule. `bun run secrets:history` scans all fetched refs and rejects shallow clones.
+
+## CI
+
+[GitHub Actions](.github/workflows/ci.yml) runs on pushes to `main`, pull requests and manual dispatch, with read-only repository permission and no deployment. Every job sets `timeout-minutes` of at most 5 and starts at once:
+
+- `checks` scans full history, then runs `format:check`, `lint`, `check`, `test:unit`, `build` and `check:assets`.
+- `policy` runs `test:policy` and `test:security`.
+- `browser` builds twice inside the pinned Playwright container and runs `test:e2e` in 6 shards and `test:recipes` in 4 shards.
+
+CodeRabbit automatic reviews are off in `.coderabbit.yaml`. Request a manual review only when asked.
+
+## Offline shell
+
+The service worker in `src/service-worker/index.ts` keeps one `krab-shell-<version>` cache of the app shell, immutable build files and static assets. It serves only same-origin `GET` requests; map tiles and other third-party requests go to the network. It never touches IndexedDB. A new build installs in the background, has no `skipWaiting`, and takes over on the next launch after every Krab page has closed. While a trip is active and Krab is visible, Krab holds a screen wake lock. Use the [device checklist](.agents/skills/verify-krab/features/device-checks.md) for Home Screen installation, offline launch, updates and wake lock on a real iPhone.
+
+## Deploy
+
+Cloudflare hosting is configured in the Cloudflare dashboard, which runs these commands on pushes to `main`. The repository tracks neither `wrangler.json` nor `build/_headers`.
+
+Build command:
 
 ```sh
-bun run check
-bun run build
-bun run check:assets
-bun run preview --host 127.0.0.1
+bun run build && bun -e 'await Bun.write("wrangler.json", JSON.stringify({name:"krab",compatibility_date:"2026-11-02",assets:{directory:"./build",not_found_handling:"single-page-application"}})); await Bun.write("build/_headers", "/service-worker.js\n  Cache-Control: no-cache\n/_app/immutable/*\n  Cache-Control: public, max-age=31536000, immutable\n");'
 ```
 
-`check` synchronizes framework types and runs strict Svelte/TypeScript checking. The static adapter writes the deployable site to `build/`, including the client-rendered `index.html` fallback. Configure a future static host to serve that fallback for application routes. Generated `.svelte-kit/` server intermediates are build tooling output; the shipped `build/` directory needs no SvelteKit application server. `preview` serves the production build locally and is not a hosting setup.
-
-Formatting, lint and test commands are documented in [Code checks](docs/tooling.md). Commit hooks and CI use the shared commands below. After one online load the service worker keeps the app shell for offline use; see [Offline shell and updates](docs/offline.md) for the caching contract, hosting headers and kill switch. The Map tab offers NOAA charts and OpenFreeMap streets; trip data stays on the phone. There is no authentication.
-
-## Tests
+Deploy command:
 
 ```sh
-bun run test:unit
-bun run test:e2e:container
+bunx wrangler deploy
 ```
 
-`test:unit` runs every Vitest suite under `src/**/*.test.ts` and `scripts/verify-krab/**/*.test.ts`; the trip module's suite drives its public interface over `fake-indexeddb`, with a fixed clock and position source. `test:e2e:container` builds the site twice (the second build stands in for an update) and runs the Playwright WebKit suite with iPhone emulation, an emulated made-up position and axe (WCAG 2.2 AA, light and dark) inside the official `mcr.microsoft.com/playwright:v<version>-noble` image whose version matches the installed `@playwright/test`, because WebKit does not launch natively on every Linux host. It needs Docker. Where WebKit runs natively (as in CI), `bun run build && bun run build:next && bun run test:e2e` runs the same suite directly. Test output goes to the ignored `test-results/`.
+After a deploy, check the worker headers and body, and one immutable asset:
 
-## Installation assets
+```sh
+curl -sI https://krab.lomzem.dev/service-worker.js
+curl -s https://krab.lomzem.dev/service-worker.js | head -c 200
+```
 
-The static shell links a standalone web app manifest and a 180px Apple touch icon, with 192px and 512px manifest icons. These are original placeholder crab drawings generated with ImageMagick. The manifest assumes hosting at the origin root; update its URLs and scope when adopting a subpath host.
+The worker must have a JavaScript `Content-Type` and `Cache-Control: no-cache`, and its body must be the worker, not the HTML fallback. An `/_app/immutable/` asset must have `Cache-Control: public, max-age=31536000, immutable`.
 
-After each build, run `bun run check:assets` from the repository root. This single check parses the emitted HTML and manifest, resolves the start URL and icon references inside `build/`, verifies PNG dimensions, and checks the shell's installation presentation metadata. It uses Bun's HTMLRewriter and requires no running server. A suitable HTTPS origin is needed for installation; hosting is deferred.
+### Service worker kill switch
 
-Offline startup comes from the service worker described in [Offline shell and updates](docs/offline.md). Automated asset verification does not establish actual iPhone installation or launch behavior; use the [device checklist](.agents/skills/verify-krab/features/device-checks.md) for those checks.
+If a broken worker reaches phones, ship `src/service-worker/kill-switch.ts`. It activates at once, deletes every `krab-shell-` cache and unregisters itself. IndexedDB is never touched.
+
+1. Replace the contents of `src/service-worker/index.ts` with `import './kill-switch';`.
+2. In `vite.config.ts`, pass `serviceWorker: { register: false }` to `sveltekit({ ... })`.
+3. Run the checks and `bun run build`. Confirm that `build/service-worker.js` contains the kill-switch code and that `build/index.html` does not register a worker.
+4. Merge to `main` so the dashboard deploys it. Keep the worker at `/service-worker.js` with the same headers.
+
+On an affected phone, open Krab online once, then reload. `navigator.serviceWorker.getRegistration()` must resolve to `undefined`, `caches.keys()` must have no `krab-shell-` entry, and the stored trip must still show. To restore offline support, revert both changes and deploy normally.
 
 ## Code organization
 
-- `src/routes/` contains thin SvelteKit routes that compose feature UI.
-- `src/lib/features/<feature>/` directories own each feature's UI, domain logic, Effect services, and private browser integrations together. Consume another feature through its `index.ts`; MapTab and PastTrips load `map/ChartMap.svelte` directly through a dynamic import to defer the map component.
-  - `trip/` owns the trip record, the drop rules, the GPS freshness policy and IndexedDB storage. Its interface takes a clock, a position source and an `IDBFactory`, and returns Effect values with typed storage failures.
-  - `location/` wraps `watchPosition` as the production position source and stops watching while the page is hidden.
-  - `on-water/` is the on-water UI: bottom tabs, the first-launch location explanation, the Drop control, the Gear list and the Undo toast. It never touches IndexedDB directly.
-- Extract shared browser integrations when multiple features need them.
-
-Do not create empty feature directories or speculative abstractions. SvelteKit 3 uses `#lib/*` package subpath imports, configured in `package.json`. Configuration lives in `vite.config.ts`, including Tailwind's Vite plugin and SvelteKit's static adapter. Global Tailwind theme tokens (light and dark, following the system setting) live in `src/app.css`. The Atkinson Hyperlegible Next font is self-hosted from `@fontsource/atkinson-hyperlegible-next` under the SIL Open Font License; see [the Atkinson Hyperlegible Next attribution](docs/third-party/atkinson-hyperlegible-next.md).
-
-See [GLOSSARY.md](GLOSSARY.md), [the phone-only active-trip decision](docs/adr/0001-phone-only-active-trip-data.md) and [keeping past trips on the phone](docs/adr/0002-keep-past-trips-on-the-phone.md) before product work.
-
-## Dependencies and documentation
-
-Direct versions are pinned in `package.json`, with transitive resolutions in `bun.lock`. Keep TypeScript within the installed SvelteKit and svelte-check peer ranges when updating dependencies.
-
-- [SvelteKit SPA configuration](https://svelte.dev/docs/kit/single-page-apps) and [Vite configuration](https://svelte.dev/docs/kit/configuration)
-- [Tailwind with SvelteKit](https://tailwindcss.com/docs/installation/framework-guides/sveltekit)
-- [Effect v4 documentation](https://effect.website/docs/v4/onboarding), matching installed stable v4
-- Primary npm metadata: [SvelteKit](https://registry.npmjs.org/@sveltejs%2fkit), [svelte-check](https://registry.npmjs.org/svelte-check), [TypeScript](https://registry.npmjs.org/typescript), [Effect](https://registry.npmjs.org/effect)
-
-## Commit and secret protection
-
-Setup requires Git, tar, and HTTPS access to GitHub releases. `bun run setup:security` downloads the [official Gitleaks 8.30.1 release](https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1) for Linux/macOS x64/arm64, verifies its archive against the pinned upstream SHA-256, and installs it in ignored `.tools/gitleaks`. It does not use the system Gitleaks or an npm scanner wrapper. Bun installs the pinned Lefthook package from the frozen lockfile. The installed hook uses Bun on PATH; run setup again after moving the checkout or replacing hooks. Do not set a competing Git `core.hooksPath`.
-
-Every normal commit runs these non-mutating commands in order and stops on failure:
-
-```sh
-bun run secrets:staged
-bun run format:check
-bun run lint
-bun run check
-bun run test:unit
-```
-
-The end-to-end suite is too slow for the hook and runs in CI. The scanner reads the staged Git diff, including index content that differs from the working copy. It runs before policy checks to prevent their diagnostics from printing a detected staged value. Fix a finding in the index and rerun the commit; checks never rewrite or stage files. Gitleaks uses its upstream detection rules; a passing scan is limited to those rules.
-
-```sh
-bun run secrets:history
-bun run test:security
-```
-
-The history command runs the same native scanner over **all fetched refs** with `--log-opts=--all`, including older commits whose files were deleted. It rejects shallow repositories. CI must use a full-history checkout (`fetch-depth: 0`) and run `bun run setup:security` before scanning; unfetched history is outside its scope. The CI workflow runs this command before code checks.
-
-Both scan commands require version 8.30.1 and pass `--redact=100`. Native output is suppressed; a private temporary JSON report is reduced to path, line, and rule, then deleted on process exit. No finding snippets, values, authors, commit messages, or fingerprints are printed. Scanner/setup errors block commits. No credentials or service keys are required.
-
-`test:security` uses disposable repositories and synthetic non-secret material: one hook lifecycle/policy scenario, staged/index mismatch security proof, and a distinct removed historical finding on another branch. It checks native redaction and hook diagnostics without displaying the synthetic material. Historical fixtures are created before hook activation in that isolated repository. It neither changes this checkout's index/history nor bypasses its hooks.
-
-## CI and review configuration
-
-[CI and manual review documentation](docs/ci.md) records pinned Actions, the shared verification sequence, CodeRabbit skip settings, and local validation limits. CI runs on pushes, pull requests, and manual dispatch with read-only repository permission. No deployment or paid scanner integration is configured.
-
-CodeRabbit automatic initial, incremental, and draft reviews are disabled. Request manual reviews only when explicitly asked; check current public-repository eligibility and limits then.
+Feature code lives in `src/lib/features/<feature>/`, and `src/routes/` stays thin. `#lib/*` resolves to `src/lib/*` through `package.json` imports. Tailwind theme tokens for light and dark live in `src/app.css`. Third-party attributions live in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
