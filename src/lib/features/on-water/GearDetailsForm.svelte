@@ -7,51 +7,44 @@
     canDropAgain,
     KIND_NAMES,
     timeInWater,
-    type Drop,
-    type DropEdit,
-    type Kind
+    type Drop
   } from '#lib/features/trip/index.js';
-  import { baitKey, type BaitSearch } from './bait-options';
   import CatchField from './CatchField.svelte';
-  import { ACTION_BUTTON, PRIMARY_BUTTON } from './controls';
+  import { ACTION_BUTTON, PRIMARY_BUTTON, QUIET_BUTTON } from './controls';
   import DetailsFields from './DetailsFields.svelte';
-  import {
-    catchDraftOf,
-    countOf,
-    draftChanged,
-    draftOf,
-    editOf,
-    type CatchDraft
-  } from './details-draft';
-  import type { SheetOperation, SheetSubject } from './gear-sheet';
+  import type { CatchDraft, InvalidField } from './details-draft';
+  import type {
+    GearSheetSession,
+    SheetDraft,
+    SheetSubject
+  } from './gear-sheet.svelte';
   import KindField from './KindField.svelte';
 
+  const FIELD_IDS: Record<InvalidField, string> = {
+    bait: 'bait-search',
+    depth: 'depth',
+    kept: 'kept-count',
+    released: 'released-count'
+  };
+
   let {
+    session,
     subject,
+    draft,
     formId,
     now,
-    operation,
-    onsave,
-    oncollect,
-    ondropagain,
     denied = false,
     direction,
-    ondirty,
-    inert = false,
-    children
+    inert = false
   }: {
+    session: GearSheetSession;
     subject: SheetSubject;
+    draft: SheetDraft;
     formId: string;
     now: number;
-    operation: SheetOperation | null;
-    onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
-    oncollect?: (dropId: string) => void;
-    ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     denied?: boolean;
     direction?: Snippet<[Drop]>;
-    ondirty?: (dirty: boolean) => void;
     inert?: boolean;
-    children?: Snippet;
   } = $props();
 
   const drop = $derived(subject.drop);
@@ -59,30 +52,17 @@
   const idPrefix = $derived(`gear-${drop.id}`);
   const collectedAt = $derived(drop.collectedAt);
   const inWater = $derived(timeInWater(drop, now));
-  const initial = () => ({
-    draft: draftOf(drop),
-    kind: stored,
-    collected: drop.collectedAt !== null
-  });
-  let draft = $state(initial().draft);
-  let kind = $state(initial().kind);
   const baits = untrack(() => subject.baits);
-  let baitSearch = $state<BaitSearch>({ query: '', refused: false });
-  const searching = $derived(baitKey(baitSearch.query) !== '');
-  let catchDraft = $derived(
-    collectedAt === null ? null : untrack(() => catchDraftOf(drop.catch))
+  const busy = $derived(session.busy);
+  const refused = $derived(session.refusal?.invalid ?? []);
+  const catchRefused = $derived(
+    refused.includes('kept') ||
+      refused.includes('released') ||
+      session.problem === 'catch'
   );
-  const busy = $derived(operation?.pending ?? false);
-  const problem = $derived(operation?.problem ?? null);
-  let wasCollected = initial().collected;
+  let wasCollected = untrack(() => drop.collectedAt !== null);
   let collectButton = $state<HTMLButtonElement>();
   let catchHeading = $state<HTMLHeadingElement>();
-
-  $effect(() => {
-    ondirty?.(
-      kind !== stored || searching || draftChanged(drop, draft, catchDraft)
-    );
-  });
 
   $effect(() => {
     const collected = collectedAt !== null;
@@ -93,54 +73,29 @@
     });
   });
 
-  $effect(() => {
-    if (operation?.problem !== 'depth') return;
-    void tick().then(() => {
-      document
-        .getElementById(`${idPrefix}-depth`)
-        ?.focus({ preventScroll: true });
-      document
-        .getElementById(`${idPrefix}-depth-field`)
-        ?.scrollIntoView({ block: 'nearest' });
-    });
-  });
-
-  $effect(() => {
-    if (operation?.problem !== 'catch') return;
-    const typed = untrack(() => catchDraft);
-    const refused = (['kept', 'released'] as const).find(
-      (side) => typed && countOf(typed[side]) === null
-    );
-    if (!refused) return;
-    void tick().then(() => {
-      document
-        .getElementById(`${idPrefix}-${refused}-count`)
-        ?.focus({ preventScroll: true });
-      document
-        .getElementById(`${idPrefix}-catch-title`)
-        ?.closest('section')
-        ?.scrollIntoView({ block: 'nearest' });
-    });
-  });
-
-  const save = (
-    send: (dropId: string, edit: DropEdit, kind: Kind | null) => void
-  ) => {
-    if (searching) {
-      baitSearch.refused = true;
-      void tick().then(() => {
-        const search = document.getElementById(`${idPrefix}-bait-search`);
-        search?.focus({ preventScroll: true });
-        search?.scrollIntoView({ block: 'nearest' });
-      });
-      return;
+  const shownOf = (field: InvalidField, input: HTMLElement | null) => {
+    if (field === 'bait') return input;
+    if (field === 'depth') {
+      return document.getElementById(`${idPrefix}-depth-field`);
     }
-    send(drop.id, editOf(draft, catchDraft), kind === stored ? null : kind);
+    return document
+      .getElementById(`${idPrefix}-catch-title`)
+      ?.closest('section');
   };
+
+  $effect(() => {
+    const first = session.refusal?.invalid.at(0);
+    if (!first) return;
+    void tick().then(() => {
+      const input = document.getElementById(`${idPrefix}-${FIELD_IDS[first]}`);
+      input?.focus({ preventScroll: true });
+      shownOf(first, input)?.scrollIntoView({ block: 'nearest' });
+    });
+  });
 
   const submit = (event: SubmitEvent) => {
     event.preventDefault();
-    save(onsave);
+    session.save();
   };
 </script>
 
@@ -158,35 +113,33 @@
         </p>
         {@render direction?.(drop)}
       </div>
-      {#if oncollect}
-        <Button
-          {@attach elementRef<HTMLButtonElement>((element) => {
-            collectButton = element;
-          })}
-          class="w-full {ACTION_BUTTON}"
-          aria-disabled={busy}
-          onclick={() => {
-            oncollect(drop.id);
-          }}>Collect</Button
-        >
-      {/if}
+      <Button
+        {@attach elementRef<HTMLButtonElement>((element) => {
+          collectButton = element;
+        })}
+        class="w-full {ACTION_BUTTON}"
+        aria-disabled={busy}
+        onclick={() => {
+          session.collect();
+        }}>Collect</Button
+      >
     </div>
   {:else}
     <CatchField
-      value={catchDraft}
+      value={draft.catchOf(drop)}
       {idPrefix}
-      invalid={problem === 'catch'}
+      invalid={catchRefused}
       bind:heading={catchHeading}
       onchange={(next: CatchDraft | null) => {
-        catchDraft = next;
+        draft.typeCatch(drop, next);
       }}
     />
-    {#if ondropagain && canDropAgain(subject.trip, drop)}
+    {#if canDropAgain(subject.trip, drop)}
       <Button
         class="w-full {PRIMARY_BUTTON}"
         aria-disabled={busy}
         onclick={() => {
-          save(ondropagain);
+          session.dropAgain();
         }}
       >
         {#if denied}
@@ -197,12 +150,25 @@
       </Button>
     {/if}
   {/if}
-  {@render children?.()}
+  {#if session.from === 'list' && drop.position}
+    <Button
+      class="w-full {QUIET_BUTTON}"
+      aria-disabled={busy}
+      onclick={() => {
+        session.showOnMap();
+      }}>Show on map</Button
+    >
+  {/if}
   <KindField
-    bind:kind
+    bind:kind={draft.kind}
     {stored}
     locked={!canChangeKind(subject.trip, drop.gearId)}
     {idPrefix}
   />
-  <DetailsFields bind:draft bind:baitSearch {baits} {idPrefix} />
+  <DetailsFields
+    bind:draft={draft.details}
+    bind:baitSearch={draft.baitSearch}
+    {baits}
+    {idPrefix}
+  />
 </form>

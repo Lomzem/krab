@@ -5,14 +5,15 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
+  import { canUndoCollect, type Drop } from '#lib/features/trip/index.js';
   import {
     ACTION_BUTTON,
     DESTRUCTIVE_BUTTON,
+    DESTRUCTIVE_TEXT_BUTTON,
     PRIMARY_BUTTON,
     QUIET_BUTTON
   } from './controls';
-  import type { SheetOperation, SheetSubject } from './gear-sheet';
+  import type { GearSheetSession, Loss } from './gear-sheet.svelte';
   import DayMarker from './DayMarker.svelte';
   import GearDetailsForm from './GearDetailsForm.svelte';
   import GearIcon from './GearIcon.svelte';
@@ -29,22 +30,19 @@
 
   const TITLE_ID = 'gear-sheet-title';
   const FORM_ID = 'gear-sheet-form';
-  const UNSAVED_ID = 'gear-sheet-unsaved';
-  const CATCH_LOSS_ID = 'gear-sheet-catch-loss';
 
-  type Loss = 'draft' | 'catch';
   const ASKS: Record<
     Loss,
     { id: string; text: string; keep: string; go: string }
   > = {
     draft: {
-      id: UNSAVED_ID,
+      id: 'gear-sheet-unsaved',
       text: 'Unsaved changes',
       keep: 'Keep editing',
       go: 'Discard changes'
     },
     catch: {
-      id: CATCH_LOSS_ID,
+      id: 'gear-sheet-catch-loss',
       text: 'Clears the catch',
       keep: 'Keep catch',
       go: 'Undo collect'
@@ -52,65 +50,55 @@
   };
 
   let {
-    subject,
+    session,
     now,
-    operation,
-    onclose,
-    onsave,
-    oncollect,
-    ondropagain,
     denied = false,
     returnFocus,
     notice,
-    actions,
-    direction,
-    endAction
+    direction
   }: {
-    subject: SheetSubject | null;
+    session: GearSheetSession;
     now: number;
-    operation: SheetOperation | null;
-    onclose: () => void;
-    onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
-    oncollect?: (dropId: string) => void;
-    ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     denied?: boolean;
     returnFocus: () => HTMLElement | null | undefined;
     notice: Notice | null;
-    actions?: Snippet<[Drop, (exit: () => void) => void]>;
     direction?: Snippet<[Drop]>;
-    endAction?: Snippet<
-      [Drop, (exit: () => void) => void, (exit: () => void) => void]
-    >;
   } = $props();
 
+  const subject = $derived(session.subject);
+  const open = $derived(session.open);
+  const busy = $derived(session.busy);
+  const asking = $derived(session.asking);
+
   const failure = $derived.by(() => {
-    const problem = operation?.problem ?? null;
+    const problem = session.problem;
     if (problem === null || problem === 'depth') return null;
     if (problem === 'catch' && subject?.drop.collectedAt !== null) return null;
     return PROBLEMS[problem];
   });
 
-  const open = $derived(subject !== null);
-  const busy = $derived(operation?.pending ?? false);
-  let dirty = $state<boolean>(false);
-  let asking = $state<{ exit: () => void; loss: Loss } | null>(null);
-  let resets = $state(0);
-  let waiting: (() => void) | null = null;
-  let saving = $state<boolean>(false);
   let editingFocus: Element | null = null;
   let askGroup = $state<HTMLDivElement>();
   let keepButton = $state<HTMLButtonElement>();
   let sheet = $state<{ absorbPress: () => void }>();
 
-  const ask = (exit: () => void, loss: Loss = 'draft') => {
+  const askShown = (loss: Loss) => {
     const active = document.activeElement;
     if (active && !askGroup?.contains(active)) editingFocus = active;
-    asking = { exit, loss };
+    if (loss === 'catch') sheet?.absorbPress();
     void tick().then(() => keepButton?.focus());
   };
 
-  const keepEditing = () => {
-    asking = null;
+  $effect.pre(() => {
+    const loss = asking;
+    if (loss !== null) {
+      untrack(() => {
+        askShown(loss);
+      });
+    }
+  });
+
+  const restoreEditing = () => {
     void tick().then(() => {
       if (editingFocus instanceof HTMLElement && editingFocus.isConnected) {
         editingFocus.focus({ preventScroll: true });
@@ -118,55 +106,14 @@
     });
   };
 
-  const discard = () => {
-    const shown = asking;
-    asking = null;
-    if (shown?.loss === 'draft') resets += 1;
-    shown?.exit();
+  const keepEditing = () => {
+    session.keepEditing();
+    restoreEditing();
   };
 
-  const confirmCatchLoss = (exit: () => void) => {
-    if (busy) return;
-    sheet?.absorbPress();
-    ask(exit, 'catch');
+  const dismiss = () => {
+    if (session.dismiss() === 'kept') restoreEditing();
   };
-
-  const storing =
-    (send: (dropId: string, edit: DropEdit, kind: Kind | null) => void) =>
-    (dropId: string, edit: DropEdit, kind: Kind | null) => {
-      if (!busy) saving = true;
-      send(dropId, edit, kind);
-    };
-
-  const leave = (exit: () => void) => {
-    if (asking) keepEditing();
-    else if (!dirty || (busy && saving)) exit();
-    else if (busy) waiting = exit;
-    else ask(exit);
-  };
-
-  const shownId = $derived(subject?.drop.id ?? null);
-  let askedId: string | null = null;
-
-  $effect(() => {
-    if (shownId === askedId) return;
-    askedId = shownId;
-    untrack(() => {
-      asking = null;
-      waiting = null;
-    });
-  });
-
-  $effect(() => {
-    if (!busy) saving = false;
-  });
-
-  $effect(() => {
-    if (busy || !waiting) return;
-    const exit = waiting;
-    waiting = null;
-    if (untrack(() => open)) leave(exit);
-  });
 
   let entered = false;
   let returning = false;
@@ -197,14 +144,13 @@
       if (!entered) return;
       entered = false;
       if (!open) return;
-      if (asking || dirty) enter();
-      leave(onclose);
+      if (asking !== null || session.dirty) enter();
+      dismiss();
     });
   });
 
   const collectLeads = $derived(
-    oncollect !== undefined &&
-      subject !== null &&
+    subject !== null &&
       subject.drop.collectedAt === null &&
       subject.trip.endedAt === null
   );
@@ -214,11 +160,9 @@
   bind:this={sheet}
   {open}
   titleId={TITLE_ID}
-  onclose={() => {
-    leave(onclose);
-  }}
+  onclose={dismiss}
   onbackdrop={() => {
-    if (!dirty && !asking) onclose();
+    session.backdrop();
   }}
   {returnFocus}
   {notice}
@@ -248,31 +192,24 @@
     {/if}
   {/snippet}
 
-  {#if subject}
-    {#key `${subject.drop.id}/${String(resets)}`}
+  {#if subject && session.draft}
+    {#key session.draft}
       <GearDetailsForm
-        ondirty={(next: boolean) => {
-          dirty = next;
-        }}
-        inert={asking !== null}
+        {session}
         {subject}
+        draft={session.draft}
         formId={FORM_ID}
         {now}
-        {operation}
-        onsave={storing(onsave)}
-        {oncollect}
-        ondropagain={ondropagain && storing(ondropagain)}
         {denied}
         {direction}
-      >
-        {@render actions?.(subject.drop, leave)}
-      </GearDetailsForm>
+        inert={asking !== null}
+      />
     {/key}
   {/if}
 
   {#snippet footer()}
     {#if asking}
-      {@const shown = ASKS[asking.loss]}
+      {@const shown = ASKS[asking]}
       <div
         bind:this={askGroup}
         role="group"
@@ -289,8 +226,11 @@
           class="flex-1 basis-36 {QUIET_BUTTON}"
           onclick={keepEditing}>{shown.keep}</Button
         >
-        <Button class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}" onclick={discard}
-          >{shown.go}</Button
+        <Button
+          class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
+          onclick={() => {
+            session.discard();
+          }}>{shown.go}</Button
         >
       </div>
     {/if}
@@ -310,8 +250,22 @@
         class="flex-[1_1_7rem] {collectLeads ? PRIMARY_BUTTON : ACTION_BUTTON}"
         >Save</Button
       >
-      {#if subject}
-        {@render endAction?.(subject.drop, leave, confirmCatchLoss)}
+      {#if subject && canUndoCollect(subject.trip, subject.drop)}
+        <Button
+          class="grow {QUIET_BUTTON}"
+          aria-disabled={busy}
+          onclick={() => {
+            session.undoCollect();
+          }}>Undo collect</Button
+        >
+      {:else if subject}
+        <Button
+          class="grow {DESTRUCTIVE_TEXT_BUTTON}"
+          aria-disabled={busy}
+          onclick={() => {
+            session.deleteDrop();
+          }}>Delete drop</Button
+        >
       {/if}
     </div>
   {/snippet}

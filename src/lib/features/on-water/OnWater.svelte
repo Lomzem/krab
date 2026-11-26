@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Button } from '@ui-sdk/svelte/button';
   import { Tabs, TabsList, TabsPanel, TabsTab } from '@ui-sdk/svelte/tabs';
   import { elementRef } from '#lib/shared/element-ref.js';
   import { tick } from 'svelte';
@@ -16,15 +15,11 @@
   } from '#lib/features/location/index.js';
   import type { Base, Camera } from '#lib/features/map/index.js';
   import {
-    canUndoCollect,
     activeGear,
     type Drop,
-    type DropAttempt,
-    type DropEdit,
-    type Kind
+    type DropAttempt
   } from '#lib/features/trip/index.js';
   import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
-  import { DESTRUCTIVE_TEXT_BUTTON, QUIET_BUTTON } from './controls';
   import DirectionCue from './DirectionCue.svelte';
   import DockRow from './DockRow.svelte';
   import DockStatus from './DockStatus.svelte';
@@ -32,10 +27,11 @@
   import EndTripSheet from './EndTripSheet.svelte';
   import GearList from './GearList.svelte';
   import {
-    sheetSubject,
-    type SheetOperation,
-    type SheetOrigin
-  } from './gear-sheet';
+    GearSheetSession,
+    openerFocus,
+    type SheetOrigin,
+    type SheetSubject
+  } from './gear-sheet.svelte';
   import GearSheet from './GearSheet.svelte';
   import GettingPosition from './GettingPosition.svelte';
   import SavingDrop from './SavingDrop.svelte';
@@ -45,7 +41,7 @@
   import { DEFAULT_MAP_FILTER, filterToShow } from './map-filter';
   import MapTab from './MapTab.svelte';
   import PastTrips from './PastTrips.svelte';
-  import { OnWater, type SaveProblem, type Undo } from './on-water.svelte';
+  import { OnWater, type Undo } from './on-water.svelte';
   import {
     locationExplained,
     rememberLocationExplained,
@@ -75,7 +71,6 @@
   let now = $state(Date.now());
   let acquireNow = $state(Date.now());
   let dropButton = $state<HTMLButtonElement>();
-  let sheet = $state.raw<SheetOrigin | null>(null);
   let base = $state<Base>('chart');
   let camera = $state.raw<Camera | null>(null);
   let main = $state<HTMLElement>();
@@ -102,19 +97,23 @@
       (water.pending.waited || slowAttempt === water.pending.attempt)
   );
 
-  let operation = $state.raw<SheetOperation | null>(null);
-
-  const subject = $derived(
-    sheetSubject(
-      water.trip ? [water.trip, ...water.past] : water.past,
-      sheet?.dropId ?? null
-    )
-  );
-  const subjectActive = $derived(subject?.trip.endedAt === null);
-  const sheetOperation = $derived(
-    operation?.sheet === sheet ? operation : null
-  );
-  const busy = $derived(sheetOperation?.pending ?? false);
+  const gearSheet = new GearSheetSession({
+    trips: () => (water.trip ? [water.trip, ...water.past] : water.past),
+    save: (dropId, edit, nextKind) => water.save(dropId, edit, nextKind),
+    collect: (dropId) => water.collect(dropId),
+    remove: (dropId) => water.remove(dropId),
+    undoCollect: (dropId, name) => water.undoCollect(dropId, name),
+    dropAgain: (dropId) => {
+      now = Date.now();
+      void water.dropAgain(dropId).then(focusDropAfterSave);
+    },
+    saveLost: (name) => {
+      water.saveLost(name);
+    },
+    showOnMap: (target) => {
+      show(target);
+    }
+  });
   const rowStatus = $derived(explained ? readiness.status : null);
   const dockStatus = $derived(
     water.pending?.phase === 'acquiring' && rowStatus?.kind === 'finding'
@@ -138,12 +137,14 @@
         (dockStatus?.kind === 'denied' || dockStatus?.kind === 'finding'))
   );
   const dockShown = $derived(rowShown || panelShown);
-  const sheetDirection = $derived(
-    subject && gear
-      ? (gear.inWater.find((row) => row.drop.id === subject.drop.id)
-          ?.direction ?? null)
-      : null
-  );
+  const sheetDirection = $derived.by(() => {
+    const shown = gearSheet.subject;
+    if (!shown || !gear) return null;
+    return (
+      gear.inWater.find((row) => row.drop.id === shown.drop.id)?.direction ??
+      null
+    );
+  });
 
   const endedTrip = $derived(
     !water.trip && endedTripId
@@ -261,30 +262,14 @@
     });
   };
 
-  let sheetReturn: SheetOrigin['returnFocus'] = () => null;
-
-  const openSheet = (origin: SheetOrigin) => {
-    sheet = origin;
-    sheetReturn = origin.returnFocus;
-  };
-
-  const listRow = (dropId: string) =>
-    document.querySelector<HTMLElement>(
-      `main [data-drop="${CSS.escape(dropId)}"]`
-    );
-
   const opensFrom =
     (from: SheetOrigin['from']) => (dropId: string, opener: HTMLElement) => {
-      openSheet({
+      gearSheet.show({
         dropId,
         from,
-        returnFocus: () => (opener.isConnected ? opener : listRow(dropId))
+        returnFocus: openerFocus(dropId, opener)
       });
     };
-
-  const closeSheet = () => {
-    sheet = null;
-  };
 
   const sheetReturnFocus = () => {
     if (pastShowNext !== null) {
@@ -294,53 +279,12 @@
     }
     if (water.pending?.phase === 'acquiring' || savingShown) return null;
     if (showOnMap !== null) return mapTabButton;
-    return sheetReturn() ?? restingFocus();
+    return gearSheet.returnFocus() ?? restingFocus();
   };
 
-  const operate = async <A>(
-    work: () => Promise<A>,
-    settle: (result: A) => SaveProblem | null,
-    closed: (outcome: { result: A } | null) => void = () => {}
-  ) => {
-    const origin = sheet;
-    if (!origin || busy) return;
-    operation = { sheet: origin, pending: true, problem: null };
-    const outcome = await work().then(
-      (result) => ({ result }),
-      () => null
-    );
-    const owned = operation.sheet === origin;
-    if (sheet !== origin) {
-      if (owned) operation = { sheet: origin, pending: false, problem: null };
-      closed(outcome);
-      return;
-    }
-    if (!owned) return;
-    const problem = outcome ? settle(outcome.result) : 'storage';
-    operation = { sheet: origin, pending: false, problem };
-  };
-
-  const closeWhenSaved = (problem: SaveProblem | null) => {
-    if (problem === null) closeSheet();
-    return problem;
-  };
-
-  const save = (dropId: string, edit: DropEdit, nextKind: Kind | null) => {
-    const name = subject?.name;
-    void operate(
-      () => water.save(dropId, edit, nextKind),
-      closeWhenSaved,
-      (outcome) => {
-        if (outcome?.result !== null && name) water.saveLost(name);
-      }
-    );
-  };
-
-  const show = (target: Drop) => {
-    if (busy) return;
-    if (subject && !subjectActive) {
+  const show = ({ trip, drop: target }: SheetSubject) => {
+    if (trip.endedAt !== null) {
       pastShowNext = target.id;
-      closeSheet();
       return;
     }
     now = Date.now();
@@ -348,37 +292,6 @@
     mapFilter = filterToShow(mapFilter, gear.inDays, target);
     showOnMap = target.id;
     void switchTo('map');
-    closeSheet();
-  };
-
-  const dropAgain = (dropId: string, edit: DropEdit, nextKind: Kind | null) => {
-    void operate(
-      () => water.save(dropId, edit, nextKind),
-      (problem) => {
-        if (problem !== null) return problem;
-        closeSheet();
-        now = Date.now();
-        void water.dropAgain(dropId).then(focusDropAfterSave);
-        return null;
-      }
-    );
-  };
-
-  const deleteDrop = (dropId: string) => {
-    void operate(
-      () => water.remove(dropId),
-      (deleted) => {
-        if (deleted) closeSheet();
-        return null;
-      }
-    );
-  };
-
-  const collect = (dropId: string) => {
-    void operate(
-      () => water.collect(dropId),
-      () => null
-    );
   };
 
   const endTrip = async () => {
@@ -403,13 +316,6 @@
 
   const endReturnFocus = () =>
     endButton?.isConnected ? endButton : restingFocus();
-
-  const undoCollect = (dropId: string, name: string) => {
-    void operate(
-      () => water.undoCollect(dropId, name),
-      () => null
-    );
-  };
 </script>
 
 <Tabs
@@ -465,7 +371,7 @@
               showOnMap = null;
             }}
             onopen={(dropId: string, returnFocus: () => HTMLElement | null) => {
-              openSheet({ dropId, from: 'map', returnFocus });
+              gearSheet.show({ dropId, from: 'map', returnFocus });
             }}
             newest={water.notice?.offer.action === 'undo-drop'
               ? water.notice.offer.dropId
@@ -528,7 +434,7 @@
             returnFocus: () => HTMLElement | null,
             from: 'list' | 'map'
           ) => {
-            openSheet({ dropId, from, returnFocus });
+            gearSheet.show({ dropId, from, returnFocus });
           }}
           ondelete={(tripId: string) => water.deleteTrip(tripId)}
           onretry={reload}
@@ -539,30 +445,12 @@
   </main>
 
   <GearSheet
-    {subject}
+    session={gearSheet}
     {now}
-    operation={sheetOperation}
-    onclose={closeSheet}
-    onsave={save}
-    oncollect={collect}
-    ondropagain={dropAgain}
     denied={readiness.status.kind === 'denied'}
     returnFocus={sheetReturnFocus}
     notice={water.notice}
   >
-    {#snippet actions(target: Drop, leave: (exit: () => void) => void)}
-      {#if sheet?.from === 'list' && target.position}
-        <Button
-          class="w-full {QUIET_BUTTON}"
-          aria-disabled={busy}
-          onclick={() => {
-            leave(() => {
-              show(target);
-            });
-          }}>Show on map</Button
-        >
-      {/if}
-    {/snippet}
     {#snippet direction(target: Drop)}
       {#if sheetDirection}
         <DirectionCue
@@ -576,40 +464,6 @@
         <p class="text-sm text-muted-foreground">Location is off</p>
       {:else if readiness.status.kind === 'finding'}
         <p class="text-sm text-muted-foreground">Finding position</p>
-      {/if}
-    {/snippet}
-    {#snippet endAction(
-      target: Drop,
-      leave: (exit: () => void) => void,
-      confirmCatchLoss: (exit: () => void) => void
-    )}
-      {#if subject && canUndoCollect(subject.trip, target)}
-        {@const { name } = subject}
-        {@const putBack = () => {
-          undoCollect(target.id, name);
-        }}
-        <Button
-          class="grow {QUIET_BUTTON}"
-          aria-disabled={busy}
-          onclick={() => {
-            if (busy) return;
-            leave(() => {
-              if (target.catch) confirmCatchLoss(putBack);
-              else putBack();
-            });
-          }}>Undo collect</Button
-        >
-      {:else}
-        <Button
-          class="grow {DESTRUCTIVE_TEXT_BUTTON}"
-          aria-disabled={busy}
-          onclick={() => {
-            if (busy) return;
-            leave(() => {
-              deleteDrop(target.id);
-            });
-          }}>Delete drop</Button
-        >
       {/if}
     {/snippet}
   </GearSheet>
