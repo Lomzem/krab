@@ -1,3 +1,5 @@
+@layer ui-sdk;
+
 @import 'tailwindcss';
 
 @custom-variant compact (@media (max-height: 26rem));
