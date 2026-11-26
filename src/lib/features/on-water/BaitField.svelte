@@ -10,7 +10,8 @@
     Command,
     CommandInput,
     CommandItem,
-    CommandList
+    CommandList,
+    CommandStatus
   } from '@ui-sdk/svelte/command';
   import {
     baitChips,
@@ -62,6 +63,7 @@
     event instanceof MouseEvent && event.detail === 0;
 
   const forget = () => {
+    highlighted = null;
     search.query = '';
     search.refused = false;
   };
@@ -135,19 +137,32 @@
         onkeydowncapture={(event) => {
           if (event.key === 'Escape' && search.query !== '')
             event.stopPropagation();
+          if (
+            event.key === 'Enter' &&
+            highlighted === null &&
+            !event.isComposing
+          )
+            event.stopPropagation();
         }}
       >
         <Command
           class="flex flex-col gap-2"
           filter={false}
+          autoHighlight={false}
           bind:query={search.query}
           bind:value={highlighted}
           onQueryChange={() => {
             void tick().then(() => {
-              highlighted = first;
+              highlighted = typed === '' ? null : first;
             });
           }}
         >
+          <CommandStatus class="sr-only">
+            {#snippet children({ count })}
+              {#if typed !== ''}{count}
+                {count === 1 ? 'result' : 'results'}{/if}
+            {/snippet}
+          </CommandStatus>
           <CommandList
             aria-labelledby={legendId}
             hidden={!listed}
@@ -197,7 +212,11 @@
               enterkeyhint="done"
               aria-invalid={problem ? 'true' : undefined}
               aria-describedby={problem ? problemId : undefined}
-            />
+            >
+              {#snippet render({ props })}
+                <input {...props} aria-expanded={listed} />
+              {/snippet}
+            </CommandInput>
           </div>
           {#if problem}
             <p

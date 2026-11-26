@@ -172,3 +172,54 @@ test('opening the bait search from the keyboard focuses it and a tap leaves focu
   await page.keyboard.press('Space');
   await expect(search).toBeFocused();
 });
+
+test('an empty bait search lets Enter save the sheet while ArrowDown then Enter picks a saved bait', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const search = sheet.getByLabel('Find or add bait');
+  const label = sheet.getByLabel('Label', { exact: true });
+  const other = sheet.getByRole('button', { name: 'Other bait' });
+
+  await start(page);
+  await dropPot(page, 'Pot 1');
+  await gearRow(page, 'Pot 1').click();
+  await sheet.getByRole('button', { name: 'Add bait' }).click();
+  await expect(search).toHaveAttribute('aria-expanded', 'false');
+  await search.fill('Fish heads');
+  await expect(search).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Enter');
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+
+  await dropPot(page, 'Pot 2');
+  await gearRow(page, 'Pot 2').click();
+  await label.fill('North buoy');
+  await other.click();
+  await search.focus();
+  await page.keyboard.press('Enter');
+  await expect(sheet).toBeHidden();
+  await expect(gearRow(page, 'Pot 2')).toContainText('North buoy');
+  expect(await storedBaits(page)).toEqual(['Fish heads', '']);
+
+  await gearRow(page, 'Pot 2').click();
+  await label.fill('South buoy');
+  await other.click();
+  await search.fill('Fish');
+  await expect(
+    sheet.getByRole('status').filter({ hasText: '2 results' })
+  ).toHaveCount(1);
+  await search.fill('');
+  await page.keyboard.press('Enter');
+  await expect(sheet).toBeHidden();
+  await expect(gearRow(page, 'Pot 2')).toContainText('South buoy');
+  expect(await storedBaits(page)).toEqual(['Fish heads', '']);
+
+  await gearRow(page, 'Pot 2').click();
+  await other.click();
+  await search.focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(sheet.getByRole('radio', { name: 'Fish heads' })).toBeChecked();
+  await expect(sheet).toBeVisible();
+});
