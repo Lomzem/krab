@@ -1225,6 +1225,79 @@ test('on a 320 by 640 screen, the newest drop and its time label stay clear of i
   expect(await creditsOf(page).evaluate(shownWhole)).toBe(true);
 });
 
+const creditsDialog = (page: Page) =>
+  page.getByRole('dialog', { name: 'Map credits' });
+
+for (const text of ['100%', '200%']) {
+  test(`on an 852 by 340 screen with text at ${text}, the Street map credits open from the keyboard on their first link, scroll inside the screen and show each link whole as Tab reaches it, and Escape closes them back on the credits`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 852, height: 340 });
+    await page.addInitScript((size) => {
+      document.documentElement.style.fontSize = size;
+    }, text);
+    await dropPotAndOpenMap(page);
+    await streetMapButton(page).click();
+    await expect(creditsOf(page)).toHaveAccessibleName(/OpenFreeMap/);
+
+    await creditsOf(page).focus();
+    await page.keyboard.press('Enter');
+    const credits = creditsDialog(page);
+    await expect(credits).toBeVisible();
+    const links = credits.getByRole('link');
+    await expect(links).toHaveText([
+      'OpenFreeMap',
+      '© OpenMapTiles',
+      '© OpenStreetMap contributors'
+    ]);
+    await expect(links.first()).toBeFocused();
+    const { y, height } = await boxOf(credits);
+    expect(y).toBeGreaterThanOrEqual(0);
+    expect(y + height).toBeLessThanOrEqual(340);
+    expect(
+      await credits.evaluate(
+        (element) => element.scrollHeight > element.clientHeight
+      )
+    ).toBe(true);
+
+    for (const index of [0, 1, 2]) {
+      if (index > 0) await page.keyboard.press('Tab');
+      await expect(links.nth(index)).toBeFocused();
+      await expect(links.nth(index)).toBeInViewport({ ratio: 0.99 });
+    }
+
+    await page.keyboard.press('Escape');
+    await expect(credits).toBeHidden();
+    await expect(creditsOf(page)).toBeFocused();
+  });
+}
+
+test('with the map credits open, a tap on Filter or Drop pot does what it says and closes the credits', async ({
+  page
+}) => {
+  await dropPotAndOpenMap(page);
+  await expect(potOnMap(page)).toBeVisible();
+  await creditsOf(page).tap();
+  await expect(creditsDialog(page)).toBeVisible();
+
+  await mapArea(page)
+    .getByRole('button', { name: /^Filter/ })
+    .tap();
+  const filter = page
+    .getByRole('dialog')
+    .filter({ has: page.getByRole('heading', { name: 'Map filter' }) });
+  await expect(filter).toBeVisible();
+  await expect(creditsDialog(page)).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(filter).toBeHidden();
+
+  await creditsOf(page).tap();
+  await expect(creditsDialog(page)).toBeVisible();
+  await page.getByRole('button', { name: 'Drop pot' }).tap();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await expect(creditsDialog(page)).toBeHidden();
+});
+
 test('on a 320 by 640 screen with a map notice showing, a new drop stays clear of both the notice and its Undo toast, and stays put when Undo ends', async ({
   context,
   page,

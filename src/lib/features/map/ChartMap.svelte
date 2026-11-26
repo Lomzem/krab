@@ -16,6 +16,12 @@
   import { SvelteMap } from 'svelte/reactivity';
   import { Button } from '@ui-sdk/svelte/button';
   import {
+    Popover,
+    PopoverContent,
+    PopoverTitle,
+    PopoverTrigger
+  } from '@ui-sdk/svelte/popover';
+  import {
     SegmentedControl,
     SegmentedControlItem
   } from '@ui-sdk/svelte/segmented-control';
@@ -118,8 +124,6 @@
       (availability === 'unexplained' || availability === 'not-answering')
   );
   let chip = $state<HTMLButtonElement>();
-  let creditsPanel = $state<HTMLDivElement>();
-  let creditsOpen = $state(false);
   let rendered = $state<Base | null>(null);
   const credit = $derived(CREDITS[rendered ?? base]);
   let selected = $state<string | null>(null);
@@ -483,34 +487,6 @@
     reveal(id);
   };
 
-  const closeCredits = (refocus: boolean) => {
-    if (!creditsOpen) return;
-    creditsOpen = false;
-    if (refocus) chip?.focus();
-  };
-
-  const toggleCredits = async () => {
-    if (creditsOpen) {
-      closeCredits(true);
-      return;
-    }
-    creditsOpen = true;
-    await tick();
-    creditsPanel?.querySelector<HTMLElement>('a')?.focus();
-  };
-
-  const outsideCredits = (event: PointerEvent) => {
-    const target = event.target as Node | null;
-    if (
-      !creditsOpen ||
-      chip?.contains(target) ||
-      creditsPanel?.contains(target)
-    ) {
-      return;
-    }
-    closeCredits(true);
-  };
-
   const leaveOverview = () => {
     overview = false;
     framePending = false;
@@ -816,8 +792,6 @@
   });
 </script>
 
-<svelte:document onpointerdown={outsideCredits} />
-
 {#snippet baseChoice(choice: Base, text: string)}
   <SegmentedControlItem
     value={choice}
@@ -1080,19 +1054,21 @@
     <div
       class="relative z-10 col-start-1 row-span-2 row-start-1 m-3 max-w-[calc(100%-5.5rem)] self-end justify-self-start short-map:max-w-[calc(100%-8.5rem)]"
     >
-      {#if creditsOpen}
-        <div
-          bind:this={creditsPanel}
-          role="dialog"
-          aria-label="Map credits"
-          tabindex="-1"
-          class="absolute bottom-full left-0 mb-2 w-max max-w-[calc(100vw-1.5rem)] rounded-control border border-input bg-card py-1 text-foreground shadow-sm transition-opacity duration-120 ease-out motion-reduce:transition-none starting:opacity-0"
-          onkeydown={(event) => {
-            if (event.key !== 'Escape') return;
-            event.stopPropagation();
-            closeCredits(true);
+      <Popover>
+        <PopoverTrigger
+          {@attach (node: HTMLButtonElement) => {
+            chip = node;
           }}
+          class="min-h-11 min-w-11 touch-manipulation rounded-[6px] border border-input bg-card px-2 py-1 text-left text-sm leading-[1.3] font-medium text-muted-foreground {FOCUS} {PRESS} active:bg-muted"
+          >{credit}</PopoverTrigger
         >
+        <PopoverContent
+          side="top"
+          align="start"
+          sideOffset={8}
+          class="max-h-(--available-height) w-max max-w-(--available-width) overflow-y-auto overscroll-contain rounded-control border border-input bg-card py-1 text-foreground shadow-sm transition-opacity duration-120 ease-out motion-reduce:transition-none starting:opacity-0"
+        >
+          <PopoverTitle class="sr-only">Map credits</PopoverTitle>
           <ul>
             {#if (rendered ?? base) === 'chart'}
               <li>
@@ -1135,16 +1111,8 @@
               </li>
             {/if}
           </ul>
-        </div>
-      {/if}
-      <button
-        bind:this={chip}
-        type="button"
-        class="min-h-11 min-w-11 touch-manipulation rounded-[6px] border border-input bg-card px-2 py-1 text-left text-sm leading-[1.3] font-medium text-muted-foreground {FOCUS} {PRESS} active:bg-muted"
-        aria-haspopup="dialog"
-        aria-expanded={creditsOpen}
-        onclick={() => void toggleCredits()}>{credit}</button
-      >
+        </PopoverContent>
+      </Popover>
     </div>
   {/if}
 </div>
