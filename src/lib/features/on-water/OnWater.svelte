@@ -421,7 +421,9 @@
     if (next) void switchTo(next);
   }}
 >
-  <div class="border-b border-border bg-card pt-[env(safe-area-inset-top,0px)]">
+  <header
+    class="border-b border-border bg-card pt-[env(safe-area-inset-top,0px)]"
+  >
     <TabsList class="grid grid-cols-3" aria-label="Screens">
       {#each TABS as item (item.tab)}
         <TabsTab
@@ -435,7 +437,7 @@
         </TabsTab>
       {/each}
     </TabsList>
-  </div>
+  </header>
 
   <main bind:this={main} class="flex min-h-0 flex-1 flex-col overflow-y-auto">
     <TabsPanel value="map" keepMounted class="flex min-h-0 flex-1 flex-col">
