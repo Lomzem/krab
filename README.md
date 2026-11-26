@@ -27,6 +27,7 @@ Installation runs `prepare`, which synchronizes SvelteKit types and activates Le
 | `bun run test:unit`              | Run the Vitest suites under `src/**/*.test.ts` and `scripts/verify-krab/**/*.test.ts`                        |
 | `bun run test:policy`            | Run paired valid and invalid probes through `lint`, `check` and `format:check` in a disposable copy          |
 | `bun run test:security`          | Prove the commit hook and the staged and history secret scans in disposable repositories                     |
+| `bun run ci`                     | Run `format:check`, `lint`, `check` and `test:unit` in order, beside `test:policy`, in under a minute        |
 | `bun run build`                  | Write the static site, with its `index.html` fallback, to `build/`                                           |
 | `bun run check:assets`           | Check the emitted manifest, icons and installation metadata in `build/`                                      |
 | `bun run build:next`             | Keep the current `build/` as `.svelte-kit/previous-build`, then build a newer version for the update test    |
