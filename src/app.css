@@ -28,6 +28,7 @@
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
   --color-mark: var(--mark);
+  --color-scrim: var(--scrim);
   --color-warning: var(--warning);
   --color-position: var(--position);
   --color-ring-map: var(--ring-map);
@@ -84,6 +85,7 @@
   --ring: #1d4ed8;
   --destructive: #b3261e;
   --mark: #a3256f;
+  --scrim: #000000;
   --warning: #805300;
   --position: #1d4ed8;
   --ring-map: #0b3a8f;

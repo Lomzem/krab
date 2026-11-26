@@ -368,7 +368,7 @@
             </button>
             {#if time}
               <span
-                class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-map-paper/90 px-1 text-xs leading-tight font-semibold whitespace-nowrap text-[#1a2e2b] tabular-nums"
+                class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-map-paper/90 px-1 text-xs leading-tight font-semibold whitespace-nowrap text-map-ink tabular-nums"
                 aria-hidden="true">{time}</span
               >
             {/if}

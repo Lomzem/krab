@@ -182,7 +182,7 @@ const cases: PolicyCase[] = [
     name: 'UI copy word limit in Svelte markup',
     file: 'src/lib/features/on-water/Probe.svelte',
     valid:
-      '<script lang="ts">const count = 1;</script><p class="px-4 text-[16px] text-muted-foreground">{count} in the <strong>water</strong></p><button aria-label="One more kept">+</button>',
+      '<script lang="ts">const count = 1;</script><p class="px-4 text-muted-foreground max-[22rem]:text-base">{count} in the <strong>water</strong></p><button aria-label="One more kept">+</button>',
     invalid: '<p>Leave both empty if nothing counted</p>',
     command: 'lint',
     diagnostic: 'the limit is 5',
@@ -715,6 +715,130 @@ const cases: PolicyCase[] = [
     command: 'check',
     diagnostic: 'a11y_missing_attribute',
     risk: 'Svelte compiler and accessibility warnings pass typechecking'
+  },
+  {
+    name: 'raw color in a chrome class',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p class="text-map-ink">Pot</p>\n',
+    invalid: '<p class="text-[#1a2e2b]">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'Raw color in text-[#1a2e2b]',
+    risk: 'Chrome hard-codes a color that skips the theme tokens'
+  },
+  {
+    name: 'raw color value in chrome script',
+    file: 'src/lib/features/compass/probe.ts',
+    valid: "export const ink = 'var(--map-ink)';\n",
+    invalid: "export const ink = '#1a2e2b';\n",
+    command: 'lint',
+    diagnostic: 'Raw color in #1a2e2b',
+    risk: 'Compass script hands a raw color to the screen'
+  },
+  {
+    name: 'raw color in a chrome inline style',
+    file: 'src/lib/shared/Probe.svelte',
+    valid: '<p style="color: var(--foreground)">Pot</p>\n',
+    invalid: '<p style="color: rgb(26 46 43)">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'Raw color in color: rgb(26 46 43)',
+    risk: 'Shared chrome hides a raw color in a style attribute'
+  },
+  {
+    name: 'raw color in a chrome style block',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<p class="probe">Pot</p>\n\n<style>\n  .probe {\n    color: var(--foreground);\n  }\n</style>\n',
+    invalid:
+      '<p class="probe">Pot</p>\n\n<style>\n  .probe {\n    color: #1a2e2b;\n  }\n</style>\n',
+    command: 'lint',
+    diagnostic: 'Raw color in color: #1a2e2b',
+    risk: 'Chrome hides a raw color in a component style block'
+  },
+  {
+    name: 'Tailwind palette color in chrome',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p class="backdrop:bg-scrim/40">Pot</p>\n',
+    invalid: '<p class="backdrop:bg-black/40">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'backdrop:bg-black/40 uses the Tailwind palette',
+    risk: 'Chrome picks a palette color that no theme token names'
+  },
+  {
+    name: 'text size off the type scale',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<p class="text-center text-control text-muted-foreground">Pot</p>\n',
+    invalid: '<p class="text-lg">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'text-lg is off the type scale',
+    risk: 'Chrome uses a Tailwind size the type scale resets, or the stylesheet tokens go unread'
+  },
+  {
+    name: 'arbitrary font size in chrome script',
+    file: 'src/lib/features/on-water/probe.ts',
+    valid: "export const size = 'text-display leading-tight';\n",
+    invalid: "export const size = 'text-[17px] leading-tight';\n",
+    command: 'lint',
+    diagnostic: 'text-[17px] is off the type scale',
+    risk: 'A class list in script sets a font size off the type scale'
+  },
+  {
+    name: 'raw font size in a chrome inline style',
+    file: 'src/lib/shared/Probe.svelte',
+    valid: '<p style="font-size: var(--text-control)">Pot</p>\n',
+    invalid: '<p style="font-size: 17px">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'font-size: 17px is off the type scale',
+    risk: 'A style attribute sets a font size off the type scale'
+  },
+  {
+    name: 'arbitrary spacing in a chrome class',
+    file: 'src/lib/features/compass/Probe.svelte',
+    valid: '<p class="-mx-1 mt-auto gap-x-2.5 p-px px-edge">Pot</p>\n',
+    invalid: '<p class="px-[13px]">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'px-[13px] is off the spacing scale',
+    risk: 'Chrome spacing leaves the scale, or spacing tokens and the numeric scale are refused'
+  },
+  {
+    name: 'raw spacing in a chrome style directive',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p style:padding="var(--spacing-edge)">Pot</p>\n',
+    invalid: '<p style:padding="13px">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'padding: 13px is off the spacing scale',
+    risk: 'A style directive sets spacing off the scale'
+  },
+  {
+    name: 'safe-area layout exemption',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<p\n  class="pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"\n  style="padding-top: calc(0.75rem + env(safe-area-inset-top))"\n>\n  Pot\n</p>\n',
+    invalid: '<p class="pb-[max(0.5rem,1rem)]">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'pb-[max(0.5rem,1rem)] is off the spacing scale',
+    risk: 'Safe-area insets are refused, or the exemption admits any arbitrary spacing'
+  },
+  {
+    name: 'SVG icon paint exemption',
+    file: 'src/lib/shared/Probe.svelte',
+    valid:
+      '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">\n  <path d="M12 20V4M5.5 10.5 12 4l6.5 6.5" fill="url(#cone)" />\n</svg>\n',
+    invalid:
+      '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">\n  <path d="M12 20V4M5.5 10.5 12 4l6.5 6.5" fill="white" />\n</svg>\n',
+    command: 'lint',
+    diagnostic: 'SVG paint white',
+    risk: 'Icons and arrows hard-code paint, or currentColor and vector geometry are refused'
+  },
+  {
+    name: 'map canvas exemption',
+    file: 'src/lib/features/map/probe.ts',
+    invalidFile: 'src/lib/features/on-water/probe.ts',
+    valid: "export const sea = { 'background-color': '#d5e2e0' };\n",
+    invalid: "export const sea = { 'background-color': '#d5e2e0' };\n",
+    command: 'lint',
+    diagnostic: 'Raw color in #d5e2e0',
+    risk: 'MapLibre styling in the map feature is refused, or On Water escapes the token rule'
   },
   {
     name: 'bits-ui import outside the bait command wrappers',

@@ -22,7 +22,7 @@ Installation runs `prepare`, which synchronizes SvelteKit types and activates Le
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `bun run format`                 | Format source, configuration and Markdown; sort Tailwind classes                                             |
 | `bun run format:check`           | Check formatting without rewriting files                                                                     |
-| `bun run lint`                   | Run ESLint with strict type-aware rules, the UI copy rule and the CI time limit rule                         |
+| `bun run lint`                   | Run ESLint with strict type-aware rules and the `krab/*` policy rules                                        |
 | `bun run check`                  | Synchronize SvelteKit and type-check the project and the service worker; any compiler warning fails          |
 | `bun run test:unit`              | Run the Vitest suites under `src/**/*.test.ts` and `scripts/verify-krab/**/*.test.ts`                        |
 | `bun run test:policy`            | Run paired valid and invalid probes through `lint`, `check` and `format:check` in a disposable copy          |
@@ -96,4 +96,4 @@ On an affected phone, open Krab online once, then reload. `navigator.serviceWork
 
 ## Code organization
 
-Feature code lives in `src/lib/features/<feature>/`, and code outside the feature, including routes, scripts and tests, reaches it only through its `index.ts`. Code that several features use lives in `src/lib/shared/`, which imports no feature. `src/routes/` stays thin. `#lib/*` resolves to `src/lib/*` through `package.json` imports. Tailwind theme tokens for light and dark live in `src/app.css`. Interactive controls come from UI SDK; see `AGENTS.md`. Third-party attributions live in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Feature code lives in `src/lib/features/<feature>/`, and code outside the feature, including routes, scripts and tests, reaches it only through its `index.ts`. Code that several features use lives in `src/lib/shared/`, which imports no feature. `src/routes/` stays thin. `#lib/*` resolves to `src/lib/*` through `package.json` imports. Tailwind theme tokens for light and dark live in `src/app.css`, and `krab/chrome-tokens` holds chrome to them. Interactive controls come from UI SDK; see `AGENTS.md`. Third-party attributions live in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

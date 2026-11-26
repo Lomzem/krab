@@ -218,7 +218,7 @@
   bind:this={dialog}
   aria-labelledby={titleId}
   aria-describedby={describedBy}
-  class="m-0 mt-auto max-h-[88dvh] w-full max-w-none flex-col overflow-hidden rounded-t-2xl bg-card p-0 text-foreground shadow-xl transition-[translate] duration-(--motion-sheet-in) ease-out backdrop:bg-black/40 open:flex starting:open:[translate:0_100%]"
+  class="m-0 mt-auto max-h-[88dvh] w-full max-w-none flex-col overflow-hidden rounded-t-2xl bg-card p-0 text-foreground shadow-xl transition-[translate] duration-(--motion-sheet-in) ease-out backdrop:bg-scrim/40 open:flex starting:open:[translate:0_100%]"
   onpointerdown={notePress}
   onkeydown={noteKey}
   oncancel={(event) => {

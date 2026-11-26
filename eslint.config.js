@@ -8,6 +8,7 @@ import * as yaml from 'yaml-eslint-parser';
 import uiCopy from './scripts/ui-copy.ts';
 import { ciTimeLimit } from './scripts/ci-time-limit.ts';
 import { featureBoundaries } from './scripts/feature-boundaries.ts';
+import { chromeTokens } from './scripts/chrome-tokens.ts';
 import { uiSdkPriority } from './scripts/ui-sdk-priority.ts';
 
 const krab = {
@@ -16,6 +17,7 @@ const krab = {
     ...uiCopy.rules,
     'ci-time-limit': ciTimeLimit,
     'feature-boundaries': featureBoundaries,
+    'chrome-tokens': chromeTokens,
     'ui-sdk-priority': uiSdkPriority
   }
 };
@@ -27,6 +29,12 @@ const FEATURES = [
   'map',
   'on-water',
   'trip'
+];
+
+const CHROME = [
+  'src/lib/features/on-water/**/*.{ts,svelte}',
+  'src/lib/features/compass/**/*.{ts,svelte}',
+  'src/lib/shared/**/*.{ts,svelte}'
 ];
 
 const BITS_UI_WRAPPERS = ['src/lib/features/on-water/bait-command/'];
@@ -101,6 +109,12 @@ export default defineConfig([
     ignores: ['**/*.test.ts', '**/*.d.ts'],
     plugins: { krab },
     rules: { 'krab/ui-copy': 'error' }
+  },
+  {
+    files: CHROME,
+    ignores: ['**/*.test.ts', '**/*.d.ts'],
+    plugins: { krab },
+    rules: { 'krab/chrome-tokens': ['error', { stylesheet: 'src/app.css' }] }
   },
   {
     files: ['.github/workflows/*.{yml,yaml}'],
