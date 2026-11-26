@@ -1,28 +1,51 @@
 import type { Rule } from 'eslint';
 import type * as ESTree from 'estree';
-import { dirname, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 
 type Options = { features: string[] };
 type Statement = { type: string; [key: string]: unknown };
+type MarkupRoot = {
+  expression?: ESTree.Node | null;
+  argument?: ESTree.Node;
+  value?: ESTree.Node;
+};
 
 const LIB_ALIASES = ['#lib/', '$lib/'];
 const FEATURE = /^src\/lib\/features\/([^/]+)(?:\/(.*))?$/;
 const ENTRYPOINT = /^index(?:\.(?:js|ts))?$/;
+const ENTRYPOINT_FILE = /^index\.[^/]+$/;
+const DECLARATION_FILE = /\.d\.[mc]?ts$/;
 const FRAMEWORK_FILE =
   /^src\/(?:app\.d\.ts|hooks(?:\.(?:client|server|universal))?\.[jt]s|params\/[^/]+\.[jt]s|service-worker(?:\.[jt]s|\/.+))$/;
+const ROUTE_FILE =
+  /^\+(?:(?:page|layout)(?:@[^.]*)?(?:\.svelte|(?:\.server)?\.[jt]s)|error\.svelte|server\.[jt]s)$/;
 const ROUTE_BLOCKS = [
   'SvelteIfBlock',
   'SvelteEachBlock',
   'SvelteAwaitBlock',
   'SvelteKeyBlock',
-  'SvelteConstTag'
+  'SvelteSnippetBlock',
+  'SvelteConstTag',
+  'SvelteDeclarationTag'
+];
+const MARKUP_ROOTS = [
+  'SvelteMustacheTag',
+  'SvelteRenderTag',
+  'SvelteAttachTag',
+  'SvelteDirective',
+  'SvelteSpecialDirective',
+  'SvelteSpreadAttribute',
+  'SvelteShorthandAttribute'
 ];
 
 const targetOf = (specifier: string, fromDir: string, cwd: string) => {
   const path = specifier.split('?', 1)[0] ?? '';
   const alias = LIB_ALIASES.find((prefix) => path.startsWith(prefix));
-  if (alias) return `src/lib/${path.slice(alias.length)}`;
-  return path.startsWith('.') ? relative(cwd, resolve(fromDir, path)) : null;
+  if (alias)
+    return relative(cwd, resolve(cwd, 'src/lib', path.slice(alias.length)));
+  if (path.startsWith('.')) return relative(cwd, resolve(fromDir, path));
+  if (!path.startsWith('/')) return null;
+  return relative(cwd, path.startsWith(`${cwd}/`) ? path : join(cwd, path));
 };
 
 const featureOf = (path: string) => {
@@ -78,6 +101,40 @@ const isReexport = (node: Statement) =>
   node.type === 'ExportAllDeclaration' ||
   (node.type === 'ExportNamedDeclaration' && !node.declaration);
 
+const exportedName = (specifier: ESTree.ExportSpecifier) =>
+  specifier.exported.type === 'Identifier'
+    ? specifier.exported.name
+    : String(specifier.exported.value);
+
+const propsOf = (body: Statement[]) =>
+  body.flatMap((node) =>
+    node.type === 'VariableDeclaration'
+      ? (node as unknown as ESTree.VariableDeclaration).declarations.filter(
+          (declarator) => isProps(declarator.init)
+        )
+      : []
+  );
+
+const propNames = (pattern: ESTree.Pattern): string[] => {
+  if (pattern.type === 'Identifier') return [pattern.name];
+  if (pattern.type === 'AssignmentPattern') return propNames(pattern.left);
+  if (pattern.type === 'RestElement') return propNames(pattern.argument);
+  if (pattern.type !== 'ObjectPattern') return [];
+  return pattern.properties.flatMap((property) =>
+    propNames(property.type === 'Property' ? property.value : property)
+  );
+};
+
+const propDefaults = (pattern: ESTree.Pattern) =>
+  pattern.type === 'ObjectPattern'
+    ? pattern.properties.flatMap((property) =>
+        property.type === 'Property' &&
+        property.value.type === 'AssignmentPattern'
+          ? [property.value.right]
+          : []
+      )
+    : [];
+
 export const featureBoundaries: Rule.RuleModule = {
   meta: {
     type: 'problem',
@@ -94,14 +151,19 @@ export const featureBoundaries: Rule.RuleModule = {
     messages: {
       placement:
         '{{file}} is outside the application layout. Put feature code in src/lib/features/<feature>/ and code that several features use in src/lib/shared/.',
+      routeFile:
+        '{{file}} is not a SvelteKit route file. Keep only +page, +layout, +error and +server files in src/routes, and put other code in a feature.',
       undeclared:
         'Feature {{feature}} is not declared. Add it to FEATURES in eslint.config.js, or move the file into a declared feature.',
       entrypoint:
         'Import feature {{feature}} through its public entrypoint, src/lib/features/{{feature}}/index.ts, not {{target}}.',
+      entrypointFile:
+        'src/lib/features/{{feature}}/index.ts is the only entrypoint file of feature {{feature}}. Rename {{file}}.',
+      defaultExport: 'Export a named value instead of a default export.',
       shared:
         'src/lib/shared must not import a feature. Move the code that both need into src/lib/shared.',
       computed:
-        'Give import() a literal path, so the feature boundary check can see what it loads.',
+        'Give {{call}} a literal path, so the feature boundary check can see what it loads.',
       glob: 'import.meta.glob hides imports from the feature boundary check. Import each module by a literal path.',
       wildcard: 'Export each name explicitly instead of export *.',
       passThrough:
@@ -115,9 +177,12 @@ export const featureBoundaries: Rule.RuleModule = {
     const cwd = context.cwd;
     const file = relative(cwd, context.filename);
     const fromDir = dirname(context.filename);
-    const ownFeature = featureOf(file)?.name;
+    const ownFeature = featureOf(file);
+    const inLib = file.startsWith('src/lib/');
     const inShared = file.startsWith('src/lib/shared/');
     const inRoutes = file.startsWith('src/routes/');
+    const props = new Set<string>();
+    const known = new Set<string>();
     const report = (
       node: ESTree.Node,
       messageId: string,
@@ -136,7 +201,7 @@ export const featureBoundaries: Rule.RuleModule = {
       }
       if (
         feature &&
-        feature.name !== ownFeature &&
+        feature.name !== ownFeature?.name &&
         feature.rest !== '' &&
         !ENTRYPOINT.test(feature.rest)
       )
@@ -159,25 +224,40 @@ export const featureBoundaries: Rule.RuleModule = {
       if (specifier !== null) checkTarget(node, specifier);
     };
 
+    const checkLoad = (
+      node: ESTree.Node,
+      source: ESTree.Node | undefined,
+      call: string
+    ) => {
+      const specifier = source ? literalPath(source) : null;
+      if (specifier === null) report(node, 'computed', { call });
+      else checkTarget(node, specifier);
+    };
+
     const checkPlacement = (program: ESTree.Program) => {
-      if (!file.startsWith('src/')) return;
-      if (
-        inRoutes ||
-        inShared ||
-        FRAMEWORK_FILE.test(file) ||
-        (ownFeature && features.includes(ownFeature))
-      )
+      if (inRoutes) {
+        if (!ROUTE_FILE.test(basename(file)))
+          report(program, 'routeFile', { file });
         return;
-      if (ownFeature) report(program, 'undeclared', { feature: ownFeature });
-      else report(program, 'placement', { file });
+      }
+      if (!file.startsWith('src/') || inShared || FRAMEWORK_FILE.test(file))
+        return;
+      if (!ownFeature) report(program, 'placement', { file });
+      else if (!features.includes(ownFeature.name))
+        report(program, 'undeclared', { feature: ownFeature.name });
+      else if (
+        ENTRYPOINT_FILE.test(ownFeature.rest) &&
+        ownFeature.rest !== 'index.ts'
+      )
+        report(program, 'entrypointFile', { feature: ownFeature.name, file });
     };
 
     const checkPassThrough = (program: ESTree.Program) => {
       if (
-        !file.startsWith('src/lib/') ||
-        !/\.[jt]s$/.test(file) ||
-        file.endsWith('.d.ts') ||
-        (ownFeature && file === `src/lib/features/${ownFeature}/index.ts`)
+        !inLib ||
+        file.endsWith('.svelte') ||
+        DECLARATION_FILE.test(file) ||
+        ownFeature?.rest === 'index.ts'
       )
         return;
       const body = program.body as Statement[];
@@ -190,12 +270,58 @@ export const featureBoundaries: Rule.RuleModule = {
         report(program, 'passThrough');
     };
 
+    const isThin = (node: ESTree.Node): boolean => {
+      switch (node.type) {
+        case 'Literal':
+          return true;
+        case 'TemplateLiteral':
+          return node.expressions.length === 0;
+        case 'Identifier':
+          return known.has(node.name);
+        case 'MemberExpression':
+          return !node.computed && isThin(node.object);
+        case 'ChainExpression':
+          return isThin(node.expression);
+        case 'CallExpression':
+          return (
+            node.callee.type === 'Identifier' &&
+            props.has(node.callee.name) &&
+            node.arguments.every((argument) => isThin(argument))
+          );
+        default:
+          return false;
+      }
+    };
+
+    const reportUnlessThin = (node: ESTree.Node, what: string) => {
+      if (isThin(node)) return;
+      const isFunction = node.type.endsWith('FunctionExpression');
+      report(node, 'thinRoute', { what: isFunction ? 'function' : what });
+    };
+
     const checkRouteStatements = (body: Statement[]) => {
       for (const node of body)
         if (!isThinStatement(node))
           report(node as unknown as ESTree.Node, 'thinRoute', {
             what: 'statement'
           });
+    };
+
+    const checkRouteScript = (body: Statement[]) => {
+      for (const node of body)
+        if (node.type === 'ImportDeclaration')
+          for (const specifier of (node as unknown as ESTree.ImportDeclaration)
+            .specifiers)
+            known.add(specifier.local.name);
+      for (const { id } of propsOf(body))
+        for (const name of propNames(id)) {
+          props.add(name);
+          known.add(name);
+        }
+      for (const { id } of propsOf(body))
+        for (const value of propDefaults(id))
+          reportUnlessThin(value, 'prop default');
+      checkRouteStatements(body);
     };
 
     const visitors: Rule.RuleListener = {
@@ -209,22 +335,31 @@ export const featureBoundaries: Rule.RuleModule = {
         }
         for (const node of program.body as Statement[])
           if (node.type === 'SvelteScriptElement')
-            checkRouteStatements(node.body as Statement[]);
+            checkRouteScript(node.body as Statement[]);
       },
       ImportDeclaration(node) {
         checkSource(node, node.source);
       },
       ExportNamedDeclaration(node) {
         checkSource(node, node.source);
+        if (!inLib) return;
+        for (const specifier of node.specifiers)
+          if (exportedName(specifier) === 'default')
+            report(specifier, 'defaultExport');
+      },
+      ExportDefaultDeclaration(node) {
+        if (inLib) report(node, 'defaultExport');
       },
       ExportAllDeclaration(node) {
         report(node, 'wildcard');
         checkSource(node, node.source);
       },
       ImportExpression(node) {
-        const specifier = literalPath(node.source);
-        if (specifier === null) report(node, 'computed');
-        else checkTarget(node, specifier);
+        checkLoad(node, node.source, 'import()');
+      },
+      CallExpression(node) {
+        if (node.callee.type === 'Identifier' && node.callee.name === 'require')
+          checkLoad(node, node.arguments[0], 'require()');
       },
       MetaProperty(node) {
         const parent = node.parent as ESTree.Node;
@@ -246,19 +381,16 @@ export const featureBoundaries: Rule.RuleModule = {
     };
     if (!inRoutes) return visitors;
 
-    const reportMarkupFunction = (node: ESTree.Node) => {
-      const top: string | undefined = context.sourceCode
-        .getAncestors(node)
-        .at(1)?.type;
-      if (top?.startsWith('Svelte') && top !== 'SvelteScriptElement')
-        report(node, 'thinRoute', { what: 'function' });
-    };
     return {
       ...visitors,
       [ROUTE_BLOCKS.join(', ')](node: ESTree.Node) {
         report(node, 'thinRoute', { what: 'block' });
       },
-      'ArrowFunctionExpression, FunctionExpression': reportMarkupFunction
+      [MARKUP_ROOTS.join(', ')](node: ESTree.Node) {
+        const root = node as unknown as MarkupRoot;
+        const expression = root.expression ?? root.argument ?? root.value;
+        if (expression) reportUnlessThin(expression, 'expression');
+      }
     };
   }
 };
