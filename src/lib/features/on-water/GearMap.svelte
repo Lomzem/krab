@@ -93,12 +93,16 @@
 
   let chooser = $state<{ ids: string[]; apart: boolean } | null>(null);
   let chosenFrom: string[] = [];
-  let picked = false;
+  let closedBy: 'pick' | 'dismiss' = 'dismiss';
   const chooserItems = $derived(
     chooser
       ? inListOrder(itemOf ? chooser.ids.flatMap(itemOf) : itemsOf(chooser.ids))
       : []
   );
+
+  $effect(() => {
+    if (chooser !== null && chooserItems.length === 0) chooser = null;
+  });
 
   const activate = (spot: Spot) => {
     if (spot.ids.length === 1) {
@@ -106,11 +110,12 @@
       return;
     }
     chosenFrom = spot.ids;
+    closedBy = 'dismiss';
     chooser = { ids: spot.ids, apart: spot.apart };
   };
 
   const pick = (id: string) => {
-    picked = true;
+    closedBy = 'pick';
     chooser = null;
     onopen(id, focusOn([id, ...chosenFrom]));
   };
@@ -177,11 +182,8 @@
   onclose={() => {
     chooser = null;
   }}
-  returnFocus={() => {
-    if (picked) {
-      picked = false;
-      return null;
-    }
-    return chart?.focusTarget(chosenFrom) ?? chart?.canvas() ?? null;
-  }}
+  returnFocus={() =>
+    closedBy === 'pick'
+      ? null
+      : (chart?.focusTarget(chosenFrom) ?? chart?.canvas() ?? null)}
 />

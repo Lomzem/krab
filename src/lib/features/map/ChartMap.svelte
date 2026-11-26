@@ -576,7 +576,7 @@
         if (held.length > 0)
           void tick().then(() => {
             if (document.activeElement === document.body)
-              focusTarget(held)?.focus();
+              (focusTarget(held) ?? canvas())?.focus();
           });
       }
     };
@@ -614,8 +614,7 @@
     reveal(id);
     await tick();
     hideOffscreen();
-    const spot = spotOf.get(id);
-    if (spot) triggers.get(spot.key)?.focus();
+    focusTarget([id])?.focus();
     onshown();
   };
 
