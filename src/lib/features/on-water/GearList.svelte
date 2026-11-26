@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
+  import type { Attachment } from 'svelte/attachments';
   import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import { QUIET_BUTTON } from './controls';
   import {
@@ -23,7 +25,7 @@
     onend,
     endedTrip,
     onviewended,
-    endButton = $bindable(),
+    attachEndButton,
     heading = $bindable()
   }: {
     gear: ActiveGear | null;
@@ -33,7 +35,7 @@
     onend: () => void;
     endedTrip: boolean;
     onviewended: () => void;
-    endButton?: HTMLButtonElement;
+    attachEndButton: Attachment<HTMLButtonElement>;
     heading?: HTMLHeadingElement;
   } = $props();
 
@@ -65,15 +67,14 @@
     {/if}
   </div>
   {#if gear}
-    <button
-      bind:this={endButton}
-      type="button"
+    <Button
+      {@attach attachEndButton}
       class="inline-flex min-h-11 flex-none touch-manipulation items-center justify-center rounded-control border border-input bg-card px-3 text-base font-semibold text-foreground transition-opacity duration-0 {FOCUS} {PRESS} active:bg-muted aria-disabled:opacity-60 aria-disabled:delay-500"
       aria-haspopup="dialog"
       aria-disabled={!canEnd}
       onclick={() => {
         if (canEnd) onend();
-      }}>End trip</button
+      }}>End trip</Button
     >
   {/if}
 </header>
@@ -96,15 +97,15 @@
 
 {#snippet gearRow(row: GearRow)}
   <li class="border-b border-border">
-    <button
-      type="button"
+    <Button
       class={[
         rowClass,
         row.direction ? '@max-2xs:flex-wrap' : '@max-[22rem]:flex-wrap'
       ]}
       data-drop={row.drop.id}
       onclick={(event) => {
-        onopen(row.drop.id, event.currentTarget);
+        if (event.currentTarget instanceof HTMLElement)
+          onopen(row.drop.id, event.currentTarget);
       }}
     >
       <GearIcon kind={row.gear.kind} size={24} />
@@ -163,19 +164,19 @@
           No position
         </p>
       {/if}
-    </button>
+    </Button>
   </li>{/snippet}
 
 {#snippet collectedRows(shown: CollectedRow[])}
   <ul class="border-t border-border bg-card">
     {#each shown as item (item.drop.id)}
       <li class="border-b border-border">
-        <button
-          type="button"
+        <Button
           class={rowClass}
           data-drop={item.drop.id}
           onclick={(event) => {
-            onopen(item.drop.id, event.currentTarget);
+            if (event.currentTarget instanceof HTMLElement)
+              onopen(item.drop.id, event.currentTarget);
           }}
         >
           <GearIcon kind={item.gear.kind} size={24} />
@@ -184,7 +185,7 @@
             {@render dropLabel(item.drop.label)}
             <p class="text-sm text-muted-foreground">{item.catchText}</p>
           </div>
-        </button>
+        </Button>
       </li>
     {/each}
   </ul>
@@ -240,8 +241,7 @@
   <div class="flex flex-col items-start gap-3 px-4 pb-6">
     <p class="text-base">Nothing in the water</p>
     {#if endedTrip}
-      <button type="button" class={QUIET_BUTTON} onclick={onviewended}
-        >View ended trip</button
+      <Button class={QUIET_BUTTON} onclick={onviewended}>View ended trip</Button
       >
     {/if}
   </div>

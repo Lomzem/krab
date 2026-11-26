@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
+  import { Input } from '@ui-sdk/svelte/input';
   import Icon from '#lib/shared/Icon.svelte';
   import { FOCUS, PRESS } from '#lib/shared/control-states.js';
   import { countOf, type CatchDraft } from './details-draft';
@@ -11,6 +13,12 @@
     ['released', 'Released']
   ];
   const NOTHING: CatchDraft = { kept: '0', released: '0' };
+  const ARROW_STEPS: Partial<Record<string, number>> = {
+    ArrowUp: 1,
+    ArrowDown: -1
+  };
+  const modified = (event: KeyboardEvent) =>
+    event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
   const countSize = (text: string) => {
     if (text.length <= 4) return 'text-title';
     return text.length === 5 ? 'text-control' : 'text-base';
@@ -97,8 +105,7 @@
     >
       Catch
     </h3>
-    <button
-      type="button"
+    <Button
       aria-pressed={nothing}
       class={[
         `flex min-h-11 touch-manipulation items-center gap-1 rounded-control border pr-2.5 pl-3 text-sm font-medium select-none ${FOCUS}`,
@@ -108,7 +115,7 @@
       ]}
       onclick={() => {
         onchange(NOTHING);
-      }}>Nothing caught<SelectedCheck shown={nothing} /></button
+      }}>Nothing caught<SelectedCheck shown={nothing} /></Button
     >
   </div>
   {#each SIDES as [side, name] (side)}
@@ -124,8 +131,7 @@
         for="{idPrefix}-{side}-count"
         class="text-control font-medium select-none">{name}</label
       >
-      <button
-        type="button"
+      <Button
         class={stepper}
         aria-label="One fewer {side}"
         aria-disabled={count ? undefined : 'true'}
@@ -134,8 +140,8 @@
         }}
       >
         <Icon name="minus" />
-      </button>
-      <input
+      </Button>
+      <Input
         id="{idPrefix}-{side}-count"
         type="text"
         inputmode="numeric"
@@ -148,15 +154,21 @@
         class="h-12 w-full min-w-0 rounded-control border border-input bg-card px-1 text-center {countSize(
           text ?? ''
         )} font-semibold text-foreground tabular-nums {FOCUS} aria-invalid:border-2 aria-invalid:border-destructive"
-        oninput={(event) => {
-          set(side, event.currentTarget.value);
+        onValueChange={(next) => {
+          set(side, next);
+        }}
+        onkeydown={(event) => {
+          const by = ARROW_STEPS[event.key];
+          if (by === undefined || modified(event)) return;
+          event.preventDefault();
+          if (by < 0 ? count : count !== Number.MAX_SAFE_INTEGER)
+            step(side, by);
         }}
         onblur={() => {
           leave(side);
         }}
       />
-      <button
-        type="button"
+      <Button
         class={stepper}
         aria-label="One more {side}"
         aria-disabled={count === Number.MAX_SAFE_INTEGER ? 'true' : undefined}
@@ -165,7 +177,7 @@
         }}
       >
         <Icon name="plus" />
-      </button>
+      </Button>
       <output class="sr-only">{name}: {spoken(text)}</output>
     </div>
   {/each}
@@ -184,13 +196,12 @@
       {/if}
     </p>
     {#if value}
-      <button
-        type="button"
+      <Button
         class="min-h-11 touch-manipulation rounded-control px-1 text-sm font-medium text-primary underline underline-offset-4 select-none {FOCUS}"
         onclick={() => {
           left = [];
           onchange(null);
-        }}>Clear catch</button
+        }}>Clear catch</Button
       >
     {/if}
   </div>

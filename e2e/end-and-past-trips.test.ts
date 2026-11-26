@@ -18,7 +18,7 @@ const tab = (page: Page, name: string) =>
 
 const dropOf = async (page: Page, kind: 'Pot' | 'Net', name: string) => {
   await page
-    .getByRole('group', { name: 'Gear to drop' })
+    .getByRole('radiogroup', { name: 'Gear to drop' })
     .getByText(kind, { exact: true })
     .click();
   await page
@@ -278,7 +278,7 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
     name: 'Past trips'
   });
   const detail = page.getByRole('region', { name: TWO_DAYS });
-  const days = detail.getByRole('group', { name: 'Days on this trip' });
+  const days = detail.getByRole('radiogroup', { name: 'Days on this trip' });
   const named = (name: string) =>
     detail.getByRole('button', { name, exact: true });
   const pot1 = [named('Pot 1 Uncollected'), named('Pot 1, Day 1, Uncollected')];

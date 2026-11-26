@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
+  import { Checkbox } from '@ui-sdk/svelte/checkbox';
+  import { Radio, RadioGroup } from '@ui-sdk/svelte/radio';
   import Icon from '#lib/shared/Icon.svelte';
   import type { DaySelection } from '#lib/features/trip/index.js';
   import { FOCUS } from '#lib/shared/control-states.js';
@@ -33,8 +36,8 @@
   } = $props();
 
   const choiceClass =
-    'relative flex min-h-12 touch-manipulation items-center gap-3 rounded-control border border-input bg-card px-3 text-base font-medium has-checked:border-primary';
-  const inputClass = `peer absolute inset-0 size-full cursor-pointer appearance-none rounded-control ${FOCUS}`;
+    'relative flex min-h-12 touch-manipulation items-center gap-3 rounded-control border border-input bg-card px-3 text-base font-medium has-data-checked:border-primary';
+  const overlayClass = `peer absolute inset-0 size-full cursor-pointer rounded-control ${FOCUS}`;
 </script>
 
 <Sheet {open} titleId={TITLE_ID} {onclose} {returnFocus}>
@@ -45,11 +48,12 @@
   <fieldset class="mt-4">
     <legend class="mb-2 text-control font-semibold">Also show</legend>
     <div class="grid gap-2">
-      <label class={choiceClass}>
-        <input
-          type="checkbox"
-          class={inputClass}
-          bind:checked={filter.collected}
+      <div class={choiceClass}>
+        <Checkbox
+          class={overlayClass}
+          bind:checked={
+            () => filter.collected, (next) => (filter.collected = next === true)
+          }
           aria-labelledby="{TITLE_ID}-collected"
         />
         <span
@@ -60,13 +64,14 @@
           >Collected gear</span
         >
         {@render check()}
-      </label>
+      </div>
       {#if hasPast}
-        <label class={choiceClass}>
-          <input
-            type="checkbox"
-            class={inputClass}
-            bind:checked={filter.past}
+        <div class={choiceClass}>
+          <Checkbox
+            class={overlayClass}
+            bind:checked={
+              () => filter.past, (next) => (filter.past = next === true)
+            }
             aria-labelledby="{TITLE_ID}-past"
           />
           <span
@@ -80,13 +85,15 @@
             ></span
           >
           {@render check()}
-        </label>
+        </div>
       {/if}
-      <label class={choiceClass}>
-        <input
-          type="checkbox"
-          class={inputClass}
-          bind:checked={filter.timeInWater}
+      <div class={choiceClass}>
+        <Checkbox
+          class={overlayClass}
+          bind:checked={
+            () => filter.timeInWater,
+            (next) => (filter.timeInWater = next === true)
+          }
           aria-labelledby="{TITLE_ID}-time"
         />
         <span
@@ -97,41 +104,41 @@
           >Time in the water</span
         >
         {@render check()}
-      </label>
+      </div>
     </div>
   </fieldset>
 
   {#if multiDay}
-    <fieldset class="mt-6">
-      <legend class="mb-2 text-control font-semibold">Days on this trip</legend>
-      <div class="grid grid-cols-3 gap-2">
+    <div class="mt-6">
+      <p id="{TITLE_ID}-days" class="mb-2 text-control font-semibold">
+        Days on this trip
+      </p>
+      <RadioGroup
+        class="grid grid-cols-3 gap-2"
+        aria-labelledby="{TITLE_ID}-days"
+        name="map-filter-days"
+        bind:value={
+          () => filter.days, (next) => (filter.days = next as DaySelection)
+        }
+      >
         {#each DAY_CHOICES as choice (choice.days)}
-          <label class={DAY_CHOICE}>
-            <input
-              type="radio"
-              name="map-filter-days"
-              class={inputClass}
-              value={choice.days}
-              bind:group={filter.days}
-            />
-            <span class="pointer-events-none">{choice.name}</span>
+          <Radio value={choice.days} class="{DAY_CHOICE} {FOCUS}">
+            {choice.name}
             <SelectedCheck shown={filter.days === choice.days} />
-          </label>
+          </Radio>
         {/each}
-      </div>
-    </fieldset>
+      </RadioGroup>
+    </div>
   {/if}
 
   {#snippet footer()}
-    <button type="button" class="flex-1 {PRIMARY_BUTTON}" onclick={onclose}
-      >Done</button
-    >
+    <Button class="flex-1 {PRIMARY_BUTTON}" onclick={onclose}>Done</Button>
   {/snippet}
 </Sheet>
 
 {#snippet check()}
   <span
-    class="pointer-events-none flex size-7 items-center justify-center rounded-md border-2 border-input text-transparent peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground"
+    class="pointer-events-none flex size-7 items-center justify-center rounded-md border-2 border-input text-transparent peer-data-checked:border-primary peer-data-checked:bg-primary peer-data-checked:text-primary-foreground"
     aria-hidden="true"
   >
     <Icon name="check" size={20} />

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
   import { ACTION_BUTTON } from './controls';
   let { onallow }: { onallow: () => void } = $props();
 </script>
@@ -13,9 +14,8 @@
   >
     Mark and find gear
   </h2>
-  <button
-    type="button"
+  <Button
     class="min-h-16 grow basis-40 compact:min-h-14 {ACTION_BUTTON}"
-    onclick={onallow}>Turn on location</button
+    onclick={onallow}>Turn on location</Button
   >
 </section>

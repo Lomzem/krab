@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
+  import { elementRef } from '#lib/shared/element-ref.js';
   import { tick, untrack, type Snippet } from 'svelte';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -280,16 +282,15 @@
         <p id={shown.id} class="basis-full text-base font-medium">
           {shown.text}
         </p>
-        <button
-          bind:this={keepButton}
-          type="button"
+        <Button
+          {@attach elementRef<HTMLButtonElement>((element) => {
+            keepButton = element;
+          })}
           class="flex-1 basis-36 {QUIET_BUTTON}"
-          onclick={keepEditing}>{shown.keep}</button
+          onclick={keepEditing}>{shown.keep}</Button
         >
-        <button
-          type="button"
-          class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
-          onclick={discard}>{shown.go}</button
+        <Button class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}" onclick={discard}
+          >{shown.go}</Button
         >
       </div>
     {/if}
@@ -302,12 +303,12 @@
           {failure}
         </p>
       {/if}
-      <button
+      <Button
         type="submit"
         form={FORM_ID}
         aria-disabled={busy}
         class="flex-[1_1_7rem] {collectLeads ? PRIMARY_BUTTON : ACTION_BUTTON}"
-        >Save</button
+        >Save</Button
       >
       {#if subject}
         {@render endAction?.(subject.drop, leave, confirmCatchLoss)}

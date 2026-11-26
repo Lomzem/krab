@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
+  import { elementRef } from '#lib/shared/element-ref.js';
   import { tick } from 'svelte';
   import { keepScreenAwakeWhile } from '#lib/features/app-shell/index.js';
   import {
@@ -487,7 +489,9 @@
           }}
           endedTrip={endedTrip !== null}
           onviewended={() => void viewEndedTrip()}
-          bind:endButton
+          attachEndButton={elementRef<HTMLButtonElement>((element) => {
+            endButton = element;
+          })}
           bind:heading={gearHeading}
         />
       {:else}
@@ -534,15 +538,14 @@
   >
     {#snippet actions(target: Drop, leave: (exit: () => void) => void)}
       {#if sheet?.from === 'list' && target.position}
-        <button
-          type="button"
+        <Button
           class="w-full {QUIET_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
             leave(() => {
               show(target);
             });
-          }}>Show on map</button
+          }}>Show on map</Button
         >
       {/if}
     {/snippet}
@@ -571,8 +574,7 @@
         {@const putBack = () => {
           undoCollect(target.id, name);
         }}
-        <button
-          type="button"
+        <Button
           class="grow {QUIET_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
@@ -581,11 +583,10 @@
               if (target.catch) confirmCatchLoss(putBack);
               else putBack();
             });
-          }}>Undo collect</button
+          }}>Undo collect</Button
         >
       {:else}
-        <button
-          type="button"
+        <Button
           class="grow {DESTRUCTIVE_TEXT_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
@@ -593,7 +594,7 @@
             leave(() => {
               deleteDrop(target.id);
             });
-          }}>Delete drop</button
+          }}>Delete drop</Button
         >
       {/if}
     {/snippet}
@@ -636,7 +637,9 @@
           <section aria-label="Drop gear">
             <DropControl
               bind:kind
-              bind:button={dropButton}
+              attachButton={elementRef<HTMLButtonElement>((element) => {
+                dropButton = element;
+              })}
               denied={readiness.status.kind === 'denied'}
               finding={water.notice !== null &&
                 readiness.status.kind === 'finding'}

@@ -33,7 +33,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page
-    .getByRole('group', { name: 'Gear to drop' })
+    .getByRole('radiogroup', { name: 'Gear to drop' })
     .getByText('Net', { exact: true })
     .click();
   await page.getByRole('button', { name: 'Drop net' }).click();
@@ -84,7 +84,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
 
   await gearRow(page, 'Net 1').click();
   await sheet
-    .getByRole('group', { name: 'Gear' })
+    .getByRole('radiogroup', { name: 'Gear' })
     .getByText('Pot', { exact: true })
     .click();
   await sheet.getByRole('button', { name: 'Save' }).click();
@@ -591,7 +591,7 @@ test('with the page zoomed up to 200% on 320 and 393 wide screens in both themes
   page
 }) => {
   const bar = page.getByRole('region', { name: 'Drop gear' });
-  const kinds = bar.getByRole('group', { name: 'Gear to drop' });
+  const kinds = bar.getByRole('radiogroup', { name: 'Gear to drop' });
   const dropButton = bar.getByRole('button', { name: /^Drop (pot|net)$/ });
   const zoomTo = (zoom: number) =>
     page.evaluate((value) => {

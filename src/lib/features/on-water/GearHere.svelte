@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
   import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import { spokenItem, type HereItem } from './gear-here';
   import GearIcon from './GearIcon.svelte';
@@ -38,8 +39,7 @@
   <ul class="-mx-4 mt-3 border-t border-border">
     {#each items as item (item.id)}
       <li class="border-b border-border">
-        <button
-          type="button"
+        <Button
           class="flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left {FOCUS_INSET} {PRESS} active:bg-muted"
           aria-label={spokenItem(item)}
           onclick={() => {
@@ -73,7 +73,7 @@
               >{item.summary}</span
             >
           </span>
-        </button>
+        </Button>
       </li>
     {/each}
   </ul>

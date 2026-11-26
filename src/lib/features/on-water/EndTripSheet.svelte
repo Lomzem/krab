@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
+  import { elementRef } from '#lib/shared/element-ref.js';
   import type { Trip } from '#lib/features/trip/index.js';
   import { DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
   import Sheet from './Sheet.svelte';
@@ -53,19 +55,19 @@
   </div>
 
   {#snippet footer()}
-    <button
-      bind:this={keep}
-      type="button"
+    <Button
+      {@attach elementRef<HTMLButtonElement>((element) => {
+        keep = element;
+      })}
       class="flex-1 basis-36 {PRIMARY_BUTTON}"
-      onclick={onclose}>Keep trip going</button
+      onclick={onclose}>Keep trip going</Button
     >
-    <button
-      type="button"
+    <Button
       class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
       aria-disabled={busy}
       onclick={() => {
         if (!busy) onend();
-      }}>End trip</button
+      }}>End trip</Button
     >
   {/snippet}
 </Sheet>

@@ -39,7 +39,7 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
   const pin = (name: RegExp) => mapArea.getByRole('button', { name });
   const sheet = page.getByRole('dialog');
   const alsoShow = sheet.getByRole('group', { name: 'Also show' });
-  const days = sheet.getByRole('group', { name: 'Days on this trip' });
+  const days = sheet.getByRole('radiogroup', { name: 'Days on this trip' });
   const openFilter = async () => {
     await mapArea.getByRole('button', { name: /^Filter/ }).click();
     await expect(

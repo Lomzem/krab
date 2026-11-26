@@ -24,7 +24,7 @@ test('drop details stay a draft until Save, refuse a bad depth, save and survive
   const pot1 = gearRow(page, 'Pot 1');
   const drop = async (kind: 'Pot' | 'Net', name: string) => {
     await page
-      .getByRole('group', { name: 'Gear to drop' })
+      .getByRole('radiogroup', { name: 'Gear to drop' })
       .getByText(kind, { exact: true })
       .click();
     await expect(page.getByText('Finding position')).toBeHidden();
@@ -122,7 +122,7 @@ test('drop details stay a draft until Save, refuse a bad depth, save and survive
 
   await gearRow(page, 'Net 1').click();
   await sheet
-    .getByRole('group', { name: 'Gear' })
+    .getByRole('radiogroup', { name: 'Gear' })
     .getByText('Pot', { exact: true })
     .click();
   await save.click();

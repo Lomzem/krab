@@ -574,6 +574,52 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   await expect(collectedRow(page, 'Pot 1')).toContainText('Nothing caught');
 });
 
+test('Up and Down Arrow in a count step it like One more and One fewer, leaving a blank catch blank and a refused count refused', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const kept = sheet.getByRole('textbox', { name: 'Kept' });
+  const released = sheet.getByRole('textbox', { name: 'Released' });
+  const nothingCaught = sheet.getByRole('button', { name: 'Nothing caught' });
+  await collectPot(page);
+
+  await kept.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(kept).toHaveValue('');
+  await expect(released).toHaveValue('');
+  await expect(countOf(page, 'Kept')).toContainText('Kept: not recorded');
+
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(kept).toHaveValue('2');
+  await expect(released).toHaveValue('0');
+  await expect(kept).toBeFocused();
+  await expect(nothingCaught).toHaveAttribute('aria-pressed', 'false');
+
+  for (let press = 0; press < 3; press += 1) {
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(kept).toHaveValue('0');
+  await expect(nothingCaught).toHaveAttribute('aria-pressed', 'true');
+
+  await released.fill('2.5');
+  await page.keyboard.press('ArrowDown');
+  await expect(released).toHaveValue('2.5');
+  await page.keyboard.press('Tab');
+  await expect(released).toHaveAttribute('aria-invalid', 'true');
+  await expect(released).toHaveAccessibleDescription(
+    'Whole number for Released'
+  );
+  await released.focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(released).toHaveValue('1');
+  await expect(released).not.toHaveAttribute('aria-invalid');
+
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(collectedRow(page, 'Pot 1')).toContainText('0 kept, 1 released');
+});
+
 test('the open sheet says what Collect and End trip did in its own status, including a failed write, and stays open for another try', async ({
   page
 }) => {

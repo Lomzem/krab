@@ -36,7 +36,7 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
   const pin = (name: RegExp) => mapArea.getByRole('button', { name });
   const sheet = page.getByRole('dialog');
   const filter = sheet.getByRole('group', { name: 'Also show' });
-  const days = sheet.getByRole('group', { name: 'Days on this trip' });
+  const days = sheet.getByRole('radiogroup', { name: 'Days on this trip' });
   const openFilter = async () => {
     await mapArea.getByRole('button', { name: /^Filter/ }).click();
     await expect(
@@ -218,7 +218,7 @@ test('with Today chosen, an open Gear here chooser keeps its gear across midnigh
 
   await mapArea.getByRole('button', { name: /^Filter/ }).click();
   await sheet
-    .getByRole('group', { name: 'Days on this trip' })
+    .getByRole('radiogroup', { name: 'Days on this trip' })
     .getByRole('radio', { name: 'Today', exact: true })
     .check();
   await sheet.getByRole('button', { name: 'Done' }).click();

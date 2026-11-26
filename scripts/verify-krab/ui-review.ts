@@ -903,7 +903,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
     await expect(finding).toBeHidden();
     const kind = name.startsWith('Net') ? 'Net' : 'Pot';
     await page
-      .getByRole('group', { name: 'Gear to drop' })
+      .getByRole('radiogroup', { name: 'Gear to drop' })
       .getByText(kind, { exact: true })
       .click();
     await page
@@ -971,7 +971,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await deliverFix(page, MADE_UP_SEA);
   await expect(finding).toBeHidden();
   await page
-    .getByRole('group', { name: 'Gear to drop' })
+    .getByRole('radiogroup', { name: 'Gear to drop' })
     .getByText('Pot', { exact: true })
     .click();
   await page.getByRole('button', { name: 'Drop pot' }).click();

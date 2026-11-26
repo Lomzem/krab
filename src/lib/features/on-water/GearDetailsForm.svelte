@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
+  import { elementRef } from '#lib/shared/element-ref.js';
   import { tick, untrack, type Snippet } from 'svelte';
   import {
     canChangeKind,
@@ -157,14 +159,15 @@
         {@render direction?.(drop)}
       </div>
       {#if oncollect}
-        <button
-          bind:this={collectButton}
-          type="button"
+        <Button
+          {@attach elementRef<HTMLButtonElement>((element) => {
+            collectButton = element;
+          })}
           class="w-full {ACTION_BUTTON}"
           aria-disabled={busy}
           onclick={() => {
             oncollect(drop.id);
-          }}>Collect</button
+          }}>Collect</Button
         >
       {/if}
     </div>
@@ -179,8 +182,7 @@
       }}
     />
     {#if ondropagain && canDropAgain(subject.trip, drop)}
-      <button
-        type="button"
+      <Button
         class="w-full {PRIMARY_BUTTON}"
         aria-disabled={busy}
         onclick={() => {
@@ -192,7 +194,7 @@
         {:else}
           Drop {KIND_NAMES[stored].toLowerCase()} again here
         {/if}
-      </button>
+      </Button>
     {/if}
   {/if}
   {@render children?.()}

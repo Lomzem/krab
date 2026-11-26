@@ -761,7 +761,7 @@ test("a failed drop's Retry comes back after a later drop's toast ends, and Retr
   await page.clock.runFor(2000);
   await deliverFix(page, SECOND_FIX, new Date(PAUSED.getTime() + 2000));
   await page
-    .getByRole('group', { name: 'Gear to drop' })
+    .getByRole('radiogroup', { name: 'Gear to drop' })
     .getByText('Net', { exact: true })
     .click();
   await page.getByRole('button', { name: 'Drop net' }).click();

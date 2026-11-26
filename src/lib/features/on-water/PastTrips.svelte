@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
+  import { Radio, RadioGroup } from '@ui-sdk/svelte/radio';
+  import { elementRef } from '#lib/shared/element-ref.js';
   import Icon from '#lib/shared/Icon.svelte';
   import { tick } from 'svelte';
   import {
@@ -161,19 +164,18 @@
   );
 
   const rowClass = `flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left ${FOCUS_INSET} ${PRESS} active:bg-muted`;
-  const inputClass = `peer absolute inset-0 size-full cursor-pointer appearance-none rounded-control ${FOCUS}`;
 </script>
 
 {#snippet dropRows(shown: PastDropRow[])}
   <ul class="@container border-t border-border bg-card">
     {#each shown as row (row.drop.id)}
       <li class="border-b border-border">
-        <button
-          type="button"
+        <Button
           class={[rowClass, !row.drop.position && '@max-[22rem]:flex-wrap']}
           data-drop={row.drop.id}
           onclick={(event) => {
             const opener = event.currentTarget;
+            if (!(opener instanceof HTMLElement)) return;
             onopen(
               row.drop.id,
               () => (opener.isConnected ? opener : null),
@@ -208,7 +210,7 @@
               No position
             </p>
           {/if}
-        </button>
+        </Button>
       </li>
     {/each}
   </ul>
@@ -217,13 +219,12 @@
 {#if current}
   <section aria-labelledby="past-trip-title" class="pb-6">
     <div class="px-4 pt-3">
-      <button
-        type="button"
+      <Button
         class="-ml-2 flex min-h-11 touch-manipulation items-center gap-1 rounded-control px-2 text-base font-medium text-primary {FOCUS}"
         onclick={() => void backToList()}
       >
         <Icon name="back" size={20} />All past trips
-      </button>
+      </Button>
       <h1
         id="past-trip-title"
         bind:this={titleHeading}
@@ -252,26 +253,26 @@
     </div>
 
     {#if multiDay}
-      <fieldset class="px-4 pt-4">
-        <legend class="mb-2 text-control font-semibold"
-          >Days on this trip</legend
+      <div class="px-4 pt-4">
+        <p id="past-days-title" class="mb-2 text-control font-semibold">
+          Days on this trip
+        </p>
+        <RadioGroup
+          class="grid grid-cols-3 gap-2"
+          aria-labelledby="past-days-title"
+          name="past-trip-days"
+          bind:value={
+            () => selection, (next) => (selection = next as PastDaySelection)
+          }
         >
-        <div class="grid grid-cols-3 gap-2">
           {#each DAY_CHOICES as choice (choice.days)}
-            <label class={DAY_CHOICE}>
-              <input
-                type="radio"
-                name="past-trip-days"
-                class={inputClass}
-                value={choice.days}
-                bind:group={selection}
-              />
-              <span class="pointer-events-none">{choice.name}</span>
+            <Radio value={choice.days} class="{DAY_CHOICE} {FOCUS}">
+              {choice.name}
               <SelectedCheck shown={selection === choice.days} />
-            </label>
+            </Radio>
           {/each}
-        </div>
-      </fieldset>
+        </RadioGroup>
+      </div>
     {/if}
 
     <h2 id="past-gear-title" class="px-4 pt-6 pb-2 text-control font-semibold">
@@ -296,14 +297,15 @@
     {/if}
 
     <div class="px-4 pt-8">
-      <button
-        bind:this={deleteButton}
-        type="button"
+      <Button
+        {@attach elementRef<HTMLButtonElement>((element) => {
+          deleteButton = element;
+        })}
         class="w-full {DESTRUCTIVE_BUTTON}"
         aria-haspopup="dialog"
         onclick={() => {
           deleteOpen = true;
-        }}>Delete trip</button
+        }}>Delete trip</Button
       >
     </div>
   </section>
@@ -328,8 +330,7 @@
       <ul bind:this={list} class="border-t border-border bg-card">
         {#each summaries as item (item.trip.id)}
           <li class="border-b border-border">
-            <button
-              type="button"
+            <Button
               class={rowClass}
               data-trip={item.trip.id}
               onclick={() => {
@@ -347,7 +348,7 @@
                 </p>
               </div>
               <Icon name="forward" size={20} class="text-muted-foreground" />
-            </button>
+            </Button>
           </li>
         {/each}
       </ul>
@@ -382,18 +383,18 @@
   {/if}
 
   {#snippet footer()}
-    <button
-      bind:this={keepButton}
-      type="button"
+    <Button
+      {@attach elementRef<HTMLButtonElement>((element) => {
+        keepButton = element;
+      })}
       class="flex-1 basis-36 {PRIMARY_BUTTON}"
       aria-disabled={deleting}
-      onclick={keepTrip}>Keep trip</button
+      onclick={keepTrip}>Keep trip</Button
     >
-    <button
-      type="button"
+    <Button
       class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
       aria-disabled={deleting}
-      onclick={() => void confirmDelete()}>Delete trip</button
+      onclick={() => void confirmDelete()}>Delete trip</Button
     >
   {/snippet}
 </Sheet>

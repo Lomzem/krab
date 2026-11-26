@@ -210,7 +210,7 @@ test('visual inventory through a dense overnight trip', async ({
   const map = page.getByRole('region', { name: 'Map', exact: true });
   await map.getByRole('button', { name: /^Filter/ }).click();
   await expect(
-    sheet.getByRole('group', { name: 'Days on this trip' })
+    sheet.getByRole('radiogroup', { name: 'Days on this trip' })
   ).toBeVisible();
   await capture('13-map-filter');
   await checkFocus('filter');

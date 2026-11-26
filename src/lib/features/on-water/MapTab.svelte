@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
+  import { elementRef } from '#lib/shared/element-ref.js';
   import type { Snippet } from 'svelte';
   import Icon from '#lib/shared/Icon.svelte';
   import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
@@ -278,9 +280,10 @@
 >
   {#snippet controls()}
     {#if gear || past.length > 0}
-      <button
-        bind:this={filterButton}
-        type="button"
+      <Button
+        {@attach elementRef<HTMLButtonElement>((element) => {
+          filterButton = element;
+        })}
         class="relative {CAPSULE_BUTTON} data-active:bg-accent data-active:text-accent-foreground"
         data-active={hides || undefined}
         aria-haspopup="dialog"
@@ -296,7 +299,7 @@
             aria-hidden="true"
           ></span>
         {/if}
-      </button>
+      </Button>
     {/if}
     {#if compassShown}
       <button

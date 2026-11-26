@@ -1,13 +1,13 @@
 import { expect, type Locator } from '@playwright/test';
 
 const choiceFaces = (days: Locator) =>
-  days.locator('label').evaluateAll((labels) =>
-    labels.map((label) => {
-      const box = label.getBoundingClientRect();
-      const mark = label.querySelector('svg');
+  days.getByRole('radio').evaluateAll((choices) =>
+    choices.map((choice) => {
+      const box = choice.getBoundingClientRect();
+      const mark = choice.querySelector('svg');
       const markBox = mark?.getBoundingClientRect();
       return {
-        name: label.textContent.trim(),
+        name: choice.textContent.trim(),
         marked:
           mark !== null &&
           getComputedStyle(mark).visibility === 'visible' &&

@@ -13,4 +13,4 @@ export const DESTRUCTIVE_TEXT_BUTTON = `${SHAPE} text-destructive active:bg-mute
 export const PRIMARY_BUTTON = `${SHAPE} border border-primary bg-card text-primary active:bg-muted`;
 
 export const DAY_CHOICE =
-  'relative flex min-h-12 touch-manipulation items-center justify-center gap-1 rounded-control border border-input bg-card px-2 text-center text-base font-medium has-checked:border-primary has-checked:bg-accent has-checked:text-accent-foreground';
+  'relative flex min-h-12 cursor-pointer touch-manipulation items-center justify-center gap-1 rounded-control border border-input bg-card px-2 text-center text-base font-medium data-checked:border-primary data-checked:bg-accent data-checked:text-accent-foreground';
