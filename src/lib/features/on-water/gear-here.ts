@@ -1,3 +1,4 @@
+import type { LatLon } from '#lib/shared/lat-lon.js';
 import type { ChipFace, Layer } from './pin-chip';
 
 export type HereItem = ChipFace & {
@@ -7,6 +8,8 @@ export type HereItem = ChipFace & {
   details: string[];
   summary: string;
 };
+
+export type MapItem = HereItem & { at: LatLon; time: string | null };
 
 export const spokenItem = (item: HereItem) =>
   [item.name, item.label, ...item.details].filter(Boolean).join(', ');

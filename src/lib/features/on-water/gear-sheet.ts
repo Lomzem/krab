@@ -22,7 +22,7 @@ export type SheetSubject = {
 export type SheetOrigin = {
   dropId: string;
   from: 'list' | 'map';
-  opener: HTMLElement;
+  returnFocus: () => HTMLElement | null;
 };
 
 export type SheetOperation = {

@@ -266,30 +266,30 @@
     });
   };
 
-  let returnTo: HTMLElement | null = null;
-  let returnDrop: string | null = null;
+  let sheetReturn: SheetOrigin['returnFocus'] = () => null;
 
   const openSheet = (origin: SheetOrigin) => {
     sheet = origin;
-    returnTo = origin.opener;
-    returnDrop = origin.dropId;
+    sheetReturn = origin.returnFocus;
   };
+
+  const listRow = (dropId: string) =>
+    document.querySelector<HTMLElement>(
+      `main [data-drop="${CSS.escape(dropId)}"]`
+    );
 
   const opensFrom =
     (from: SheetOrigin['from']) => (dropId: string, opener: HTMLElement) => {
-      openSheet({ dropId, from, opener });
+      openSheet({
+        dropId,
+        from,
+        returnFocus: () => (opener.isConnected ? opener : listRow(dropId))
+      });
     };
 
   const closeSheet = () => {
     sheet = null;
   };
-
-  const shownDrop = (dropId: string | null) =>
-    dropId === null
-      ? null
-      : document.querySelector<HTMLElement>(
-          `main :is([data-drop="${CSS.escape(dropId)}"], [data-drops~="${CSS.escape(dropId)}"])`
-        );
 
   const sheetReturnFocus = () => {
     if (pastShowNext !== null) {
@@ -299,8 +299,7 @@
     }
     if (water.pending?.phase === 'acquiring' || savingShown) return null;
     if (showOnMap !== null) return mapTabButton;
-    if (returnTo?.isConnected) return returnTo;
-    return shownDrop(returnDrop) ?? restingFocus();
+    return sheetReturn() ?? restingFocus();
   };
 
   const operate = async <A>(
@@ -467,7 +466,9 @@
           onshown={() => {
             showOnMap = null;
           }}
-          onopen={opensFrom('map')}
+          onopen={(dropId: string, returnFocus: () => HTMLElement | null) => {
+            openSheet({ dropId, from: 'map', returnFocus });
+          }}
           newest={water.notice?.offer.action === 'undo-drop'
             ? water.notice.offer.dropId
             : null}
@@ -516,8 +517,12 @@
         onshown={() => {
           pastShow = null;
         }}
-        onopen={(dropId: string, opener: HTMLElement, from: 'list' | 'map') => {
-          openSheet({ dropId, from, opener });
+        onopen={(
+          dropId: string,
+          returnFocus: () => HTMLElement | null,
+          from: 'list' | 'map'
+        ) => {
+          openSheet({ dropId, from, returnFocus });
         }}
         ondelete={(tripId: string) => water.deleteTrip(tripId)}
         onretry={reload}

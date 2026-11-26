@@ -1,7 +1,6 @@
 <script lang="ts">
   import Icon from '#lib/shared/Icon.svelte';
   import { tick } from 'svelte';
-  import { loadChartMap, type MapPlace } from '#lib/features/map/index.js';
   import {
     dayGroups,
     isMultiDay,
@@ -13,15 +12,12 @@
     type Trip
   } from '#lib/features/trip/index.js';
   import DayMarker from './DayMarker.svelte';
-  import GearHere from './GearHere.svelte';
-  import { inListOrder, spokenItem, type HereItem } from './gear-here';
+  import GearMap from './GearMap.svelte';
+  import type { MapItem } from './gear-here';
   import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import { DAY_CHOICE, DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
   import GearIcon from './GearIcon.svelte';
-  import GroupPin from './GroupPin.svelte';
   import LoadFailed from './LoadFailed.svelte';
-  import PinChip from './PinChip.svelte';
-  import { chipBoxes, LAYER_PRIORITY } from './pin-chip';
   import SelectedCheck from './SelectedCheck.svelte';
   import Sheet from './Sheet.svelte';
   import type { Notice } from './on-water.svelte';
@@ -53,7 +49,11 @@
     titleHeading?: HTMLHeadingElement;
     show: string | null;
     onshown: () => void;
-    onopen: (dropId: string, opener: HTMLElement, from: 'list' | 'map') => void;
+    onopen: (
+      dropId: string,
+      returnFocus: () => HTMLElement | null,
+      from: 'list' | 'map'
+    ) => void;
     ondelete: (tripId: string) => Promise<boolean>;
     onretry: () => Promise<void>;
     notice: Notice | null;
@@ -139,48 +139,28 @@
   const pinDetails = (row: PastDropRow) =>
     [row.day?.text, row.status].filter((part): part is string => Boolean(part));
 
-  const itemOf = (id: string): HereItem[] => {
-    const row = rowsById.get(id);
-    return row
-      ? [
-          {
-            id,
-            kind: row.gear.kind,
-            layer: 'past',
-            number: row.gear.number,
-            day: row.day,
-            uncollected: row.drop.collectedAt === null,
-            name: row.name,
-            label: row.drop.label,
-            details: pinDetails(row),
-            summary: pinDetails(row).join(', ')
-          }
-        ]
-      : [];
-  };
-
-  const places = $derived(
-    rows.flatMap(({ drop }): MapPlace[] =>
-      itemOf(drop.id).flatMap((item) =>
-        drop.position
-          ? [
-              {
-                id: drop.id,
-                at: drop.position,
-                priority: LAYER_PRIORITY.past,
-                ...chipBoxes(item, null)
-              }
-            ]
-          : []
-      )
+  const mapItems = $derived(
+    rows.flatMap((row): MapItem[] =>
+      row.drop.position
+        ? [
+            {
+              id: row.drop.id,
+              kind: row.gear.kind,
+              layer: 'past',
+              number: row.gear.number,
+              day: row.day,
+              uncollected: row.drop.collectedAt === null,
+              name: row.name,
+              label: row.drop.label,
+              details: pinDetails(row),
+              summary: pinDetails(row).join(', '),
+              at: row.drop.position,
+              time: null
+            }
+          ]
+        : []
     )
   );
-
-  let here = $state<string[]>([]);
-  let hereOpener: HTMLElement | null = null;
-  let hereApart = $state(false);
-  let picked = false;
-  const hereItems = $derived(inListOrder(here.flatMap(itemOf)));
 
   const rowClass = `flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left ${FOCUS_INSET} ${PRESS} active:bg-muted`;
   const inputClass = `peer absolute inset-0 size-full cursor-pointer appearance-none rounded-control ${FOCUS}`;
@@ -195,7 +175,12 @@
           class={[rowClass, !row.drop.position && '@max-[22rem]:flex-wrap']}
           data-drop={row.drop.id}
           onclick={(event) => {
-            onopen(row.drop.id, event.currentTarget, 'list');
+            const opener = event.currentTarget;
+            onopen(
+              row.drop.id,
+              () => (opener.isConnected ? opener : null),
+              'list'
+            );
           }}
         >
           <GearIcon kind={row.gear.kind} size={24} />
@@ -257,51 +242,15 @@
     </div>
 
     <div class="flex h-[45dvh] flex-col">
-      {#await loadChartMap()}
-        <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
-      {:then ChartMap}
-        <ChartMap {places} me={null} locate={false} show={mapShow} {onshown}>
-          {#snippet pin(id: string, selected: boolean)}
-            {#each itemOf(id) as item (item.id)}
-              <button
-                type="button"
-                class="group grid size-11 place-items-center focus-visible:outline-none"
-                aria-label={spokenItem(item)}
-                aria-haspopup="dialog"
-                aria-current={selected || undefined}
-                data-drop={id}
-                onclick={(event) => {
-                  onopen(id, event.currentTarget, 'map');
-                }}
-              >
-                <PinChip face={item} {selected} />
-              </button>
-            {/each}
-          {/snippet}
-          {#snippet group(
-            lead: string,
-            ids: string[],
-            apart: boolean,
-            selected: boolean
-          )}
-            {#each itemOf(lead) as first (first.id)}
-              <GroupPin
-                lead={first}
-                items={inListOrder(ids.flatMap(itemOf))}
-                {apart}
-                {selected}
-                onopen={(opener: HTMLElement) => {
-                  hereOpener = opener;
-                  hereApart = apart;
-                  here = ids;
-                }}
-              />
-            {/each}
-          {/snippet}
-        </ChartMap>
-      {:catch}
-        <p class="px-4 pt-4 text-base">This phone can't show maps</p>
-      {/await}
+      <GearMap
+        items={mapItems}
+        locate={false}
+        show={mapShow}
+        {onshown}
+        onopen={(dropId: string, returnFocus: () => HTMLElement | null) => {
+          onopen(dropId, returnFocus, 'map');
+        }}
+      />
     </div>
 
     {#if multiDay}
@@ -407,26 +356,6 @@
     {/if}
   </section>
 {/if}
-
-<GearHere
-  items={hereItems}
-  apart={hereApart}
-  onpick={(id: string) => {
-    picked = true;
-    here = [];
-    if (hereOpener) onopen(id, hereOpener, 'map');
-  }}
-  onclose={() => {
-    here = [];
-  }}
-  returnFocus={() => {
-    if (picked) {
-      picked = false;
-      return null;
-    }
-    return hereOpener?.isConnected ? hereOpener : null;
-  }}
-/>
 
 <Sheet
   open={deleteOpen && trip !== null}

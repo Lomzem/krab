@@ -103,7 +103,6 @@
   <button
     type="button"
     class="flex min-h-14 w-full touch-manipulation items-center gap-3 py-1 pr-3 pl-4 text-left {FOCUS_INSET} {PRESS} active:bg-muted"
-    data-drop={nearest.drop.id}
     onpointerdown={() => {
       pressedDropId = nearest.drop.id;
     }}

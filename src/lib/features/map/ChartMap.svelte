@@ -56,8 +56,10 @@
     headingDeg = null,
     show,
     onshown,
-    pin,
-    group,
+    label,
+    face,
+    beside,
+    onactivate,
     controls,
     keepClear = null,
     fitLabel = 'Show all gear'
@@ -70,10 +72,10 @@
     headingDeg?: number | null;
     show: string | null;
     onshown: () => void;
-    pin: Snippet<[id: string, selected: boolean]>;
-    group: Snippet<
-      [lead: string, ids: string[], apart: boolean, selected: boolean]
-    >;
+    label: (spot: Spot) => string;
+    face: Snippet<[spot: Spot, selected: boolean]>;
+    beside?: Snippet<[spot: Spot]>;
+    onactivate: (spot: Spot) => void;
     controls?: Snippet;
     keepClear?: string | null;
     fitLabel?: string;
@@ -114,6 +116,7 @@
     selected !== null && ids.includes(selected);
   let latest: Accuracy = accuracyArea(null, 0, false);
   const markers = new SvelteMap<string, Marker>();
+  const triggers = new SvelteMap<string, HTMLButtonElement>();
 
   const accuracy = $derived(
     me?.current
@@ -549,48 +552,57 @@
   const fromBase = (sourceId: unknown) =>
     typeof sourceId === 'string' && baseSources.has(sourceId);
 
-  const marker = (node: HTMLElement, at: LatLon) => {
+  type Placed = { at: LatLon; ids?: readonly string[] };
+
+  const marker = (node: HTMLElement, shown: Placed) => {
     if (!map) return {};
+    let current = shown;
     const placed = new Marker({ element: node })
-      .setLngLat(lngLat(at))
+      .setLngLat(lngLat(shown.at))
       .addTo(map);
     const id = node.dataset['place'];
     if (id) markers.set(id, placed);
     return {
-      update: (next: LatLon) => {
-        placed.setLngLat(lngLat(next));
+      update: (next: Placed) => {
+        current = next;
+        placed.setLngLat(lngLat(next.at));
       },
       destroy: () => {
         const held = node.contains(document.activeElement)
-          ? heldDrops(node)
+          ? (current.ids ?? [])
           : [];
         if (id && markers.get(id) === placed) markers.delete(id);
         placed.remove();
         if (held.length > 0)
           void tick().then(() => {
-            refocus(held);
+            if (document.activeElement === document.body)
+              focusTarget(held)?.focus();
           });
       }
     };
   };
 
-  const heldDrops = (node: HTMLElement) => {
-    const shown = node.querySelector<HTMLElement>('[data-drop], [data-drops]');
-    return (shown?.dataset['drops'] ?? shown?.dataset['drop'] ?? '')
-      .split(' ')
-      .filter((drop) => drop !== '');
+  const trigger = (node: HTMLButtonElement, key: string) => {
+    triggers.set(key, node);
+    return {
+      destroy: () => {
+        if (triggers.get(key) === node) triggers.delete(key);
+      }
+    };
   };
 
-  const refocus = (held: string[]) => {
-    if (document.activeElement !== document.body) return;
-    const next = held
-      .map((drop) =>
-        container?.querySelector<HTMLElement>(
-          `[data-place] :is([data-drop="${CSS.escape(drop)}"], [data-drops~="${CSS.escape(drop)}"])`
-        )
-      )
-      .find((shown) => shown);
-    next?.focus();
+  export const focusTarget = (ids: readonly string[]): HTMLElement | null => {
+    const shown = ids.flatMap((id) => {
+      const spot = spotOf.get(id);
+      const button = spot && triggers.get(spot.key);
+      return button ? [button] : [];
+    });
+    if (shown.length === 0) return null;
+    return (
+      shown.find((button) => !button.closest('[inert]')) ??
+      map?.getCanvas() ??
+      null
+    );
   };
 
   const showPlace = async (id: string) => {
@@ -605,13 +617,7 @@
     await tick();
     hideOffscreen();
     const spot = spotOf.get(id);
-    if (spot) {
-      markers
-        .get(spot.key)
-        ?.getElement()
-        .querySelector<HTMLElement>('button')
-        ?.focus();
-    }
+    if (spot) triggers.get(spot.key)?.focus();
     onshown();
   };
 
@@ -815,19 +821,23 @@
         <div
           data-place={spot.key}
           style:z-index={spot.priority}
-          use:marker={spot.at}
+          use:marker={spot}
           onfocusin={revealFocused}
         >
-          {#if spot.ids.length === 1}
-            {@render pin(spot.key, isSelected(spot.ids))}
-          {:else}
-            {@render group(
-              spot.lead,
-              spot.ids,
-              spot.apart,
-              isSelected(spot.ids)
-            )}
-          {/if}
+          <button
+            type="button"
+            class="group grid size-11 place-items-center focus-visible:outline-none"
+            aria-label={label(spot)}
+            aria-haspopup="dialog"
+            aria-current={isSelected(spot.ids) || undefined}
+            use:trigger={spot.key}
+            onclick={() => {
+              onactivate(spot);
+            }}
+          >
+            {@render face(spot, isSelected(spot.ids))}
+          </button>
+          {@render beside?.(spot)}
         </div>
       </div>
     {/each}
@@ -839,7 +849,7 @@
           style:z-index={ME_ORDER}
           role="img"
           aria-label={me.label}
-          use:marker={me.at}
+          use:marker={me}
         >
           <svg width="60" height="60" viewBox="-8 -8 60 60" aria-hidden="true">
             {#if headingDeg !== null}
