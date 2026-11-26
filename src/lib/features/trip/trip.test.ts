@@ -22,11 +22,8 @@ import {
   type Drop,
   type DropEdit,
   type Fix,
-  type NoPosition,
-  type Position,
   type Trip,
-  type TripBook,
-  type TripDeps
+  type TripBook
 } from './index';
 
 const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
@@ -40,7 +37,9 @@ const SEA = { lat: 0, lon: -140 };
 
 type Timer = { at: number; wake: () => void };
 
-const harness = (stored: TripDeps['stored'] = () => undefined) => {
+const harness = (
+  stored: Parameters<typeof tripBook>[0]['stored'] = () => undefined
+) => {
   const state: { now: number; fix: Fix | null; denied: boolean } = {
     now: T0,
     fix: { ...SEA, accuracyM: 5, at: T0 },
@@ -487,6 +486,8 @@ type DropFields = Pick<
 >;
 
 it('types a drop location as a position or a reason, never both or neither', () => {
+  type Position = NonNullable<Drop['position']>;
+  type NoPosition = NonNullable<Drop['noPosition']>;
   type Placed<L> = DropFields & { collectedAt: null; catch: null } & L;
 
   expectTypeOf<

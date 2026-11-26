@@ -94,7 +94,7 @@ export type TripDeps = {
   stored: (trips: Trips) => void;
 };
 
-export type DropDetails = Pick<Drop, 'label' | 'bait' | 'depthFt' | 'notes'>;
+type DropDetails = Pick<Drop, 'label' | 'bait' | 'depthFt' | 'notes'>;
 
 export type DropEdit = { details: DropDetails; catch: Catch | null };
 

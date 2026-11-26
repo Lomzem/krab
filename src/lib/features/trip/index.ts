@@ -47,16 +47,12 @@ export type {
   Clock,
   Deletion,
   Drop,
-  DropDetails,
   DropEdit,
   Fix,
   Gear,
   Kind,
-  NoPosition,
-  Position,
   PositionSource,
   Trip,
-  TripDeps,
   Trips
 } from './types';
 export {
@@ -70,9 +66,7 @@ export {
   InvalidDepth,
   KindLocked,
   NotCollected,
-  StorageFailed,
-  TripNotEnded,
-  TripNotFound
+  StorageFailed
 };
 export type { DropAttempt, DropPhase, PlacedDrop };
 export {
@@ -83,13 +77,11 @@ export {
   gearName,
   KIND_NAMES,
   KINDS,
-  type DropTarget,
-  type FoundDrop
+  type DropTarget
 } from './rules';
-export { compassPoint, shortDateRange, shortTime } from './format';
+export { compassPoint } from './format';
 export { availability, type Availability } from './availability';
 export {
-  catchText,
   collectedGear,
   dayGroups,
   dayOf,
@@ -99,13 +91,10 @@ export {
   isMultiDay,
   nearestGear,
   pastDrops,
-  pastTripCounts,
   pastTripSummaries,
   roughness,
   timeInWater,
   tripDates,
-  tripDays,
-  tripSpan,
   type CollectedRow,
   type Day,
   type DaySelection,
@@ -113,15 +102,14 @@ export {
   type GearRow,
   type PastDaySelection,
   type PastDropRow,
-  type PastTripSummary,
-  type SpokenText
+  type PastTripSummary
 } from './queries';
 
-export type NamedTrip = { trip: Trip; name: string };
+type NamedTrip = { trip: Trip; name: string };
 
-export type Collection = NamedTrip & { changed: boolean };
+type Collection = NamedTrip & { changed: boolean };
 
-export type DeletedDrop = {
+type DeletedDrop = {
   trip: Trip | null;
   name: string;
   deletion: Deletion;

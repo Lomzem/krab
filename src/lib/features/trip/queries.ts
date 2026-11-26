@@ -48,7 +48,7 @@ const localDate = (at: number) => {
 const dayNumber = (trip: Trip, at: number) =>
   (localDate(at) - localDate(trip.startedAt)) / CALENDAR_DAY_MS + 1;
 
-export const tripDays = (trip: Trip) =>
+const tripDays = (trip: Trip) =>
   [...new Set(trip.drops.map((drop) => dayNumber(trip, drop.placedAt)))].sort(
     (a, b) => a - b
   );
@@ -180,7 +180,7 @@ export const gearCounts = (trip: Trip) => {
   };
 };
 
-export const catchText = (recorded: Catch | null) => {
+const catchText = (recorded: Catch | null) => {
   if (!recorded) return 'Catch not recorded';
   const { kept, released } = recorded;
   if (kept === 0 && released === 0) return 'Nothing caught';
@@ -225,7 +225,7 @@ const latestDrop = (trip: Trip) =>
 const earliestDrop = (trip: Trip) =>
   Math.min(latestDrop(trip), ...trip.drops.map((drop) => drop.placedAt));
 
-export const tripSpan = (trip: Trip) => ({
+const tripSpan = (trip: Trip) => ({
   first: earliestDrop(trip),
   last: latestDrop(trip)
 });
@@ -261,7 +261,7 @@ const dropCount = (trip: Trip) => {
   return `${String(drops)} ${drops === 1 ? 'drop' : 'drops'}`;
 };
 
-export const pastTripCounts = (trip: Trip) => {
+const pastTripCounts = (trip: Trip) => {
   const uncollected = trip.drops.filter(isInWater).length;
   const total = dropCount(trip);
   return uncollected === 0
