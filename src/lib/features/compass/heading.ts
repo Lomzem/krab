@@ -1,5 +1,5 @@
 import { magvar } from 'magvar';
-import type { LatLon } from '#lib/features/trip/index.js';
+import type { LatLon } from '#lib/shared/lat-lon.js';
 import type { CompassState, Reading } from './types';
 
 const MODEL_FROM_YEAR = 2025;

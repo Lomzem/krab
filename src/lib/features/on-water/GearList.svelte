@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { FOCUS, FOCUS_INSET, PRESS, QUIET_BUTTON } from './controls';
+  import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
+  import { QUIET_BUTTON } from './controls';
   import {
     arrowDeg,
     BearingArrow,
@@ -12,9 +13,9 @@
     gearInWater,
     type CollectedRow,
     type GearRow,
-    type LatLon,
     type Trip
   } from '#lib/features/trip/index.js';
+  import type { LatLon } from '#lib/shared/lat-lon.js';
   import DayMarker from './DayMarker.svelte';
   import GearIcon from './GearIcon.svelte';
 

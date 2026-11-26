@@ -9,7 +9,8 @@
     type BaitChoice,
     type BaitSearch
   } from './bait-options';
-  import { CHOICE_FOCUS, QUIET_BUTTON } from './controls';
+  import { CHOICE_FOCUS } from '#lib/shared/control-states.js';
+  import { QUIET_BUTTON } from './controls';
   import SelectedCheck from './SelectedCheck.svelte';
 
   const ADD = ' add';

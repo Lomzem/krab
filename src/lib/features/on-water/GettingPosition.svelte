@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { ACTION_BUTTON, FOCUS, QUIET_BUTTON } from './controls';
+  import { FOCUS } from '#lib/shared/control-states.js';
+  import { ACTION_BUTTON, QUIET_BUTTON } from './controls';
 
   const DEADLINE_ID = 'finding-drop-position-deadline';
 

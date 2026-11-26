@@ -1,8 +1,13 @@
 <script lang="ts">
-  import Icon from '#lib/icon/Icon.svelte';
-  import { FOCUS_INSET, PRESS } from './controls';
+  import Icon from '#lib/shared/Icon.svelte';
+  import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import type { CompassState } from '#lib/features/compass/index.js';
-  import type { Base, Camera, MapPlace } from '#lib/features/map/index.js';
+  import {
+    loadChartMap,
+    type Base,
+    type Camera,
+    type MapPlace
+  } from '#lib/features/map/index.js';
   import {
     collectedGear,
     compassPoint,
@@ -291,9 +296,9 @@
 <section class="flex flex-1 flex-col" aria-labelledby="map-title">
   <h1 id="map-title" class="sr-only">Map</h1>
   <div class="flex flex-1 flex-col">
-    {#await import('#lib/features/map/ChartMap.svelte')}
+    {#await loadChartMap()}
       <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
-    {:then { default: ChartMap }}
+    {:then ChartMap}
       <ChartMap
         bind:base
         bind:camera

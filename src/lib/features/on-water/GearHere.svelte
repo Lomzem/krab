@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FOCUS_INSET, PRESS } from './controls';
+  import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import type { MapPlace } from '#lib/features/map/index.js';
   import { spokenItem, type HereItem } from './gear-here';
   import GearIcon from './GearIcon.svelte';

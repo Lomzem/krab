@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Icon from '#lib/icon/Icon.svelte';
+  import Icon from '#lib/shared/Icon.svelte';
   import { tick } from 'svelte';
-  import type { MapPlace } from '#lib/features/map/index.js';
+  import { loadChartMap, type MapPlace } from '#lib/features/map/index.js';
   import {
     dayGroups,
     isMultiDay,
@@ -15,14 +15,8 @@
   import DayMarker from './DayMarker.svelte';
   import GearHere from './GearHere.svelte';
   import { inListOrder, spokenItem, type HereItem } from './gear-here';
-  import {
-    DAY_CHOICE,
-    DESTRUCTIVE_BUTTON,
-    FOCUS,
-    FOCUS_INSET,
-    PRESS,
-    PRIMARY_BUTTON
-  } from './controls';
+  import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
+  import { DAY_CHOICE, DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
   import GearIcon from './GearIcon.svelte';
   import GroupPin from './GroupPin.svelte';
   import LoadFailed from './LoadFailed.svelte';
@@ -263,9 +257,9 @@
     </div>
 
     <div class="flex h-[45dvh] flex-col">
-      {#await import('#lib/features/map/ChartMap.svelte')}
+      {#await loadChartMap()}
         <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
-      {:then { default: ChartMap }}
+      {:then ChartMap}
         <ChartMap {places} me={null} locate={false} show={mapShow} {onshown}>
           {#snippet pin(id: string, selected: boolean)}
             {#each itemOf(id) as item (item.id)}

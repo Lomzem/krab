@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { CHOICE_FOCUS_INSET, FOCUS, PRESS } from './controls';
+  import {
+    CHOICE_FOCUS_INSET,
+    FOCUS,
+    PRESS
+  } from '#lib/shared/control-states.js';
   import { KIND_NAMES, KINDS, type Kind } from '#lib/features/trip/index.js';
   import GearIcon from './GearIcon.svelte';
   import SelectedCheck from './SelectedCheck.svelte';

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Icon from '#lib/icon/Icon.svelte';
-  import { FOCUS } from './controls';
+  import Icon from '#lib/shared/Icon.svelte';
+  import { FOCUS } from '#lib/shared/control-states.js';
   import { tick, untrack, type Snippet } from 'svelte';
   import type { Notice } from './on-water.svelte';
 

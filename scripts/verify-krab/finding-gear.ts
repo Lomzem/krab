@@ -7,10 +7,7 @@ import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
-import {
-  chartSource,
-  chartTileUrl
-} from '../../src/lib/features/map/chart-tiles';
+import { chartSource, chartTileUrl } from '../../src/lib/features/map/index';
 
 const TILE_PX = 256;
 

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Icon from '#lib/icon/Icon.svelte';
-  import { FOCUS, PRESS } from './controls';
+  import Icon from '#lib/shared/Icon.svelte';
+  import { FOCUS, PRESS } from '#lib/shared/control-states.js';
   import { countOf, type CatchDraft } from './details-draft';
   import SelectedCheck from './SelectedCheck.svelte';
 

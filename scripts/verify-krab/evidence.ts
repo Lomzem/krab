@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import type { Page, TestInfo } from '@playwright/test';
 import { appendFileSync, writeFileSync } from 'node:fs';
-import type { Trip } from '../../src/lib/features/trip/types';
+import type { Trip } from '../../src/lib/features/trip/index';
 
 export const readTrips = (page: Page) =>
   page.evaluate(

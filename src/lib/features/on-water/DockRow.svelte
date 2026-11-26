@@ -1,8 +1,8 @@
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { watchVisibility } from '#lib/page-visibility.js';
-  import { FOCUS_INVERSE } from './controls';
+  import { watchVisibility } from '#lib/shared/page-visibility.js';
+  import { FOCUS_INVERSE } from '#lib/shared/control-states.js';
   import { Countdown } from './countdown';
   import type { Notice, Offer, Undo } from './on-water.svelte';
 

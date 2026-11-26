@@ -1,7 +1,7 @@
 <script lang="ts">
   import BaitField from './BaitField.svelte';
   import type { BaitChoice, BaitSearch } from './bait-options';
-  import { FOCUS } from './controls';
+  import { FOCUS } from '#lib/shared/control-states.js';
   import {
     depthAccepted,
     emptyDraft,

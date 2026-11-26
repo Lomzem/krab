@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Command as CommandPrimitive } from 'bits-ui';
-  import { FOCUS } from '../controls';
+  import { FOCUS } from '#lib/shared/control-states.js';
 
   let {
     ref = $bindable(null),

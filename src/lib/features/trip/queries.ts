@@ -5,7 +5,8 @@ import {
   shortDateRange,
   shortTime
 } from './format';
-import { bearingDeg, distanceFt, metresToFeet, type LatLon } from './geo';
+import type { LatLon } from '#lib/shared/lat-lon.js';
+import { bearingDeg, distanceFt, metresToFeet } from './geo';
 import { gearName } from './rules';
 import type { Catch, Drop, Gear, Position, Trip } from './types';
 

@@ -8,7 +8,7 @@
     type GearRow,
     type Trip
   } from '#lib/features/trip/index.js';
-  import { FOCUS, FOCUS_INSET, PRESS } from './controls';
+  import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import GearIcon from './GearIcon.svelte';
 
   let {

@@ -1,10 +1,6 @@
 <script lang="ts">
-  import Icon from '#lib/icon/Icon.svelte';
-  import {
-    FOCUS,
-    FOCUS_INSET,
-    PRESS
-  } from '#lib/features/on-water/controls.js';
+  import Icon from '#lib/shared/Icon.svelte';
+  import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import {
     Map as MapLibre,
     Marker,
@@ -17,7 +13,7 @@
   import { Effect } from 'effect';
   import { onMount, tick, untrack, type Snippet } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
-  import type { LatLon } from '#lib/features/trip/index.js';
+  import type { LatLon } from '#lib/shared/lat-lon.js';
   import { accuracyArea } from './accuracy';
   import {
     ACCURACY_SOURCE,

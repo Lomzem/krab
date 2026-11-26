@@ -1,4 +1,4 @@
-import type { LatLon } from '#lib/features/trip/index.js';
+import type { LatLon } from '#lib/shared/lat-lon.js';
 import type { Box, MapPlace } from './types';
 
 export type Spot = {

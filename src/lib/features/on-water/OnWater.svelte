@@ -22,12 +22,8 @@
     type DropEdit,
     type Kind
   } from '#lib/features/trip/index.js';
-  import {
-    DESTRUCTIVE_TEXT_BUTTON,
-    FOCUS_INSET,
-    PRESS,
-    QUIET_BUTTON
-  } from './controls';
+  import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
+  import { DESTRUCTIVE_TEXT_BUTTON, QUIET_BUTTON } from './controls';
   import DirectionCue from './DirectionCue.svelte';
   import DockRow from './DockRow.svelte';
   import DockStatus from './DockStatus.svelte';

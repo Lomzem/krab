@@ -116,7 +116,6 @@ export {
   type PastTripSummary,
   type SpokenText
 } from './queries';
-export type { LatLon } from './geo';
 
 export type NamedTrip = { trip: Trip; name: string };
 

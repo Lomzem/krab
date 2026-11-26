@@ -1,7 +1,8 @@
 <script lang="ts">
-  import Icon from '#lib/icon/Icon.svelte';
+  import Icon from '#lib/shared/Icon.svelte';
   import type { DaySelection } from '#lib/features/trip/index.js';
-  import { DAY_CHOICE, FOCUS, PRIMARY_BUTTON } from './controls';
+  import { FOCUS } from '#lib/shared/control-states.js';
+  import { DAY_CHOICE, PRIMARY_BUTTON } from './controls';
   import GearIcon from './GearIcon.svelte';
   import UncollectedMark from './UncollectedMark.svelte';
   import { DEFAULT_MAP_FILTER, type MapFilter } from './map-filter';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FOCUS } from '#lib/features/on-water/controls.js';
+  import { FOCUS } from '#lib/shared/control-states.js';
   import type { Snippet } from 'svelte';
   import BearingArrow from './BearingArrow.svelte';
   import { arrowDeg } from './heading';

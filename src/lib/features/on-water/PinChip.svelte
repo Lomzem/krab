@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PIN_FOCUS } from './controls';
+  import { PIN_FOCUS } from '#lib/shared/control-states.js';
   import type { MapPlace } from '#lib/features/map/index.js';
   import DayMarker from './DayMarker.svelte';
   import GearIcon from './GearIcon.svelte';
