@@ -159,6 +159,7 @@ export class OnWater {
   pending = $state.raw<PendingDrop | null>(null);
   #saving = $state.raw<readonly string[]>([]);
   readonly #book: TripBook;
+  #observers: readonly (() => void)[] = [];
   #shown = 0;
   #persistAsked = false;
   #noticeKey = 0;
@@ -172,6 +173,7 @@ export class OnWater {
         this.#trips = trips;
         this.load = 'ready';
         this.#shown += 1;
+        for (const observer of this.#observers) observer();
       }
     });
     void this.reload();
@@ -183,6 +185,10 @@ export class OnWater {
 
   get past() {
     return this.#trips.past;
+  }
+
+  observeStored(observer: () => void) {
+    this.#observers = [...this.#observers, observer];
   }
 
   drop(kind: Kind) {
@@ -261,19 +267,20 @@ export class OnWater {
     }
   }
 
+  undoCollectBlocked(dropId: string) {
+    return this.#saving.includes(dropId);
+  }
+
   get undoBlocked() {
     const offer = this.notice?.offer;
     return (
-      offer?.action === 'undo-collect' && this.#saving.includes(offer.dropId)
+      offer?.action === 'undo-collect' && this.undoCollectBlocked(offer.dropId)
     );
   }
 
   async undo(undo: Undo) {
-    if (undo.action === 'undo-collect') {
-      if (this.#saving.includes(undo.dropId)) return false;
-      await this.undoCollect(undo.dropId, undo.name);
-      return true;
-    }
+    if (undo.action === 'undo-collect')
+      return this.undoCollect(undo.dropId, undo.name);
     if (undo.action === 'undo-drop') {
       const exit = await Effect.runPromiseExit(
         this.#book.undoDrop(undo.dropId)
@@ -328,6 +335,7 @@ export class OnWater {
   }
 
   async undoCollect(dropId: string, name: string) {
+    if (this.undoCollectBlocked(dropId)) return false;
     const recorded = this.trip && findDrop([this.trip], dropId)?.drop.catch;
     const undone = await resultOf(this.#book.undoCollect(dropId));
     if (Result.isFailure(undone)) {
@@ -338,7 +346,7 @@ export class OnWater {
           name
         })
       );
-      return;
+      return true;
     }
     if (undone.success.changed) {
       this.#say(
@@ -346,9 +354,10 @@ export class OnWater {
           ? `${name} back in, catch cleared`
           : `${name} back in the water`
       );
-      return;
+      return true;
     }
     this.#retireCollectUndo(dropId);
+    return true;
   }
 
   #retireCollectUndo(dropId: string) {

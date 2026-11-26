@@ -103,6 +103,10 @@
     collect: (dropId) => water.collect(dropId),
     remove: (dropId) => water.remove(dropId),
     undoCollect: (dropId, name) => water.undoCollect(dropId, name),
+    undoCollectBlocked: (dropId) => water.undoCollectBlocked(dropId),
+    observeStored: (observer) => {
+      water.observeStored(observer);
+    },
     dropAgain: (dropId) => {
       now = Date.now();
       void water.dropAgain(dropId).then(focusDropAfterSave);

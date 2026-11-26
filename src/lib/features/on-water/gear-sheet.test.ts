@@ -1,13 +1,18 @@
-import { assert, expect, it, vi } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
+import { afterEach, assert, expect, it, vi } from 'vitest';
 import type { Drop, Trip } from '#lib/features/trip/index.js';
 import {
   GearSheetSession,
   type SheetCommands,
   type SheetOrigin
 } from './gear-sheet.svelte';
-import type { SaveProblem } from './on-water.svelte';
+import { OnWater, type SaveProblem } from './on-water.svelte';
 
 const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const dropOf = (id: string, gearId: string, collectedAt: number | null) =>
   ({
@@ -62,12 +67,46 @@ const sessionWith = (overrides: Partial<SheetCommands> = {}) => {
     collect: vi.fn(() => Promise.resolve()),
     remove: vi.fn(() => Promise.resolve(true)),
     undoCollect: vi.fn(() => Promise.resolve()),
+    undoCollectBlocked: () => false,
+    observeStored: vi.fn(),
     dropAgain: vi.fn(),
     saveLost: vi.fn(),
     showOnMap: vi.fn(),
     ...overrides
   };
   return { session: new GearSheetSession(commands), commands };
+};
+
+const collectedOnWater = async () => {
+  vi.stubGlobal('indexedDB', new IDBFactory());
+  const water = new OnWater({
+    latest: () => ({ lat: 0, lon: -140, accuracyM: 5, at: Date.now() }),
+    denied: () => false,
+    subscribe: () => () => undefined
+  });
+  await vi.waitFor(() => {
+    expect(water.load).toBe('ready');
+  });
+  await water.drop('pot');
+  const dropId = water.trip?.drops[0]?.id;
+  assert(dropId);
+  await water.collect(dropId);
+  const session = new GearSheetSession({
+    trips: () => (water.trip ? [water.trip, ...water.past] : water.past),
+    save: (id, edit, kind) => water.save(id, edit, kind),
+    collect: (id) => water.collect(id),
+    remove: (id) => water.remove(id),
+    undoCollect: (id, name) => water.undoCollect(id, name),
+    undoCollectBlocked: (id) => water.undoCollectBlocked(id),
+    observeStored: (observer) => {
+      water.observeStored(observer);
+    },
+    dropAgain: vi.fn(),
+    saveLost: vi.fn(),
+    showOnMap: vi.fn()
+  });
+  const stored = () => water.trip?.drops.find((drop) => drop.id === dropId);
+  return { water, session, dropId, stored };
 };
 
 it('refuses a Save while the bait search has unchosen text and sends nothing to the trip', () => {
@@ -196,4 +235,78 @@ it('asks before unsaved changes are lost, ignores a backdrop tap, and asks after
   expect(commands.remove).not.toHaveBeenCalled();
   session.discard();
   expect(commands.remove).toHaveBeenCalledWith('d2');
+});
+
+it('keeps a label saved after its sheet reopened when the reopened sheet saves other details', async () => {
+  const { session, dropId, stored } = await collectedOnWater();
+  session.show(origin(dropId));
+  assert(session.draft);
+  session.draft.details.label = 'Ledge';
+  session.save();
+  expect(session.dismiss()).toBe('left');
+  session.show(origin(dropId));
+  await vi.waitFor(() => {
+    expect(stored()?.label).toBe('Ledge');
+  });
+
+  assert(session.draft);
+  expect(session.draft.details.label).toBe('Ledge');
+  expect(session.dirty).toBe(false);
+  session.draft.details.notes = 'tangled';
+  session.save();
+  await vi.waitFor(() => {
+    expect(session.open).toBe(false);
+  });
+
+  expect(stored()).toMatchObject({ label: 'Ledge', notes: 'tangled' });
+});
+
+it('refuses Undo collect in a reopened sheet while a catch Save of that drop is pending, then asks before clearing the saved catch', async () => {
+  const { water, session, dropId, stored } = await collectedOnWater();
+  session.show(origin(dropId));
+  const subject = session.subject;
+  assert(subject);
+  session.draft?.typeCatch(subject.drop, { kept: '3', released: '1' });
+  session.save();
+  expect(session.dismiss()).toBe('left');
+  session.show(origin(dropId));
+
+  expect(session.undoCollectBlocked).toBe(true);
+  expect(water.undoBlocked).toBe(true);
+  session.undoCollect();
+  expect(session.asking).toBe(null);
+  await vi.waitFor(() => {
+    expect(session.undoCollectBlocked).toBe(false);
+  });
+  await water.reload();
+  expect(stored()?.collectedAt).not.toBe(null);
+  expect(stored()?.catch).toEqual({ kept: 3, released: 1 });
+
+  session.undoCollect();
+  expect(session.asking).toBe('catch');
+  session.discard();
+  await vi.waitFor(() => {
+    expect(stored()).toMatchObject({ collectedAt: null, catch: null });
+  });
+});
+
+it('ends the sheet when a stored trip loses its drop, so restoring the drop reopens no draft or prompt', async () => {
+  const { water, session, dropId, stored } = await collectedOnWater();
+  session.show(origin(dropId));
+  assert(session.draft);
+  session.draft.details.notes = 'tangled';
+  expect(session.dismiss()).toBe('asked');
+
+  await water.remove(dropId);
+  expect(stored()).toBe(undefined);
+  expect(session.open).toBe(false);
+  const offer = water.notice?.offer;
+  assert(offer?.action === 'restore');
+  await water.undo(offer);
+
+  expect(stored()).toBeDefined();
+  expect(session.open).toBe(false);
+  expect(session.draft).toBe(null);
+  expect(session.asking).toBe(null);
+  expect(session.dirty).toBe(false);
 });

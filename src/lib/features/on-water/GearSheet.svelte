@@ -253,7 +253,7 @@
       {#if subject && canUndoCollect(subject.trip, subject.drop)}
         <Button
           class="grow {QUIET_BUTTON}"
-          aria-disabled={busy}
+          aria-disabled={busy || session.undoCollectBlocked}
           onclick={() => {
             session.undoCollect();
           }}>Undo collect</Button

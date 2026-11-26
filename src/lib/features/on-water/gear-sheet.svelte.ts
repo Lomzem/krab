@@ -47,6 +47,8 @@ export type SheetCommands = {
   collect: (dropId: string) => Promise<unknown>;
   remove: (dropId: string) => Promise<boolean>;
   undoCollect: (dropId: string, name: string) => Promise<unknown>;
+  undoCollectBlocked: (dropId: string) => boolean;
+  observeStored: (observer: () => void) => void;
   dropAgain: (dropId: string) => void;
   saveLost: (name: string) => void;
   showOnMap: (subject: SheetSubject) => void;
@@ -87,18 +89,38 @@ const sheetSubject = (
   );
 };
 
+const DETAILS = ['label', 'bait', 'depth', 'notes'] as const;
+
 export class SheetDraft {
-  details = $state<DetailsDraft>({ label: '', bait: '', depth: '', notes: '' });
-  kind = $state<Kind>('pot');
+  readonly details = {} as DetailsDraft;
+  #base: () => SheetSubject;
+  #edits = $state.raw<Partial<DetailsDraft>>({});
+  #kind = $state.raw<Kind | null>(null);
   baitSearch = $state<BaitSearch>({ query: '', refused: false });
   #typedCatch = $state.raw<{
     collectedAt: number;
     value: CatchDraft | null;
   } | null>(null);
 
-  constructor(subject: SheetSubject) {
-    this.details = draftOf(subject.drop);
-    this.kind = subject.gear.kind;
+  constructor(base: () => SheetSubject) {
+    this.#base = base;
+    for (const field of DETAILS) {
+      Object.defineProperty(this.details, field, {
+        enumerable: true,
+        get: () => this.#edits[field] ?? draftOf(this.#base().drop)[field],
+        set: (value: string) => {
+          this.#edits = { ...this.#edits, [field]: value };
+        }
+      });
+    }
+  }
+
+  get kind() {
+    return this.#kind ?? this.#base().gear.kind;
+  }
+
+  set kind(kind: Kind) {
+    this.#kind = kind;
   }
 
   catchOf(drop: Drop): CatchDraft | null {
@@ -139,6 +161,9 @@ export class GearSheetSession {
 
   constructor(commands: SheetCommands) {
     this.#commands = commands;
+    commands.observeStored(() => {
+      if (this.#origin && !this.#subject) this.close();
+    });
   }
 
   get subject() {
@@ -171,6 +196,13 @@ export class GearSheetSession {
 
   get refusal() {
     return this.#refusal;
+  }
+
+  get undoCollectBlocked() {
+    const subject = this.#subject;
+    return (
+      subject !== null && this.#commands.undoCollectBlocked(subject.drop.id)
+    );
   }
 
   get dirty() {
@@ -300,7 +332,7 @@ export class GearSheetSession {
 
   undoCollect() {
     const subject = this.#subject;
-    if (!subject || this.busy) return;
+    if (!subject || this.busy || this.undoCollectBlocked) return;
     const putBack = () => {
       void this.#operate(
         'other',
@@ -331,7 +363,7 @@ export class GearSheetSession {
 
   #startDraft() {
     const subject = this.#subject;
-    this.#draft = subject && new SheetDraft(subject);
+    this.#draft = subject && new SheetDraft(() => this.#subject ?? subject);
     this.#refusal = null;
   }
 
