@@ -207,3 +207,25 @@ export const storedBaits = async (page: Page) =>
   (await storedTrips(page))
     .toSorted((a, b) => a.startedAt - b.startedAt)
     .flatMap((trip) => trip.drops.map((drop) => drop.bait));
+
+type TapCounter = { krabTaps?: { count: number; stop: () => void } };
+
+export const tapsDuring = async (page: Page, steps: () => Promise<void>) => {
+  await page.evaluate(() => {
+    const counter = { count: 0, stop: () => undefined };
+    const count = (event: PointerEvent) => {
+      if (event.isTrusted && event.isPrimary) counter.count += 1;
+    };
+    addEventListener('pointerdown', count, { capture: true });
+    counter.stop = () => {
+      removeEventListener('pointerdown', count, { capture: true });
+    };
+    (window as TapCounter).krabTaps = counter;
+  });
+  await steps();
+  return page.evaluate(() => {
+    const counter = (window as TapCounter).krabTaps;
+    counter?.stop();
+    return counter?.count ?? 0;
+  });
+};

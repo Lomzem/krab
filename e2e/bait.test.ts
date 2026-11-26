@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, storedBaits, test, toastOf } from './fixtures';
+import { expect, storedBaits, tapsDuring, test, toastOf } from './fixtures';
 
 const tab = (page: Page, name: string) =>
   page.getByRole('button', { name, exact: true });
@@ -32,6 +32,11 @@ test('a saved custom bait is a one-tap choice after reload and on a new trip whi
     await sheet.getByRole('option', { name: 'Add Fish heads' }).click();
     await expect(fishHeads).toBeChecked();
   };
+  const reuseFishHeads = () =>
+    tapsDuring(page, async () => {
+      await sheet.getByText('Fish heads', { exact: true }).tap();
+      await expect(fishHeads).toBeChecked();
+    });
 
   await start(page);
   await dropPot(page, 'Pot 1');
@@ -62,8 +67,7 @@ test('a saved custom bait is a one-tap choice after reload and on a new trip whi
   await tab(page, 'Gear').click();
   await gearRow(page, 'Pot 2').click();
   await expect(fishHeads).not.toBeChecked();
-  await sheet.getByText('Fish heads', { exact: true }).tap();
-  await expect(fishHeads).toBeChecked();
+  await expect(reuseFishHeads()).resolves.toBe(1);
   await expect(search).toBeHidden();
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(sheet).toBeHidden();
@@ -76,8 +80,7 @@ test('a saved custom bait is a one-tap choice after reload and on a new trip whi
   expect(await storedBaits(page)).toEqual(['Fish heads', 'Fish heads', '']);
   await gearRow(page, 'Pot 1').click();
   await expect(fishHeads).not.toBeChecked();
-  await sheet.getByText('Fish heads', { exact: true }).tap();
-  await expect(fishHeads).toBeChecked();
+  await expect(reuseFishHeads()).resolves.toBe(1);
 });
 
 test('typing a saved bait in another case picks the saved spelling and Enter adds new text over a partial match', async ({

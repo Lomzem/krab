@@ -4,6 +4,7 @@ import {
   expect,
   storedBaits,
   storedCollections,
+  tapsDuring,
   test,
   toastOf
 } from './fixtures';
@@ -35,6 +36,7 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
   const sheet = page.getByRole('dialog');
   const step = (name: string) =>
     sheet.getByRole('button', { name, exact: true });
+  const collections = () => storedCollections(page);
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -43,14 +45,20 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await gearTab(page).click();
 
-  await inWaterRow(page, 'Pot 1').click();
-  await expect(
-    sheet.getByRole('button', { name: 'Delete drop' })
-  ).toBeVisible();
-  await expectAccessibleInBothThemes(page);
-  await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+  const collectTaps = await tapsDuring(page, async () => {
+    await inWaterRow(page, 'Pot 1').click();
+    await expect(
+      sheet.getByRole('button', { name: 'Delete drop' })
+    ).toBeVisible();
+    await expectAccessibleInBothThemes(page);
+    await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+    await expect(sheet.getByRole('heading', { name: 'Catch' })).toBeFocused();
+    await expect.poll(collections).toEqual([{ collected: true, catch: null }]);
+  });
+  expect(collectTaps, 'taps to collect from the Gear list').toBeLessThanOrEqual(
+    2
+  );
 
-  await expect(sheet.getByRole('heading', { name: 'Catch' })).toBeFocused();
   await expect(
     sheet.getByRole('button', { name: 'Collect', exact: true })
   ).toHaveCount(0);
