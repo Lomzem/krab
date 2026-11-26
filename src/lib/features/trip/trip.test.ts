@@ -14,13 +14,8 @@ import {
   isMultiDay,
   nearestGear,
   pastDrops,
-  pastTripCounts,
   pastTripSummaries,
-  shortDateRange,
-  tripDates,
-  tripSpan,
   tripBook,
-  tripDays,
   type DaySelection,
   type Deletion,
   type PastDaySelection,
@@ -1469,7 +1464,6 @@ it('gives a drop the local calendar date it was placed, so a drop just after loc
 
   expect(isMultiDay(oneDay)).toBe(false);
   expect(dayOf(oneDay, lateEvening.drop)).toBeNull();
-  expect(tripDays(trip)).toEqual([1, 2]);
   expect(isMultiDay(trip)).toBe(true);
   expect(dayOf(trip, lateEvening.drop)).toEqual({ number: 1, text: 'Day 1' });
   expect(dayOf(trip, afterMidnight.drop)).toEqual({
@@ -1516,14 +1510,14 @@ it('numbers days from the date the trip started, keeping a gap day and a deleted
   const withoutFirst = deleted.trip;
   const undoneTo = await run(book.undoDrop(dayFour.drop.id));
 
-  expect(tripDays(gap)).toEqual([1, 3]);
+  expect(dayOf(gap, first.drop)?.text).toBe('Day 1');
   expect(dayOf(gap, dayThree.drop)?.text).toBe('Day 3');
   assert(withoutFirst);
-  expect(tripDays(withoutFirst)).toEqual([3, 4]);
+  expect(dayOf(withoutFirst, dayThree.drop)?.text).toBe('Day 3');
   expect(dayOf(withoutFirst, dayFour.drop)?.text).toBe('Day 4');
   assert(undoneTo);
-  expect(tripDays(undoneTo)).toEqual([3]);
   expect(isMultiDay(undoneTo)).toBe(false);
+  expect(dayOf(undoneTo, dayThree.drop)).toBeNull();
 });
 
 it('gear rows and collected rows carry the day of their drop on a multi-day trip', async () => {
@@ -1646,7 +1640,9 @@ it('ends the trip once, keeping its gear in the water as uncollected drops, and 
   expect(stillRunning?.endedAt).toBeNull();
   expect(ended.endedAt).toBe(T0 + 2 * 3_600_000);
   expect(again).toEqual(ended);
-  expect(pastTripCounts(ended)).toBe('3 drops, 2 uncollected');
+  expect(pastTripSummaries([ended]).map(({ counts }) => counts)).toEqual([
+    '3 drops, 2 uncollected'
+  ]);
   expect(afterEnd).toBeNull();
   expect(await run(pastIn(book))).toEqual([ended]);
   expect([nextNet.name, nextPot.name]).toEqual(['Net 1', 'Pot 1']);
@@ -1820,19 +1816,19 @@ it('lists past trips newest first, with their dates and counts in prose', async 
 
   const listed = await run(pastIn(book));
 
-  expect(listed.map((trip) => [tripDates(trip), pastTripCounts(trip)])).toEqual(
+  expect(
+    pastTripSummaries(listed).map(({ dates, counts }) => [dates, counts])
+  ).toEqual([
     [
-      [
-        'Thursday, December 31, 2026 to Friday, January 1, 2027',
-        '2 drops, 2 uncollected'
-      ],
-      [
-        'Thursday, September 10 to Friday, September 11, 2026',
-        '2 drops, 1 uncollected'
-      ],
-      ['Friday, September 4, 2026', '1 drop']
-    ]
-  );
+      'Thursday, December 31, 2026 to Friday, January 1, 2027',
+      '2 drops, 2 uncollected'
+    ],
+    [
+      'Thursday, September 10 to Friday, September 11, 2026',
+      '2 drops, 1 uncollected'
+    ],
+    ['Friday, September 4, 2026', '1 drop']
+  ]);
 });
 
 const statusOf = (row: { name: string; status: string }) => [
@@ -1897,9 +1893,12 @@ it('dates a stored past trip with no drops by the day it started', async () => {
     gear: [],
     drops: []
   };
-  expect(tripDates(empty)).toBe('Monday, June 9, 2031');
-  const { first, last } = tripSpan(empty);
-  expect(shortDateRange(first, last)).toBe('Jun 9, 2031');
+  expect(
+    pastTripSummaries([empty]).map(({ dates, shortDates }) => ({
+      dates,
+      shortDates
+    }))
+  ).toEqual([{ dates: 'Monday, June 9, 2031', shortDates: 'Jun 9, 2031' }]);
 });
 
 it('dates and groups a past trip in the phone’s current time zone after the zone changes', async () => {
@@ -1908,11 +1907,12 @@ it('dates and groups a past trip in the phone’s current time zone after the zo
   await placeAt(book, state, '2031-06-11T01:00:00-04:00');
   const last = await placeAt(book, state, '2031-06-11T08:00:00-04:00');
   const ended = await run(book.endTrip(last.trip.id));
-  expect(tripDates(ended)).toBe('Wednesday, June 11, 2031');
+  const datesOf = () => pastTripSummaries([ended]).map(({ dates }) => dates);
+  expect(datesOf()).toEqual(['Wednesday, June 11, 2031']);
 
   vi.stubEnv('TZ', 'America/Los_Angeles');
 
-  expect(tripDates(ended)).toBe('Tuesday, June 10 to Wednesday, June 11, 2031');
+  expect(datesOf()).toEqual(['Tuesday, June 10 to Wednesday, June 11, 2031']);
   expect(statusByDay(ended)).toEqual([
     ['Day 1', [['Pot 1', 'Uncollected']]],
     ['Day 2', [['Pot 2', 'Uncollected']]]
