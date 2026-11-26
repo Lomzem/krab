@@ -31,4 +31,4 @@ export const filterToShow = (
 export const filterHides = (filter: MapFilter, gear: ActiveGear | null) =>
   gear !== null &&
   ((filter.days !== 'all' && gear.multiDay) ||
-    (!filter.collected && gear.collected.length > 0));
+    (!filter.collected && gear.collectedCount > 0));

@@ -5,10 +5,15 @@ import { DEFAULT_MAP_FILTER, filterHides } from './map-filter';
 const DAY_1 = new Date(2031, 5, 10, 22).getTime();
 const DAY_2 = new Date(2031, 5, 11, 1).getTime();
 
-const drop = (id: string, placedAt: number, collectedAt: number | null) =>
+const drop = (
+  id: string,
+  placedAt: number,
+  collectedAt: number | null,
+  gearId = 'pot-1'
+) =>
   ({
     id,
-    gearId: 'pot-1',
+    gearId,
     placedAt,
     position: null,
     noPosition: 'skipped',
@@ -54,6 +59,15 @@ it('hides gear when collected gear exists and is turned off', () => {
 
   expect(filterHides(off, gearOf(drop('a', DAY_1, DAY_1 + 1)))).toBe(true);
   expect(filterHides(off, gearOf(drop('a', DAY_1, null)))).toBe(false);
+});
+
+it('hides a collected drop whose gear record is missing, as its count says', () => {
+  const gear = gearOf(drop('a', DAY_1, DAY_1 + 1, 'pot-missing'));
+
+  expect(gear.counts.collected).toBe('1 collected');
+  expect(filterHides({ ...DEFAULT_MAP_FILTER, collected: false }, gear)).toBe(
+    true
+  );
 });
 
 it('hides nothing without an active trip', () => {

@@ -194,3 +194,50 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
     ).toHaveText([name]);
   }
 });
+
+test('with Today chosen, an open Gear here chooser keeps its gear across midnight, and Close returns focus to the map', async ({
+  page
+}) => {
+  const mapArea = page.getByRole('region', { name: 'Map', exact: true });
+  const group = mapArea.getByRole('button', {
+    name: /^Pot \d Day 2 \+1 more here/
+  });
+  const sheet = page.getByRole('dialog');
+  const chooser = sheet.getByRole('heading', { name: '2 gear here' });
+
+  await holdFixes(page);
+  await page.clock.install({ time: LATE_EVENING });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await dropPotAt(page, 0.0005, 'Pot 1');
+  await page.clock.fastForward('24:15:00');
+  await dropPotAt(page, 0, 'Pot 2');
+  await dropPotAt(page, 0, 'Pot 3');
+  await page.clock.fastForward(10_000);
+  await expect(toastOf(page)).toBeHidden();
+
+  await mapArea.getByRole('button', { name: /^Filter/ }).click();
+  await sheet
+    .getByRole('group', { name: 'Days on this trip' })
+    .getByRole('radio', { name: 'Today', exact: true })
+    .check();
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(mapArea.getByRole('button', { name: /^Pot 1,/ })).toHaveCount(0);
+
+  await group.click();
+  await expect(chooser).toBeVisible();
+  await page.clock.fastForward('20:00');
+  await expect(group, 'midnight moves Pot 2 and Pot 3 off Today').toHaveCount(
+    0
+  );
+  await expect(chooser).toBeVisible();
+  await expect(sheet.getByRole('button', { name: /^Pot \d,/ })).toHaveText([
+    /Pot 2/,
+    /Pot 3/
+  ]);
+
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(mapArea.locator('canvas')).toBeFocused();
+});

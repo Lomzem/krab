@@ -265,6 +265,7 @@
 
 <GearMap
   items={mapItems}
+  {itemOf}
   {onopen}
   bind:base
   bind:camera

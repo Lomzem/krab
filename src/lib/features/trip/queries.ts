@@ -166,12 +166,15 @@ const gearCounts = (trip: Trip) => {
   const inWater = trip.drops.filter(isInWater).length;
   const collected = trip.drops.length - inWater;
   return {
-    inWater:
-      inWater === 0
-        ? 'Nothing in the water'
-        : `${String(inWater)} in the water`,
-    collected:
-      collected === 0 ? 'Nothing collected' : `${String(collected)} collected`
+    collectedCount: collected,
+    counts: {
+      inWater:
+        inWater === 0
+          ? 'Nothing in the water'
+          : `${String(inWater)} in the water`,
+      collected:
+        collected === 0 ? 'Nothing collected' : `${String(collected)} collected`
+    }
   };
 };
 
@@ -197,6 +200,7 @@ export type ActiveGear = {
   inDays: ReadonlySet<string>;
   nearest: GearRow | null;
   counts: { inWater: string; collected: string };
+  collectedCount: number;
   multiDay: boolean;
 };
 
@@ -247,7 +251,7 @@ export const activeGear = (
       inWater.find(
         (row) => row.direction !== null && inDays.has(row.drop.id)
       ) ?? null,
-    counts: gearCounts(trip),
+    ...gearCounts(trip),
     multiDay
   };
 };

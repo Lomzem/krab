@@ -13,6 +13,7 @@
     groupChip,
     inListOrder,
     spokenItem,
+    type HereItem,
     type MapItem
   } from './gear-here';
   import GroupPin from './GroupPin.svelte';
@@ -23,6 +24,7 @@
 
   let {
     items,
+    itemOf,
     onopen,
     base = $bindable('chart'),
     camera = $bindable(null),
@@ -37,6 +39,7 @@
     frame
   }: {
     items: MapItem[];
+    itemOf?: (id: string) => HereItem[];
     onopen: (dropId: string, returnFocus: ReturnFocus) => void;
     base?: Base;
     camera?: Camera | null;
@@ -53,6 +56,7 @@
 
   let chart = $state<{
     focusTarget: (ids: readonly string[]) => HTMLElement | null;
+    canvas: () => HTMLElement | null;
   }>();
 
   const byId = $derived(new Map(items.map((item) => [item.id, item])));
@@ -91,7 +95,9 @@
   let chosenFrom: string[] = [];
   let picked = false;
   const chooserItems = $derived(
-    chooser ? inListOrder(itemsOf(chooser.ids)) : []
+    chooser
+      ? inListOrder(itemOf ? chooser.ids.flatMap(itemOf) : itemsOf(chooser.ids))
+      : []
   );
 
   const activate = (spot: Spot) => {
@@ -176,6 +182,6 @@
       picked = false;
       return null;
     }
-    return chart?.focusTarget(chosenFrom) ?? null;
+    return chart?.focusTarget(chosenFrom) ?? chart?.canvas() ?? null;
   }}
 />

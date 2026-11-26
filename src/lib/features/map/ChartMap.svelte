@@ -591,6 +591,8 @@
     };
   };
 
+  export const canvas = (): HTMLElement | null => map?.getCanvas() ?? null;
+
   export const focusTarget = (ids: readonly string[]): HTMLElement | null => {
     const shown = ids.flatMap((id) => {
       const spot = spotOf.get(id);
@@ -598,11 +600,7 @@
       return button ? [button] : [];
     });
     if (shown.length === 0) return null;
-    return (
-      shown.find((button) => !button.closest('[inert]')) ??
-      map?.getCanvas() ??
-      null
-    );
+    return shown.find((button) => !button.closest('[inert]')) ?? canvas();
   };
 
   const showPlace = async (id: string) => {
