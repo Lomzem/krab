@@ -23,7 +23,7 @@ Installation runs `prepare`, which synchronizes SvelteKit types and activates Le
 | `bun run format`                 | Format source, configuration and Markdown; sort Tailwind classes                                             |
 | `bun run format:check`           | Check formatting without rewriting files                                                                     |
 | `bun run lint`                   | Run ESLint with strict type-aware rules, the UI copy rule and the CI time limit rule                         |
-| `bun run check`                  | Synchronize SvelteKit and type-check the project and the service worker                                      |
+| `bun run check`                  | Synchronize SvelteKit and type-check the project and the service worker; any compiler warning fails          |
 | `bun run test:unit`              | Run the Vitest suites under `src/**/*.test.ts` and `scripts/verify-krab/**/*.test.ts`                        |
 | `bun run test:policy`            | Run paired valid and invalid probes through `lint`, `check` and `format:check` in a disposable copy          |
 | `bun run test:security`          | Prove the commit hook and the staged and history secret scans in disposable repositories                     |

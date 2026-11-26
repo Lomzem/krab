@@ -51,6 +51,7 @@ type PolicyCase = {
   file: string;
   invalidFile?: string;
   exact?: boolean;
+  warningOnly?: boolean;
   valid: string;
   invalid: string;
   command: 'lint' | 'check' | 'format:check';
@@ -706,6 +707,16 @@ const cases: PolicyCase[] = [
     risk: 'Routes grow private modules instead of composing features, or the app stylesheet is refused'
   },
   {
+    name: 'Svelte accessibility warning',
+    file: 'src/lib/shared/Probe.svelte',
+    warningOnly: true,
+    valid: '<img src="/pot.png" alt="Pot" />\n',
+    invalid: '<img src="/pot.png" />\n',
+    command: 'check',
+    diagnostic: 'a11y_missing_attribute',
+    risk: 'Svelte compiler and accessibility warnings pass typechecking'
+  },
+  {
     name: 'CI job without a time limit',
     file: '.github/workflows/ci.yml',
     valid: workflow('    timeout-minutes: 5\n'),
@@ -868,17 +879,29 @@ const run = (...args: string[]) =>
   });
 const sync = await run('svelte-kit', 'sync');
 assert.equal(sync.status, 0, `svelte-kit sync: ${sync.output}`);
-const passes = [
-  { command: 'lint', variants: ['valid', 'invalid'] },
-  { command: 'check', variants: ['valid'] },
-  { command: 'check', variants: ['invalid'] },
-  { command: 'format:check', variants: ['valid', 'invalid'] }
-] as const;
-for (const { command, variants } of passes) {
+type Variant = 'valid' | 'invalid';
+const passes: {
+  command: Command;
+  takes: (row: Pick<PolicyCase, 'warningOnly'>, variant: Variant) => boolean;
+}[] = [
+  { command: 'lint', takes: () => true },
+  {
+    command: 'check',
+    takes: (row, variant) => variant === 'valid' || row.warningOnly === true
+  },
+  {
+    command: 'check',
+    takes: (row, variant) => variant === 'invalid' && !row.warningOnly
+  },
+  { command: 'format:check', takes: () => true }
+];
+for (const { command, takes } of passes) {
   const batch = fixtures.filter((row) => row.command === command);
   assert.ok(batch.length > 0, `${command} must have fixtures`);
   const inputs = batch.flatMap((row) =>
-    variants.map((variant) => ({ row, variant, ...row[variant] }))
+    (['valid', 'invalid'] as const)
+      .filter((variant) => takes(row, variant))
+      .map((variant) => ({ row, variant, ...row[variant] }))
   );
   for (const input of inputs) {
     assert.ok(
@@ -893,7 +916,7 @@ for (const { command, variants } of passes) {
   assert.equal(
     status,
     invalid.length > 0 ? 1 : 0,
-    `${command} with ${variants.join(' and ')} fixtures: ${output}`
+    `${command} with ${inputs.map((input) => input.variant).join(', ')} fixtures: ${output}`
   );
   const found = diagnostics[command](output);
   const expected = new Set(invalid.map((input) => input.file));
