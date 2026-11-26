@@ -19,7 +19,7 @@ const dropPotAndOpenMap = async (page: Page) => {
   await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
 };
 
 const mapArea = (page: Page) =>
@@ -133,7 +133,7 @@ test('on the Street map, panning, every map control, Show on map and reload send
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page
     .getByRole('main')
     .getByRole('button')
@@ -511,13 +511,74 @@ test('a Street style still loading when Chart is chosen again or the Map tab clo
   const heldBefore = providers.held();
   await streetMap.click();
   await expect.poll(() => providers.held()).toBeGreaterThan(heldBefore);
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect.poll(() => cancelled.length).toBe(2);
   providers.serve();
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await expect(streetMap).toBeChecked();
   await expect.poll(() => streetTiles().length).toBeGreaterThan(0);
   await expect(anyOutage(page)).toHaveCount(0);
+});
+
+test('the screen tabs take one Tab stop, arrow keys only move focus between them, and the map loads nothing until Enter or Space opens Map', async ({
+  context,
+  page
+}) => {
+  const requested: string[] = [];
+  context.on('request', (request) => requested.push(request.url()));
+  const chartTiles = () => requested.filter((url) => CHART_TILE.test(url));
+  const screenTab = (name: string) =>
+    page
+      .getByRole('tablist', { name: 'Screens' })
+      .getByRole('tab', { name, exact: true });
+  const panel = (name: string) =>
+    page.getByRole('tabpanel', { name, exact: true });
+  const mapView = mapArea(page).getByRole('region', { name: 'Map view' });
+  const focusedTabs = page.locator('[role="tab"]:focus');
+  await dropPotAndOpenMap(page);
+  await expect(potOnMap(page)).toBeVisible();
+  await expect(panel('Map')).toBeVisible();
+
+  await screenTab('Gear').click();
+  await expect(panel('Gear')).toBeVisible();
+  await expect(mapView).toHaveCount(0);
+  await screenTab('Gear').focus();
+  await page.keyboard.press('Tab');
+  await expect(focusedTabs).toHaveCount(0);
+  await page.keyboard.press('Shift+Tab');
+  await expect(screenTab('Gear')).toBeFocused();
+
+  const tilesBefore = chartTiles().length;
+  await page.keyboard.press('ArrowLeft');
+  await expect(screenTab('Map')).toBeFocused();
+  await expect(screenTab('Gear')).toHaveAttribute('aria-selected', 'true');
+  await expect(screenTab('Map')).toHaveAttribute('aria-selected', 'false');
+  await expect(panel('Gear')).toBeVisible();
+  await expect(panel('Map')).toBeHidden();
+  await expect(mapView).toHaveCount(0);
+
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(screenTab('Past trips')).toBeFocused();
+  await expect(panel('Gear')).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(screenTab('Past trips')).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect(panel('Past trips')).toBeVisible();
+  await expect(panel('Gear')).toBeHidden();
+
+  await page.keyboard.press('ArrowRight');
+  await expect(screenTab('Map')).toBeFocused();
+  await expect(panel('Past trips')).toBeVisible();
+  await expect(mapView).toHaveCount(0);
+  expect(chartTiles()).toHaveLength(tilesBefore);
+  await page.keyboard.press('Enter');
+  await expect(screenTab('Map')).toHaveAttribute('aria-selected', 'true');
+  await expect(panel('Map')).toBeVisible();
+  await expect(potOnMap(page)).toBeVisible();
+  await expect.poll(() => chartTiles().length).toBeGreaterThan(tilesBefore);
 });
 
 test('a Street style that has not arrived after 10 seconds is cancelled and says the map cannot load right now, with gear and my position still shown', async ({
@@ -602,7 +663,7 @@ test('gear on the map opens its sheet without Show on map; with my position else
   await expect(potOnMap(page)).toHaveAccessibleName(/miles/);
   await panAway(page, potOnMap(page));
 
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page
     .getByRole('main')
     .getByRole('button')
@@ -611,8 +672,8 @@ test('gear on the map opens its sheet without Show on map; with my position else
   await showOnMap.click();
   await expect(sheet).toBeHidden();
   await expect(
-    page.getByRole('button', { name: 'Map', exact: true })
-  ).toHaveAttribute('aria-current', 'page');
+    page.getByRole('tab', { name: 'Map', exact: true })
+  ).toHaveAttribute('aria-selected', 'true');
   await expect(potOnMap(page)).toBeFocused();
   await expect
     .poll(() => offCentre(page, potOnMap(page)))
@@ -652,7 +713,7 @@ test('while moving with a rough fix, my position reads as rough with my heading'
   }, MADE_UP_SEA);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
 
   await expect(myPosition(page)).toHaveAccessibleName(
     'Current position, rough, within about 390 feet, heading east'
@@ -718,11 +779,11 @@ test('gear either side of the 180th meridian fits the past trip map as one small
   await expect(potOnMap(page)).toHaveAccessibleName(/miles/);
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
-  await page.getByRole('button', { name: 'Past trips', exact: true }).click();
+  await page.getByRole('tab', { name: 'Past trips', exact: true }).click();
   await main.getByRole('button', { name: /2 drops, 2 uncollected$/ }).click();
 
   const view = main.getByRole('region', { name: 'Map view' });
@@ -760,7 +821,7 @@ test('eight drops shown apart merge into groups as I zoom out without any marker
       `Pot ${String(index + 1)} dropped`
     );
   }
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
 
   const group = map.getByRole('button', {
     name: /\+7 more in this area$/
@@ -881,7 +942,7 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
         .click();
       await expect(toastOf(page)).toContainText(`${name} dropped`);
     }
-    await page.getByRole('button', { name: 'Map', exact: true }).click();
+    await page.getByRole('tab', { name: 'Map', exact: true }).click();
     await expect.poll(() => storedDrops(page)).toBe(6);
 
     let spots: Spot[] = [];
@@ -1599,11 +1660,11 @@ test('a group led by collected gear says how many are in the water and collected
   await page.getByRole('button', { name: 'Turn on location' }).click();
   for (const number of [1, 2, 3]) await dropAt(page, number);
 
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await expect(group).toHaveAccessibleName(/^Pot \d \+2 more here$/);
   expect(await othersBorder()).toBe('solid');
 
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 2').click();
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await sheet.getByRole('button', { name: 'Save' }).click();
@@ -1649,12 +1710,12 @@ test('a saved label shows in the group chooser and the sheet heading, and collec
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   for (const number of [1, 2]) await dropAt(page, number);
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 2').click();
   await sheet.getByLabel('Label').fill('Red float');
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(sheet).toHaveCount(0);
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await expect(group).toHaveAccessibleName(/^Pot 2 \+1 more /);
 
   await group.click();
@@ -1681,7 +1742,7 @@ test('my position north of small collected gear shows whole when the map opens a
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await dropAt(page, 1);
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await page.keyboard.press('Escape');
@@ -1691,7 +1752,7 @@ test('my position north of small collected gear shows whole when the map opens a
     longitude: MADE_UP_SEA.longitude
   });
 
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await expect(myPosition(page)).toBeVisible();
   await expect.poll(meWhole, 'my position cut when the map opens').toBe(true);
   await map.getByRole('button', { name: 'Zoom in' }).click();
@@ -1847,7 +1908,7 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await deliverFix(page, MADE_UP_SEA);
   await expect(page.getByText('Finding position')).toBeHidden();
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await map.getByRole('button', { name: /^Filter/ }).click();
   await sheet
     .getByRole('group', { name: 'Also show' })
@@ -1858,11 +1919,11 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
   await shownWholeAtEdge(99, 2);
 
   await dropAt(page, 1);
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await sheet.getByRole('button', { name: 'End trip' }).click();
   await expect(sheet).toBeHidden();
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await shownWholeAtEdge(100, 1);
   await expect(
     map.getByRole('button', { name: /^Pot 1, past trip/ })
@@ -1885,7 +1946,7 @@ test('drops that share a spot stay in one group at every zoom, and a group that 
   await dropAt(page, 2);
   await dropAt(page, 3, 0.00002, 0.00002);
   await dropAt(page, 4, 0.003, 0.003);
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await expect(map.getByRole('button', { name: /^Pot 4/ })).toBeVisible();
 
   expect(await sharedSpot()).toMatch(SHARED);
@@ -1930,7 +1991,7 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
     };
   };
   const showFromGear = async (name: string) => {
-    await page.getByRole('button', { name: 'Gear', exact: true }).click();
+    await page.getByRole('tab', { name: 'Gear', exact: true }).click();
     await gearRow(page, name).click();
     await sheet.getByRole('button', { name: 'Show on map' }).click();
     await expect(sheet).toHaveCount(0);
@@ -1941,7 +2002,7 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
   await dropAt(page, 1);
   await dropAt(page, 2);
   await dropAt(page, 3, 0.003, 0.003);
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await expect(pot3).toBeVisible();
   await expect(shownOnMap).toHaveCount(0);
   expect(await ringed(pot3)).toBe(false);
@@ -2021,13 +2082,13 @@ test('on a 320 by 640 screen, opening the Map tab and Show on map from the Gear 
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.evaluate(watchCredits, 30);
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await expect
     .poll(() => page.evaluate(framesWatched))
     .toBeGreaterThanOrEqual(30);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   expect(await covered(), 'map credits covered opening Map').toEqual([]);
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
   await page.evaluate(watchCredits, 90);
   await page
@@ -2077,7 +2138,7 @@ for (const [width, height] of [
     await sheet.getByRole('checkbox', { name: 'Collected gear' }).uncheck();
     await page.keyboard.press('Escape');
     await expect(sheet).toBeHidden();
-    await page.getByRole('button', { name: 'Gear', exact: true }).click();
+    await page.getByRole('tab', { name: 'Gear', exact: true }).click();
     await gearRow(page, 'Pot 1').click();
     await sheet.getByRole('button', { name: 'Show on map' }).click();
     await expect(potOnMap(page)).toBeFocused();
@@ -2292,7 +2353,7 @@ test('a focused pin shows a white then navy ring, outside the magenta ring of ge
     })
   ).toEqual(['solid', '3px', 'rgb(29, 78, 216)', '-6px']);
 
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
   await page
     .getByRole('dialog')

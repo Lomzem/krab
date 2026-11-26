@@ -38,7 +38,7 @@ test('placing a drop from Map survives reload', async ({
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   log('tap Drop pot; saved toast visible');
   await capture('03-dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const row = page
     .getByRole('main')
     .getByRole('listitem')
@@ -55,7 +55,7 @@ test('placing a drop from Map survives reload', async ({
   keep('indexeddb-before.json', before);
   await capture('04-gear');
   await page.reload();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect(row).toContainText('At gear');
   const after = await readTrips(page);
   expect(after).toEqual(before);
@@ -93,7 +93,7 @@ test('placing a drop with location denied saves it without a position', async ({
   await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
   log('tap Drop pot without position; toast says saved without a position');
   await capture('02-dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect(
     page.getByRole('main').getByRole('listitem').filter({ hasText: 'Pot 1' })
   ).toContainText('No position');

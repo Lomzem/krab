@@ -7,7 +7,7 @@ import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
 
 const gearTab = (page: Page) =>
-  page.getByRole('button', { name: 'Gear', exact: true });
+  page.getByRole('tab', { name: 'Gear', exact: true });
 
 const gearRow = (page: Page, name: string) =>
   page.getByRole('main').getByRole('button').filter({ hasText: name });

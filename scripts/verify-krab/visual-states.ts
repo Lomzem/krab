@@ -47,7 +47,7 @@ test('visual inventory through a dense overnight trip', async ({
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeVisible();
   await capture('02-finding-position');
-  const tab = (name: string) => page.getByRole('button', { name, exact: true });
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
   const sheet = page.getByRole('dialog');
   const checkFocus = async (name: string) => {
     const observations = [];
@@ -74,7 +74,7 @@ test('visual inventory through a dense overnight trip', async ({
   await capture('04-empty-past-trips');
   await tab('Map').click();
   await capture('05-empty-map');
-  await tab('Drop pot').click();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(
     page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeVisible();
@@ -94,7 +94,7 @@ test('visual inventory through a dense overnight trip', async ({
       longitude: MADE_UP_SEA.longitude
     });
     await expect(page.getByText('Finding position')).toBeHidden();
-    await tab('Drop pot').click();
+    await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
     if (number === 1) await capture('06-drop-toast');
   }
@@ -272,7 +272,7 @@ test('visual inventory with location denied', async ({
     .click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
   await capture('02-no-position-toast');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect(page.getByRole('main')).toContainText('No position');
   await capture('03-no-position-gear');
   await page.getByRole('button', { name: 'Show steps' }).click();
@@ -339,7 +339,7 @@ test('visual inventory for bait picker', async ({ page }, info) => {
     await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
     await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
   }
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const sheet = page.getByRole('dialog');
   const gearRow = (name: string) =>
     page

@@ -183,7 +183,7 @@ test('finding gear on the Map tab and from the Gear list', async ({
   await expect(pot).toBeFocused();
   log('Escape closes the sheet; focus returns to Pot 1 on the map');
 
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page
     .getByRole('main')
     .getByRole('button')

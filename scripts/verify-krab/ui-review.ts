@@ -373,7 +373,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
   if (liveProviders) expect(streetCredits.parts.length).toBeGreaterThan(0);
   for (const part of streetCredits.parts)
     expect(part.ratio, part.text).toBeGreaterThanOrEqual(4.5);
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const row = page
     .getByRole('main')
     .getByRole('button')
@@ -813,7 +813,7 @@ test('Trip ended shows, then leaves on its own', async ({
   await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   const sheet = page.getByRole('dialog');
   await sheet.getByRole('button', { name: 'End trip' }).click();
@@ -951,7 +951,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   const gearRow = (name: string) =>
     page.getByRole('main').getByRole('button').filter({ hasText: name });
   const showFromGear = async (name: string) => {
-    await page.getByRole('button', { name: 'Gear', exact: true }).click();
+    await page.getByRole('tab', { name: 'Gear', exact: true }).click();
     await gearRow(name).click();
     await sheet.getByRole('button', { name: 'Show on map' }).click();
     await expect(sheet).toHaveCount(0);
@@ -1009,7 +1009,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await page.keyboard.press('Escape');
   await expect(sheet).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow('Pot 2').click();
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   const released = sheet.getByRole('textbox', { name: 'Released' });

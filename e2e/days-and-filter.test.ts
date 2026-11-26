@@ -31,7 +31,7 @@ test('a drop after local midnight starts Day 2: the Gear list groups by day, Tod
   page
 }) => {
   test.slow();
-  const tab = (name: string) => page.getByRole('button', { name, exact: true });
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
   const mapArea = page.getByRole('region', { name: 'Map', exact: true });
   const pin = (name: RegExp) => mapArea.getByRole('button', { name });
   const sheet = page.getByRole('dialog');

@@ -52,7 +52,7 @@ test.describe('with location denied', () => {
     await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
     await expectAccessibleInBothThemes(page);
 
-    await page.getByRole('button', { name: 'Gear', exact: true }).click();
+    await page.getByRole('tab', { name: 'Gear', exact: true }).click();
     await expect(
       page.getByRole('main').getByRole('listitem').filter({ hasText: 'Pot 1' })
     ).toContainText('No position');
@@ -72,7 +72,7 @@ test.describe('with location denied', () => {
     const askedAtStart = await asks(page);
 
     for (const screen of ['Map', 'Gear', 'Map'] as const) {
-      await page.getByRole('button', { name: screen, exact: true }).click();
+      await page.getByRole('tab', { name: screen, exact: true }).click();
       await show.click();
       await expect(steps).toContainText('Reopen Krab');
       await page.keyboard.press('Escape');
@@ -98,7 +98,7 @@ test.describe('with location denied', () => {
       .click();
     await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
 
-    await page.getByRole('button', { name: 'Gear', exact: true }).click();
+    await page.getByRole('tab', { name: 'Gear', exact: true }).click();
     await page
       .getByRole('main')
       .getByRole('button')
@@ -231,7 +231,7 @@ test('a stale fix shows as Last position with no distances, and Centre on my pos
   await expect(centre).toHaveAttribute('aria-disabled', 'true');
   await expect(centre).toBeVisible();
 
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const row = page
     .getByRole('main')
     .getByRole('listitem')
@@ -242,7 +242,7 @@ test('a stale fix shows as Last position with no distances, and Centre on my pos
 
   await deliverFix(page, away, new Date(later.getTime() + 5001));
   await expect(row).toContainText('ft');
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await expect(current).toBeVisible();
   await expect(last).toHaveCount(0);
   await expect(centre).not.toHaveAttribute('aria-disabled');
@@ -252,7 +252,7 @@ test('Drop again from a sheet on Gear shows Finding position with Cancel and Sav
   page
 }) => {
   const sheet = page.getByRole('dialog');
-  const gearTab = page.getByRole('button', { name: 'Gear', exact: true });
+  const gearTab = page.getByRole('tab', { name: 'Gear', exact: true });
 
   await holdFixes(page);
   await page.clock.install({ time: START });
@@ -274,7 +274,7 @@ test('Drop again from a sheet on Gear shows Finding position with Cancel and Sav
   await sheet.getByRole('button', { name: 'Drop pot again here' }).click();
 
   await expect(sheet).toBeHidden();
-  await expect(gearTab).toHaveAttribute('aria-current', 'page');
+  await expect(gearTab).toHaveAttribute('aria-selected', 'true');
   await expect(
     page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeFocused();
@@ -316,7 +316,7 @@ test('a stale fix says Finding position on Gear and in an open sheet, and distan
 
   const later = new Date(PAUSED.getTime() + 8001);
   await deliverFix(page, away, later);
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const row = page
     .getByRole('main')
     .getByRole('button')
@@ -356,10 +356,10 @@ test('a stale fix says Finding position on Gear and in an open sheet, and distan
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await page.getByRole('button', { name: 'Drop pot without position' }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped, no position');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page
     .getByRole('main')
     .getByRole('button')
@@ -534,7 +534,7 @@ test('a drop with no fix within 5 seconds saves without a position by itself, a 
   await expect(toastOf(page)).toContainText('Pot 3 dropped');
   await expect(toastOf(page)).not.toContainText('no position');
 
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const row = (name: string) =>
     page.getByRole('main').getByRole('listitem').filter({ hasText: name });
   await expect(row('Pot 1')).toContainText('No position');
@@ -601,7 +601,7 @@ test('a drop with a fresh fix shows saving feedback only once saving has taken h
   await expect(saving).toHaveCount(0);
   await expect(dropPot).toBeFocused();
 
-  const gearTab = page.getByRole('button', { name: 'Gear', exact: true });
+  const gearTab = page.getByRole('tab', { name: 'Gear', exact: true });
   await holdStorage(page);
   await page.keyboard.press('Enter');
   await gearTab.focus();
@@ -615,7 +615,7 @@ test('a drop with a fresh fix shows saving feedback only once saving has taken h
   const placed = () => mapView.boundingBox();
   const before = await placed();
   expect(before).not.toBeNull();
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await dropPot.focus();
   await holdStorage(page);
   await page.keyboard.press('Enter');

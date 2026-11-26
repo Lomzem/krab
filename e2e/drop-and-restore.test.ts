@@ -26,7 +26,7 @@ test('a pot dropped with a granted fix is listed under Gear and survives a reloa
     .getByRole('main')
     .getByRole('listitem')
     .filter({ hasText: 'Pot 1' });
-  const gearTab = page.getByRole('button', { name: 'Gear', exact: true });
+  const gearTab = page.getByRole('tab', { name: 'Gear', exact: true });
   const turnOnLocation = page.getByRole('button', { name: 'Turn on location' });
 
   await page.goto('/');

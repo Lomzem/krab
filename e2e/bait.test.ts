@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { expect, storedBaits, tapsDuring, test, toastOf } from './fixtures';
 
 const tab = (page: Page, name: string) =>
-  page.getByRole('button', { name, exact: true });
+  page.getByRole('tab', { name, exact: true });
 
 const gearRow = (page: Page, name: string) =>
   page.getByRole('main').getByRole('button').filter({ hasText: name });

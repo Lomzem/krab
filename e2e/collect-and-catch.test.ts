@@ -12,7 +12,7 @@ import { expectAccessibleInBothThemes } from './accessibility';
 import { failStorage, injectStorageFaults } from './storage-faults';
 
 const gearTab = (page: Page) =>
-  page.getByRole('button', { name: 'Gear', exact: true });
+  page.getByRole('tab', { name: 'Gear', exact: true });
 
 const inWaterRow = (page: Page, name: string) =>
   page

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from '@ui-sdk/svelte/button';
+  import { Tabs, TabsList, TabsPanel, TabsTab } from '@ui-sdk/svelte/tabs';
   import { elementRef } from '#lib/shared/element-ref.js';
   import { tick } from 'svelte';
   import { keepScreenAwakeWhile } from '#lib/features/app-shell/index.js';
@@ -51,7 +52,7 @@
     saveKind,
     savedKind
   } from './preferences';
-  import { TABS, type Tab } from './tabs';
+  import { TABS, tabOf, type Tab } from './tabs';
 
   const TICK_MS = 15_000;
   const SAVING_SHOWN_AFTER_MS = 500;
@@ -411,117 +412,128 @@
   };
 </script>
 
-<div class="flex h-dvh flex-col bg-background font-sans text-foreground">
-  <nav
-    class="border-b border-border bg-card pt-[env(safe-area-inset-top,0px)]"
-    aria-label="Screens"
-  >
-    <ul class="grid grid-cols-3">
+<Tabs
+  class="flex h-dvh flex-col bg-background font-sans text-foreground"
+  activation="manual"
+  value={tab}
+  onValueChange={(value: string | null) => {
+    const next = tabOf(value);
+    if (next) void switchTo(next);
+  }}
+>
+  <div class="border-b border-border bg-card pt-[env(safe-area-inset-top,0px)]">
+    <TabsList class="grid grid-cols-3" aria-label="Screens">
       {#each TABS as item (item.tab)}
-        <li class="flex">
-          <button
-            type="button"
-            {@attach (node: HTMLButtonElement) => {
-              if (item.tab === 'map') mapTabButton = node;
-            }}
-            class="relative flex min-h-12 w-full touch-manipulation items-center justify-center px-2 py-1 text-center text-control font-medium text-muted-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.75 after:bg-foreground after:opacity-0 compact:min-h-11 {FOCUS_INSET} {PRESS} active:bg-muted aria-[current=page]:font-semibold aria-[current=page]:text-foreground aria-[current=page]:after:opacity-100"
-            aria-current={tab === item.tab ? 'page' : undefined}
-            onclick={() => void switchTo(item.tab)}
-          >
-            {item.name}
-          </button>
-        </li>
+        <TabsTab
+          value={item.tab}
+          {@attach (node: HTMLButtonElement) => {
+            if (item.tab === 'map') mapTabButton = node;
+          }}
+          class="relative flex min-h-12 w-full touch-manipulation items-center justify-center px-2 py-1 text-center text-control font-medium text-muted-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.75 after:bg-foreground after:opacity-0 compact:min-h-11 {FOCUS_INSET} {PRESS} active:bg-muted aria-selected:font-semibold aria-selected:text-foreground aria-selected:after:opacity-100"
+        >
+          {item.name}
+        </TabsTab>
       {/each}
-    </ul>
-  </nav>
+    </TabsList>
+  </div>
 
   <main bind:this={main} class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-    {#if tab === 'map'}
-      {#if water.load === 'failed'}
-        <section aria-labelledby="map-title">
-          <h1 id="map-title" class="sr-only">Map</h1>
+    <TabsPanel value="map" keepMounted class="flex min-h-0 flex-1 flex-col">
+      {#if tab === 'map'}
+        {#if water.load === 'failed'}
+          <section aria-labelledby="map-title">
+            <h1 id="map-title" class="sr-only">Map</h1>
+            <LoadFailed text={TRIP_LOAD_FAILED} onretry={reload} />
+          </section>
+        {:else if water.load === 'ready'}
+          <MapTab
+            {gear}
+            past={water.past}
+            fix={readiness.fix}
+            lastFix={readiness.lastFix}
+            courseDeg={watch.courseDeg}
+            compass={$compass}
+            compassShown={compassSupported()}
+            oncompass={toggleCompass}
+            bind:base
+            bind:camera
+            bind:filter={mapFilter}
+            show={showOnMap}
+            onshown={() => {
+              showOnMap = null;
+            }}
+            onopen={(dropId: string, returnFocus: () => HTMLElement | null) => {
+              openSheet({ dropId, from: 'map', returnFocus });
+            }}
+            newest={water.notice?.offer.action === 'undo-drop'
+              ? water.notice.offer.dropId
+              : null}
+          />
+        {:else}
+          <section aria-labelledby="map-title">
+            <h1 id="map-title" class="sr-only">Map</h1>
+            <p class="px-4 pt-4 text-base text-muted-foreground">
+              Loading trip
+            </p>
+          </section>
+        {/if}
+      {/if}
+    </TabsPanel>
+    <TabsPanel value="gear" keepMounted class="flex min-h-0 flex-1 flex-col">
+      {#if tab === 'gear'}
+        {#if water.load === 'failed'}
+          <header class="px-4 pt-5">
+            <h1 class="text-display font-semibold">Gear</h1>
+          </header>
           <LoadFailed text={TRIP_LOAD_FAILED} onretry={reload} />
-        </section>
-      {:else if water.load === 'ready'}
-        <MapTab
-          {gear}
+        {:else if water.load === 'ready'}
+          <GearList
+            {gear}
+            compass={$compass}
+            onopen={opensFrom('list')}
+            canEnd={water.pending === null}
+            onend={() => {
+              endOpen = true;
+            }}
+            endedTrip={endedTrip !== null}
+            onviewended={() => void viewEndedTrip()}
+            attachEndButton={elementRef<HTMLButtonElement>((element) => {
+              endButton = element;
+            })}
+            bind:heading={gearHeading}
+          />
+        {:else}
+          <header class="px-4 pt-3 pb-2">
+            <h1 class="text-display font-semibold">Gear</h1>
+          </header>
+          <p class="px-4 text-base text-muted-foreground">Loading trip</p>
+        {/if}
+      {/if}
+    </TabsPanel>
+    <TabsPanel value="trips" keepMounted class="flex min-h-0 flex-1 flex-col">
+      {#if tab === 'trips' && water.load !== 'opening'}
+        <PastTrips
           past={water.past}
-          fix={readiness.fix}
-          lastFix={readiness.lastFix}
-          courseDeg={watch.courseDeg}
-          compass={$compass}
-          compassShown={compassSupported()}
-          oncompass={toggleCompass}
-          bind:base
-          bind:camera
-          bind:filter={mapFilter}
-          show={showOnMap}
+          failed={water.load === 'failed'}
+          bind:selected={pastTripId}
+          bind:titleHeading={pastHeading}
+          show={pastShow}
           onshown={() => {
-            showOnMap = null;
+            pastShow = null;
           }}
-          onopen={(dropId: string, returnFocus: () => HTMLElement | null) => {
-            openSheet({ dropId, from: 'map', returnFocus });
+          onopen={(
+            dropId: string,
+            returnFocus: () => HTMLElement | null,
+            from: 'list' | 'map'
+          ) => {
+            openSheet({ dropId, from, returnFocus });
           }}
-          newest={water.notice?.offer.action === 'undo-drop'
-            ? water.notice.offer.dropId
-            : null}
+          ondelete={(tripId: string) => water.deleteTrip(tripId)}
+          onretry={reload}
+          notice={water.notice}
         />
-      {:else}
-        <section aria-labelledby="map-title">
-          <h1 id="map-title" class="sr-only">Map</h1>
-          <p class="px-4 pt-4 text-base text-muted-foreground">Loading trip</p>
-        </section>
       {/if}
-    {:else if tab === 'gear'}
-      {#if water.load === 'failed'}
-        <header class="px-4 pt-5">
-          <h1 class="text-display font-semibold">Gear</h1>
-        </header>
-        <LoadFailed text={TRIP_LOAD_FAILED} onretry={reload} />
-      {:else if water.load === 'ready'}
-        <GearList
-          {gear}
-          compass={$compass}
-          onopen={opensFrom('list')}
-          canEnd={water.pending === null}
-          onend={() => {
-            endOpen = true;
-          }}
-          endedTrip={endedTrip !== null}
-          onviewended={() => void viewEndedTrip()}
-          attachEndButton={elementRef<HTMLButtonElement>((element) => {
-            endButton = element;
-          })}
-          bind:heading={gearHeading}
-        />
-      {:else}
-        <header class="px-4 pt-3 pb-2">
-          <h1 class="text-display font-semibold">Gear</h1>
-        </header>
-        <p class="px-4 text-base text-muted-foreground">Loading trip</p>
-      {/if}
-    {:else if water.load !== 'opening'}
-      <PastTrips
-        past={water.past}
-        failed={water.load === 'failed'}
-        bind:selected={pastTripId}
-        bind:titleHeading={pastHeading}
-        show={pastShow}
-        onshown={() => {
-          pastShow = null;
-        }}
-        onopen={(
-          dropId: string,
-          returnFocus: () => HTMLElement | null,
-          from: 'list' | 'map'
-        ) => {
-          openSheet({ dropId, from, returnFocus });
-        }}
-        ondelete={(tripId: string) => water.deleteTrip(tripId)}
-        onretry={reload}
-        notice={water.notice}
-      />
-    {/if}
+    </TabsPanel>
   </main>
 
   <GearSheet
@@ -686,7 +698,7 @@
       </DockRow>
     </div>
   </div>
-</div>
+</Tabs>
 
 <LocationSteps
   open={stepsOpen}

@@ -39,7 +39,7 @@ const openMapDenied = async (page: Page, width: number, height: number) => {
   await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
-  await page.getByRole('button', { name: 'Map', exact: true }).click();
+  await page.getByRole('tab', { name: 'Map', exact: true }).click();
   const map = page.getByRole('region', { name: 'Map', exact: true });
   return {
     map,

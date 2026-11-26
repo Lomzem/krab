@@ -34,7 +34,7 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
   );
   const requested: string[] = [];
   context.on('request', (request) => requested.push(request.url()));
-  const tab = (name: string) => page.getByRole('button', { name, exact: true });
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
   const mapArea = page.getByRole('region', { name: 'Map', exact: true });
   const pin = (name: RegExp) => mapArea.getByRole('button', { name });
   const sheet = page.getByRole('dialog');

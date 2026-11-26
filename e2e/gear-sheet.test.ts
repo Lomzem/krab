@@ -38,7 +38,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
     .click();
   await page.getByRole('button', { name: 'Drop net' }).click();
   await expect(toastOf(page)).toContainText('Net 1 dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   const pot1 = gearRow(page, 'Pot 1');
   await pot1.click();
@@ -92,7 +92,7 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
   await expect(gearRow(page, 'Pot 2')).toBeVisible();
 
   await page.reload();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await pot1.click();
   await expect(label).toHaveValue('red float');
   await expect(depth).toHaveValue('12.5');
@@ -134,7 +134,7 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
     await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(`${name} dropped`);
   }
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const pot1 = gearRow(page, 'Pot 1');
 
   await pot1.click();
@@ -266,7 +266,7 @@ test('deleting a drop right after closing another gear sheet returns focus to th
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await gearRow(page, 'Pot 2').click();
   await page.keyboard.press('Escape');
@@ -295,14 +295,14 @@ test('deleting a drop already deleted in another tab closes the sheet without an
     await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(`${name} dropped`);
   }
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
   await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
 
   const other = await context.newPage();
   const otherSheet = other.getByRole('dialog');
   await other.goto('/');
-  await other.getByRole('button', { name: 'Gear', exact: true }).click();
+  await other.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(other, 'Pot 1').click();
   await otherSheet.getByRole('button', { name: 'Delete drop' }).dblclick();
   await expect(toastOf(other)).toContainText('Pot 1 deleted');
@@ -331,7 +331,7 @@ test('while a sheet action is storing, the sheet ignores its other actions, and 
     await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(`${name} dropped`);
   }
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await gearRow(page, 'Pot 1').click();
   await label.fill('red float');
@@ -394,7 +394,7 @@ test('a Save that fails after Escape closed its sheet says so in a message', asy
   await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await gearRow(page, 'Pot 1').click();
   await sheet.getByLabel('Label').fill('red float');
@@ -425,7 +425,7 @@ test('a Save that fails after its sheet closed says so even while another sheet 
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await gearRow(page, 'Pot 1').click();
   await sheet.getByLabel('Label').fill('red float');
@@ -466,7 +466,7 @@ test('on a 320 by 640 screen, tabbing from corrected Depth through Label and Bai
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
   await sheet
     .getByLabel('Label')
@@ -509,7 +509,7 @@ test('on a 320 by 640 screen, tabbing from corrected Depth through Label and Bai
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(sheet).toBeHidden();
   await page.reload();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
   await expect(notes).toHaveValue(written);
 });
@@ -548,7 +548,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.getByRole('button', { name: 'Drop pot' }).click();
       await expect(toastOf(page)).toContainText(`${name} dropped`);
     }
-    await page.getByRole('button', { name: 'Gear', exact: true }).click();
+    await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
     await gearRow(page, 'Pot 2').click();
     await sheet
@@ -572,7 +572,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await sheet.getByRole('button', { name: 'Discard changes' }).click();
     await expect(sheet).toBeHidden();
 
-    await page.getByRole('button', { name: 'Map', exact: true }).click();
+    await page.getByRole('tab', { name: 'Map', exact: true }).click();
     await page
       .getByRole('region', { name: 'Map', exact: true })
       .getByRole('button', { name: /\+1 more/ })
@@ -676,7 +676,7 @@ test('with the page zoomed up to 200% on 320 and 393 wide screens in both themes
   await expect(toastOf(page)).toContainText('Net 1 dropped');
   await expect(dropButton).toHaveAccessibleName('Drop net');
   await page.reload();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect(gearRow(page, 'Net 1')).toHaveCount(1);
   await expect(gearRow(page, /Pot \d/)).toHaveCount(0);
 });
@@ -780,8 +780,8 @@ test.describe('with the clock paused', () => {
         const sheet = page.getByRole('dialog');
         const tab = (name: string) =>
           page
-            .getByRole('navigation', { name: 'Screens' })
-            .getByRole('button', { name, exact: true });
+            .getByRole('tablist', { name: 'Screens' })
+            .getByRole('tab', { name, exact: true });
         await page.setViewportSize({ width, height });
         await page.emulateMedia({ colorScheme });
         await page.clock.install({ time: new Date('2031-03-04T05:00:00Z') });
@@ -805,7 +805,7 @@ test.describe('with the clock paused', () => {
           'mouse'
         );
         await expect(toastOf(page)).toContainText('Pot 1 deleted');
-        await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        await expect(tab('Gear')).toHaveAttribute('aria-selected', 'true');
         await expect(
           page.getByRole('heading', { name: 'Gear', level: 1 })
         ).toBeFocused();
@@ -842,7 +842,7 @@ test.describe('with the clock paused', () => {
           'touch'
         );
         await expect(sheet).toBeHidden();
-        await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        await expect(tab('Gear')).toHaveAttribute('aria-selected', 'true');
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await expect(gearRow(page, 'Pot 2')).toContainText('blue buoy');
         expect(await storedDrops(page)).toBe(2);
@@ -876,7 +876,7 @@ test.describe('with the clock paused', () => {
         await page.clock.runFor(500);
         await page.mouse.up({ clickCount: 2 });
         await page.clock.runFor(0);
-        await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        await expect(tab('Gear')).toHaveAttribute('aria-selected', 'true');
         expect(await reached()).toBe(mark);
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(500);
@@ -903,7 +903,7 @@ test.describe('with the clock paused', () => {
         mark = await reached();
         await press(page, 'touch', saved.x, saved.y, 1);
         await page.clock.runFor(0);
-        await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        await expect(tab('Gear')).toHaveAttribute('aria-selected', 'true');
         expect(await reached()).toBe(mark);
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(150);
@@ -915,7 +915,7 @@ test.describe('with the clock paused', () => {
         mark = await reached();
         await press(page, 'mouse', saved.x, saved.y, 2);
         await page.clock.runFor(0);
-        await expect(tab('Gear')).toHaveAttribute('aria-current', 'page');
+        await expect(tab('Gear')).toHaveAttribute('aria-selected', 'true');
         expect(await reached()).toBe(mark);
         await expect(gearRow(page, 'Pot 2')).toBeFocused();
         await page.clock.runFor(200);
@@ -994,7 +994,7 @@ test('an open bait search with typed text keeps Save from closing and asks befor
     await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(`${name} dropped`);
   }
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await pot1.click();
   await addBait('Fish heads');
   await pot2.click();
@@ -1080,7 +1080,7 @@ test('Close, Save, Depth, a kind choice and the bait controls show one 3 px focu
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot' }).click();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
   await sheet.getByRole('button', { name: 'Add bait' }).click();
   await sheet.getByLabel('Find or add bait').fill('Fish heads');

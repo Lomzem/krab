@@ -13,7 +13,7 @@ const STILL_IN = '1 still in the water';
 test.use({ timezoneId: 'America/New_York' });
 
 const tab = (page: Page, name: string) =>
-  page.getByRole('button', { name, exact: true });
+  page.getByRole('tab', { name, exact: true });
 
 const fishOneMorning = async (page: Page) => {
   const sheet = page.getByRole('dialog');

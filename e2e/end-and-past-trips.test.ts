@@ -14,7 +14,7 @@ const TWO_DAYS = 'Tuesday, June 10 to Wednesday, June 11, 2031';
 test.use({ timezoneId: 'America/New_York' });
 
 const tab = (page: Page, name: string) =>
-  page.getByRole('button', { name, exact: true });
+  page.getByRole('tab', { name, exact: true });
 
 const dropOf = async (page: Page, kind: 'Pot' | 'Net', name: string) => {
   await page
