@@ -1001,26 +1001,15 @@ const cases: PolicyCase[] = [
     risk: 'An @apply list in a style block skips the utility check'
   },
   {
-    name: 'new bits-ui wrapper beside the four bait command wrappers',
-    file: 'src/lib/features/on-water/bait-command/probe.svelte',
+    name: 'bits-ui import, even in the old bait command folder',
+    file: 'src/lib/features/on-water/bait-command/command.svelte',
     valid:
-      '<script lang="ts">\n  import Command from \'./command.svelte\';\n</script>\n\n<Command />\n',
+      '<script lang="ts">\n  import { Command } from \'@ui-sdk/svelte/command\';\n</script>\n\n<Command />\n',
     invalid:
       '<script lang="ts">\n  import { Command } from \'bits-ui\';\n</script>\n\n<Command.Root />\n',
     command: 'lint',
-    diagnostic: 'Importing bits-ui outside the bait command wrappers',
-    risk: 'A new bits-ui wrapper joins the four the allowlist names, or the folder cannot use them'
-  },
-  {
-    name: 'bits-ui import outside the bait command folder',
-    file: 'src/lib/features/on-water/Probe.svelte',
-    valid:
-      '<script lang="ts">\n  import Command from \'./bait-command/command.svelte\';\n</script>\n\n<Command />\n',
-    invalid:
-      '<script lang="ts">\n  import { Command } from \'bits-ui\';\n</script>\n\n<Command.Root />\n',
-    command: 'lint',
-    diagnostic: 'Importing bits-ui outside the bait command wrappers',
-    risk: 'bits-ui spreads past the wrappers UI SDK replaces, or the wrappers cannot be composed'
+    diagnostic: 'Importing bits-ui brings bits-ui back',
+    risk: 'A file regains a bits-ui allowance, or UI SDK Command is refused'
   },
   {
     name: 'bits-ui through createRequire',
@@ -1030,8 +1019,8 @@ const cases: PolicyCase[] = [
     invalid:
       "import { createRequire } from 'node:module';\n\nconst load = createRequire(import.meta.url);\nexport const controls: unknown = load('bits-ui');\n",
     command: 'lint',
-    diagnostic: 'Importing bits-ui outside the bait command wrappers',
-    risk: 'An aliased require loads bits-ui past the allowlist'
+    diagnostic: 'Importing bits-ui brings bits-ui back',
+    risk: 'An aliased require loads bits-ui unseen'
   },
   {
     name: 'dynamic bits-ui import',
@@ -1039,8 +1028,8 @@ const cases: PolicyCase[] = [
     valid: "export const load = () => import('effect');\n",
     invalid: "export const load = () => import('bits-ui');\n",
     command: 'lint',
-    diagnostic: 'Importing bits-ui outside the bait command wrappers',
-    risk: 'A dynamic import adds bits-ui past the allowlist'
+    diagnostic: 'Importing bits-ui brings bits-ui back',
+    risk: 'A dynamic import loads bits-ui unseen'
   },
   {
     name: 'bits-ui through import.meta.resolve',
@@ -1049,7 +1038,7 @@ const cases: PolicyCase[] = [
       "export const known = (name: string) => name.startsWith('bits-ui');\n",
     invalid: "export const where = import.meta.resolve('bits-ui');\n",
     command: 'lint',
-    diagnostic: 'Importing bits-ui outside the bait command wrappers',
+    diagnostic: 'Importing bits-ui brings bits-ui back',
     risk: 'A resolve call loads bits-ui unseen, or any call with a bits-ui string is refused'
   },
   {
@@ -1060,7 +1049,7 @@ const cases: PolicyCase[] = [
     valid: '{\n  "imports": { "#controls": "bits-ui" }\n}\n',
     invalid: "export const load = () => import('#controls');\n",
     command: 'lint',
-    diagnostic: 'Importing #controls outside the bait command wrappers',
+    diagnostic: 'Importing #controls brings bits-ui back',
     risk: 'A subpath import alias hides bits-ui from the import check'
   },
   {
@@ -1068,11 +1057,22 @@ const cases: PolicyCase[] = [
     file: 'probe-ui-sdk/package.json',
     invalidFile: 'probe-shadcn/package.json',
     exact: true,
-    valid: '{\n  "dependencies": { "bits-ui": "2.21.0" }\n}\n',
+    valid: '{\n  "devDependencies": { "@ui-sdk/svelte": "0.1.0-beta.17" }\n}\n',
     invalid: '{\n  "devDependencies": { "shadcn-svelte": "1.0.0" }\n}\n',
     command: 'lint',
     diagnostic: 'shadcn-svelte in devDependencies',
-    risk: 'shadcn-svelte comes back as a dependency, or the temporary bits-ui dependency is refused'
+    risk: 'shadcn-svelte comes back as a dependency, or UI SDK is refused'
+  },
+  {
+    name: 'bits-ui dependency',
+    file: 'probe-ui-sdk-dependency/package.json',
+    invalidFile: 'probe-bits-ui-dependency/package.json',
+    exact: true,
+    valid: '{\n  "dependencies": { "@ui-sdk/svelte": "0.1.0-beta.17" }\n}\n',
+    invalid: '{\n  "dependencies": { "bits-ui": "2.21.0" }\n}\n',
+    command: 'lint',
+    diagnostic: 'bits-ui in dependencies brings bits-ui back',
+    risk: 'bits-ui comes back as a dependency, or UI SDK is refused'
   },
   {
     name: 'npm alias for shadcn-svelte',
@@ -1090,11 +1090,12 @@ const cases: PolicyCase[] = [
     file: 'probe-bits-ui/package.json',
     invalidFile: 'probe-bits-ui-alias/package.json',
     exact: true,
-    valid: '{\n  "dependencies": { "bits-ui": "npm:bits-ui@2.21.0" }\n}\n',
+    valid:
+      '{\n  "dependencies": { "@ui-sdk/svelte": "npm:@ui-sdk/svelte@0.1.0-beta.17" }\n}\n',
     invalid: '{\n  "dependencies": { "controls": "npm:bits-ui@2.21.0" }\n}\n',
     command: 'lint',
     diagnostic: 'controls in dependencies aliases bits-ui',
-    risk: 'bits-ui imports hide behind an alias the import check cannot see'
+    risk: 'bits-ui hides behind an alias the import check cannot see, or plain npm aliases are refused'
   },
   {
     name: 'shadcn-svelte registry scaffolding',

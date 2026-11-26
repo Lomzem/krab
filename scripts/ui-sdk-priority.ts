@@ -1,10 +1,8 @@
 import type { Rule, Scope } from 'eslint';
 import type * as ESTree from 'estree';
-import { basename, relative } from 'node:path';
+import { basename } from 'node:path';
 import { getStaticYAMLValue, type AST } from 'yaml-eslint-parser';
 import { bareSpecifier, packageImportTargets } from './package-imports.ts';
-
-type Options = { bitsUi: string[] };
 
 const BITS_UI = /^bits-ui(?:\/|$)/;
 const SHADCN = /^shadcn-svelte(?:\/|$)/;
@@ -129,7 +127,7 @@ const isLoader = (call: ESTree.CallExpression, scopeOf: ScopeOf) => {
 
 const NPM_ALIAS = /^npm:((?:@[^/@]+\/)?[^@]+)/;
 
-const dependencyProblems = (manifest: unknown, bitsUi: string[]) =>
+const dependencyProblems = (manifest: unknown) =>
   DEPENDENCY_FIELDS.flatMap((field) => {
     const dependencies =
       typeof manifest === 'object' && manifest !== null
@@ -141,7 +139,7 @@ const dependencyProblems = (manifest: unknown, bitsUi: string[]) =>
         typeof version === 'string' ? NPM_ALIAS.exec(version)?.[1] : undefined;
       if (SHADCN.test(name))
         return [{ messageId: 'shadcnDependency', data: { name, field } }];
-      if (BITS_UI.test(name) && bitsUi.length === 0)
+      if (BITS_UI.test(name))
         return [{ messageId: 'bitsUiDependency', data: { name, field } }];
       if (
         target !== undefined &&
@@ -153,15 +151,10 @@ const dependencyProblems = (manifest: unknown, bitsUi: string[]) =>
     });
   });
 
-const checkManifest = (
-  context: Rule.RuleContext,
-  program: AST.YAMLProgram,
-  bitsUi: string[]
-) => {
+const checkManifest = (context: Rule.RuleContext, program: AST.YAMLProgram) => {
   for (const document of program.body)
     for (const problem of dependencyProblems(
-      document.content ? getStaticYAMLValue(document.content) : null,
-      bitsUi
+      document.content ? getStaticYAMLValue(document.content) : null
     ))
       context.report({ loc: document.loc, ...problem });
 };
@@ -169,19 +162,12 @@ const checkManifest = (
 export const uiSdkPriority: Rule.RuleModule = {
   meta: {
     type: 'problem',
-    schema: [
-      {
-        type: 'object',
-        properties: { bitsUi: { type: 'array', items: { type: 'string' } } },
-        required: ['bitsUi'],
-        additionalProperties: false
-      }
-    ],
+    schema: [],
     messages: {
       shadcnDependency:
         '{{name}} in {{field}} brings shadcn-svelte back. Build controls with UI SDK primitives instead.',
       bitsUiDependency:
-        '{{name}} in {{field}} outlives the bait command wrappers. Remove bits-ui, which UI SDK replaces.',
+        '{{name}} in {{field}} brings bits-ui back. Build controls with UI SDK primitives instead.',
       registry:
         'components.json is shadcn-svelte registry scaffolding. Build controls with UI SDK primitives instead.',
       alias:
@@ -189,14 +175,11 @@ export const uiSdkPriority: Rule.RuleModule = {
       shadcnImport:
         'Importing {{specifier}} brings shadcn-svelte back. Build controls with UI SDK primitives instead.',
       bitsUi:
-        'Importing {{specifier}} outside the bait command wrappers adds to bits-ui, which UI SDK replaces. Build controls with UI SDK primitives instead.'
+        'Importing {{specifier}} brings bits-ui back. Build controls with UI SDK primitives instead.'
     }
   },
   create: (context) => {
-    const [{ bitsUi }] = context.options as [Options];
-    const file = relative(context.cwd, context.filename);
-    const name = basename(file);
-    const bitsUiAllowed = bitsUi.includes(file);
+    const name = basename(context.filename);
 
     const check = (
       node: ESTree.Node,
@@ -212,7 +195,7 @@ export const uiSdkPriority: Rule.RuleModule = {
           messageId: 'shadcnImport',
           data: { specifier }
         });
-      else if (loads.some((load) => BITS_UI.test(load)) && !bitsUiAllowed)
+      else if (loads.some((load) => BITS_UI.test(load)))
         context.report({ node, messageId: 'bitsUi', data: { specifier } });
     };
 
@@ -221,8 +204,7 @@ export const uiSdkPriority: Rule.RuleModule = {
         Program(node) {
           if (name === 'components.json')
             context.report({ node, messageId: 'registry' });
-          else
-            checkManifest(context, node as unknown as AST.YAMLProgram, bitsUi);
+          else checkManifest(context, node as unknown as AST.YAMLProgram);
         }
       };
 

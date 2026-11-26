@@ -1,9 +1,17 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import CommandInput from './bait-command/command-input.svelte';
-  import CommandItem from './bait-command/command-item.svelte';
-  import CommandList from './bait-command/command-list.svelte';
-  import Command from './bait-command/command.svelte';
+  import { Button } from '@ui-sdk/svelte/button';
+  import {
+    Collapsible,
+    CollapsiblePanel,
+    CollapsibleTrigger
+  } from '@ui-sdk/svelte/collapsible';
+  import {
+    Command,
+    CommandInput,
+    CommandItem,
+    CommandList
+  } from '@ui-sdk/svelte/command';
   import {
     baitChips,
     baitKey,
@@ -12,7 +20,7 @@
     type BaitChoice,
     type BaitSearch
   } from './bait-options';
-  import { CHOICE_FOCUS } from '#lib/shared/control-states.js';
+  import { CHOICE_FOCUS, FOCUS } from '#lib/shared/control-states.js';
   import { QUIET_BUTTON } from './controls';
   import SelectedCheck from './SelectedCheck.svelte';
 
@@ -32,7 +40,7 @@
 
   let open = $state(false);
   let chipRow = $state<HTMLElement>();
-  let toggle = $state<HTMLButtonElement>();
+  let highlighted = $state<string | null>(null);
 
   const own = $derived(baitKey(bait));
   const chips = $derived(baitChips(choices, bait));
@@ -40,14 +48,27 @@
   const found = $derived(baitMatches(choices, search.query));
   const listed = $derived(found.add !== null || found.matches.length > 0);
   const problem = $derived(search.refused && typed !== '');
-  const panelId = $derived(`${idPrefix}-bait-panel`);
-  const listId = $derived(`${idPrefix}-bait-options`);
+  const searchId = $derived(`${idPrefix}-bait-search`);
   const problemId = $derived(`${idPrefix}-bait-problem`);
+  const legendId = $derived(`${idPrefix}-bait-legend`);
+  const first = $derived(
+    found.add === null ? (found.matches[0]?.key ?? null) : ADD
+  );
+
+  const ITEM =
+    'flex min-h-12 cursor-pointer touch-manipulation items-center justify-between gap-2 rounded-control px-3 text-base break-words select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground';
+
+  const fromKeyboard = (event: Event | undefined) =>
+    event instanceof MouseEvent && event.detail === 0;
+
+  const forget = () => {
+    search.query = '';
+    search.refused = false;
+  };
 
   const close = () => {
     open = false;
-    search.query = '';
-    search.refused = false;
+    forget();
   };
 
   const choose = (picked: string) => {
@@ -65,12 +86,13 @@
   const clear = () => {
     bait = '';
     close();
-    void tick().then(() => toggle?.focus());
   };
 </script>
 
 <fieldset class="grid gap-2">
-  <legend class="mb-2 text-sm font-medium text-muted-foreground">Bait</legend>
+  <legend id={legendId} class="mb-2 text-sm font-medium text-muted-foreground"
+    >Bait</legend
+  >
   {#if chips.length > 0}
     <div bind:this={chipRow} class="flex flex-wrap gap-2">
       {#each chips as chip (chip.key)}
@@ -96,83 +118,97 @@
       {/each}
     </div>
   {/if}
-  <button
-    bind:this={toggle}
-    type="button"
-    class="justify-self-start {QUIET_BUTTON}"
-    aria-expanded={open}
-    aria-controls={panelId}
-    onclick={() => {
-      if (open) close();
-      else open = true;
-    }}>{chips.length > 0 ? 'Other bait' : 'Add bait'}</button
+  <Collapsible
+    class="grid gap-2"
+    bind:open
+    onOpenChange={(next, { event }) => {
+      if (!next) forget();
+      else if (fromKeyboard(event))
+        void tick().then(() => document.getElementById(searchId)?.focus());
+    }}
   >
-  <div id={panelId} hidden={!open}>
-    {#if open}
-      <Command
-        class="gap-2"
-        shouldFilter={false}
-        disableInitialScroll
-        vimBindings={false}
+    <CollapsibleTrigger class="justify-self-start {QUIET_BUTTON}"
+      >{chips.length > 0 ? 'Other bait' : 'Add bait'}</CollapsibleTrigger
+    >
+    <CollapsiblePanel>
+      <div
+        onkeydowncapture={(event) => {
+          if (event.key === 'Escape' && search.query !== '')
+            event.stopPropagation();
+        }}
       >
-        {#if listed}
+        <Command
+          class="flex flex-col gap-2"
+          filter={false}
+          bind:query={search.query}
+          bind:value={highlighted}
+          onQueryChange={() => {
+            void tick().then(() => {
+              highlighted = first;
+            });
+          }}
+        >
           <CommandList
-            id={listId}
-            aria-label="Saved baits"
-            class="max-h-36 rounded-control border border-border bg-card"
+            aria-labelledby={legendId}
+            hidden={!listed}
+            class="max-h-36 overflow-x-hidden overflow-y-auto overscroll-contain rounded-control border border-border bg-card"
           >
             {#if found.add !== null}
               {@const added = found.add}
               <CommandItem
                 value={ADD}
+                class={ITEM}
                 onSelect={() => {
                   pick(added);
                 }}
-                ><span>Add <strong class="font-semibold">{added}</strong></span
-                ></CommandItem
               >
+                <span class="min-w-0"
+                  >Add <strong class="font-semibold">{added}</strong></span
+                >
+                <SelectedCheck shown={false} />
+              </CommandItem>
             {/if}
             {#each found.matches as match (match.key)}
               <CommandItem
                 value={match.key}
-                checked={match.key === own}
+                class={ITEM}
                 onSelect={() => {
                   pick(match.label);
-                }}>{match.label}</CommandItem
+                }}
               >
+                <span class="min-w-0">{match.label}</span>
+                <SelectedCheck shown={match.key === own} />
+              </CommandItem>
             {/each}
           </CommandList>
-        {/if}
-        {#if typed === '' && own !== ''}
-          <button
-            type="button"
-            class="self-start {QUIET_BUTTON}"
-            onclick={clear}>Clear bait</button
-          >
-        {/if}
-        <div class="grid gap-2">
-          <label
-            class="text-sm font-medium text-muted-foreground"
-            for="{idPrefix}-bait-search">Find or add bait</label
-          >
-          <CommandInput
-            id="{idPrefix}-bait-search"
-            bind:value={search.query}
-            controls={listed ? listId : null}
-            enterkeyhint="done"
-            aria-invalid={problem ? 'true' : undefined}
-            aria-describedby={problem ? problemId : undefined}
-          />
-        </div>
-        {#if problem}
-          <p
-            id={problemId}
-            class="border-l-3 border-destructive pl-3 text-base"
-          >
-            Choose or add bait
-          </p>
-        {/if}
-      </Command>
-    {/if}
-  </div>
+          {#if typed === '' && own !== ''}
+            <Button class="self-start {QUIET_BUTTON}" onclick={clear}
+              >Clear bait</Button
+            >
+          {/if}
+          <div class="grid gap-2">
+            <label
+              class="text-sm font-medium text-muted-foreground"
+              for={searchId}>Find or add bait</label
+            >
+            <CommandInput
+              id={searchId}
+              class="min-h-12 w-full rounded-control border border-input bg-card px-3 text-base text-foreground aria-invalid:border-2 aria-invalid:border-destructive {FOCUS}"
+              enterkeyhint="done"
+              aria-invalid={problem ? 'true' : undefined}
+              aria-describedby={problem ? problemId : undefined}
+            />
+          </div>
+          {#if problem}
+            <p
+              id={problemId}
+              class="border-l-3 border-destructive pl-3 text-base"
+            >
+              Choose or add bait
+            </p>
+          {/if}
+        </Command>
+      </div>
+    </CollapsiblePanel>
+  </Collapsible>
 </fieldset>

@@ -41,13 +41,6 @@ const CHROME = [
 
 const MAP_CANVAS = 'src/lib/features/map/base-style.ts';
 
-const BITS_UI_WRAPPERS = [
-  'src/lib/features/on-water/bait-command/command-input.svelte',
-  'src/lib/features/on-water/bait-command/command-item.svelte',
-  'src/lib/features/on-water/bait-command/command-list.svelte',
-  'src/lib/features/on-water/bait-command/command.svelte'
-];
-
 const EFFECT_ONLY = [
   {
     selector: 'ThrowStatement',
@@ -91,14 +84,14 @@ export default defineConfig([
         'error',
         { features: ALLOWED_FEATURE_IMPORTS }
       ],
-      'krab/ui-sdk-priority': ['error', { bitsUi: BITS_UI_WRAPPERS }]
+      'krab/ui-sdk-priority': 'error'
     }
   },
   {
     files: ['**/package.json', '**/components.json'],
     languageOptions: { parser: yaml },
     plugins: { krab },
-    rules: { 'krab/ui-sdk-priority': ['error', { bitsUi: BITS_UI_WRAPPERS }] }
+    rules: { 'krab/ui-sdk-priority': 'error' }
   },
   {
     files: ['**/*.{ts,mts,cts,svelte}'],

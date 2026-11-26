@@ -143,3 +143,32 @@ test('typing a saved bait in another case picks the saved spelling and Enter add
   await expect(sheet).toBeHidden();
   expect(await storedBaits(page)).toEqual(['Fish heads', '']);
 });
+
+test('opening the bait search from the keyboard focuses it and a tap leaves focus on Add bait', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const search = sheet.getByLabel('Find or add bait');
+  const addBait = sheet.getByRole('button', { name: 'Add bait' });
+
+  await start(page);
+  await dropPot(page, 'Pot 1');
+  await gearRow(page, 'Pot 1').click();
+
+  await addBait.tap();
+  await expect(search).toBeVisible();
+  await expect(addBait).toBeFocused();
+  await addBait.tap();
+  await expect(search).toBeHidden();
+
+  await addBait.focus();
+  await page.keyboard.press('Enter');
+  await expect(search).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(addBait).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(search).toBeHidden();
+  await expect(addBait).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(search).toBeFocused();
+});

@@ -47,18 +47,11 @@ tester.run('feature-boundaries', featureBoundaries, {
 const manifest = '{\n  "dependencies": { "bits-ui": "2.21.0" }\n}\n';
 const source = (code: string) => ({
   code,
-  filename: at('src/lib/features/a/probe.ts'),
-  options: [{ bitsUi: [] }]
+  filename: at('src/lib/features/a/probe.ts')
 });
 
 tester.run('ui-sdk-priority', uiSdkPriority, {
   valid: [
-    {
-      code: manifest,
-      filename: at('probe/package.json'),
-      languageOptions: { parser: yaml },
-      options: [{ bitsUi: ['src/lib/features/a/command.svelte'] }]
-    },
     source(
       "import path from 'node:path';\nconst catalog = new Map();\ncatalog.resolve('bits-ui');\npath.resolve('bits-ui');\n"
     ),
@@ -71,7 +64,6 @@ tester.run('ui-sdk-priority', uiSdkPriority, {
       code: manifest,
       filename: at('probe/package.json'),
       languageOptions: { parser: yaml },
-      options: [{ bitsUi: [] }],
       errors: [{ messageId: 'bitsUiDependency' }]
     },
     {

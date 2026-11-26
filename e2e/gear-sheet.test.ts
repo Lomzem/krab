@@ -1012,7 +1012,7 @@ test('an open bait search with typed text keeps Save from closing and asks befor
   await other.click();
   await expect(other).toBeFocused();
   const listBox = await sheet
-    .getByRole('listbox', { name: 'Saved baits' })
+    .getByRole('listbox', { name: 'Bait' })
     .boundingBox();
   const inputBox = await search.boundingBox();
   expect(listBox && inputBox).toBeTruthy();
@@ -1037,6 +1037,7 @@ test('an open bait search with typed text keeps Save from closing and asks befor
   await expectAccessibleInBothThemes(page);
 
   await search.fill('fish');
+  await expect(sheet.getByRole('listbox', { name: 'Bait' })).toBeVisible();
   expect(await controlsListbox(search)).toBe(true);
   await expect.poll(() => activeOptionText(search)).toBe('Add fish');
   await page.keyboard.press('ArrowDown');
@@ -1044,6 +1045,12 @@ test('an open bait search with typed text keeps Save from closing and asks befor
   await page.keyboard.press('ArrowUp');
   await expect.poll(() => activeOptionText(search)).toBe('Add fish');
   await expectAccessibleInBothThemes(page);
+
+  await page.keyboard.press('Escape');
+  await expect(keepEditing).toBeFocused();
+  await keepEditing.click();
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('fish');
 
   await save.click();
   await expect(sheet).toBeVisible();
