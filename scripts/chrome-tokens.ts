@@ -53,7 +53,8 @@ const SPACING_KEYWORDS = new Set(['px', 'auto', 'reverse']);
 const SPACING_PROPERTY =
   /^(?:padding|margin|gap|row-gap|column-gap|scroll-padding|scroll-margin)(?:-[a-z-]+)?$/;
 const SAFE_AREA = /\benv\(\s*safe-area-inset-(?:top|right|bottom|left)\b/;
-const TOKEN_REFERENCE = /\((--(?:color|text|spacing)(?:-[\w-]+)?)\b/g;
+const TOKEN_REFERENCE =
+  /\((?:[a-z-]+:)?(--(?:color|text|spacing)(?:-[\w-]+)?)\b/g;
 const ARBITRARY_PROPERTY = /^\[(-?-?[a-z][a-z-]*):(.+)\]$/;
 const SVG_PAINT =
   /^(?:currentColor|none|transparent|inherit|url\(#[\w-]+\)|var\(--[\w-]+\))$/;
@@ -65,6 +66,20 @@ const PAINT_PROPERTIES = new Set([
   'lighting-color'
 ]);
 const PAINT_ATTRIBUTES = new Set([...PAINT_PROPERTIES, 'color']);
+const CLASS_ATTRIBUTE = /^(?:class|className|\w*Class)$/;
+const APPLY = /@apply\s+([^;{}]+);/g;
+const LITERAL_KEYS = new Set([
+  'Property',
+  'PropertyDefinition',
+  'MethodDefinition',
+  'TSPropertySignature'
+]);
+const LITERAL_SOURCES = new Set([
+  'ImportDeclaration',
+  'ExportNamedDeclaration',
+  'ExportAllDeclaration',
+  'TSLiteralType'
+]);
 
 const loaded = new Map<string, Tokens>();
 const tokensOf = (path: string) => {
@@ -100,7 +115,10 @@ const isArbitrary = (value: string) => /^[[(].*[\])]$/.test(value);
 const textProblem = (value: string, tokens: Tokens): string | null => {
   if (tokens.text.has(value) || tokens.colors.has(value)) return null;
   if (TEXT_UTILITIES.has(value)) return null;
-  if (isArbitrary(value) && /^[[(](?:color:|var\(--color-)/.test(value))
+  if (
+    isArbitrary(value) &&
+    /^[[(](?:color:|var\(--color-|--color-)/.test(value)
+  )
     return null;
   return 'typography';
 };
@@ -124,7 +142,7 @@ const classProblems = (token: string, tokens: Tokens): Problem[] => {
       declaration[1],
       declaration[2].replaceAll('_', ' ')
     ).map((problem) => ({ ...problem, value: token }));
-  if (/[[(]/.test(utility) && hasRawColor(utility))
+  if (/[[(]/.test(utility) && hasRawColor(utility.replaceAll('_', ' ')))
     return [{ messageId: 'color', value: token }];
   if (PALETTE.test(utility)) return [{ messageId: 'palette', value: token }];
   const text = TEXT.exec(utility)?.[1];
@@ -166,14 +184,21 @@ const classListProblems = (text: string, tokens: Tokens) =>
     .filter(Boolean)
     .flatMap((token) => classProblems(token, tokens));
 
+const styleBlockProblems = (css: string, tokens: Tokens) => [
+  ...styleProblems(css.replace(APPLY, '')),
+  ...[...css.matchAll(APPLY)].flatMap(([, list = '']) =>
+    classListProblems(list, tokens)
+  ),
+  ...referenceProblems(css, tokens)
+];
+
 type Context =
   | { kind: 'class' }
-  | { kind: 'attribute' }
   | { kind: 'style' }
   | { kind: 'property'; property: string }
   | { kind: 'paint' };
 
-const contextOf = (node: Parented): Context => {
+const contextOf = (node: Parented): Context | null => {
   for (let at = node.parent; at; at = at.parent) {
     if (at.type === 'SvelteStyleDirective') {
       const directive = at as unknown as { key: { name: { name: string } } };
@@ -183,11 +208,18 @@ const contextOf = (node: Parented): Context => {
       const name = (at as unknown as { key: { name: string } }).key.name;
       if (name === 'style') return { kind: 'style' };
       if (PAINT_ATTRIBUTES.has(name)) return { kind: 'paint' };
-      return { kind: name === 'class' ? 'class' : 'attribute' };
+      return CLASS_ATTRIBUTE.test(name) ? { kind: 'class' } : null;
     }
     if (at.type === 'SvelteStartTag') break;
   }
   return { kind: 'class' };
+};
+
+const isNameLiteral = (node: ESTree.Literal) => {
+  const parent = (node as ESTree.Literal & { parent: Parented }).parent;
+  if (LITERAL_SOURCES.has(parent.type)) return true;
+  const keyed = parent as unknown as { key?: unknown; computed?: boolean };
+  return LITERAL_KEYS.has(parent.type) && keyed.key === node && !keyed.computed;
 };
 
 const referenceProblems = (text: string, tokens: Tokens): Problem[] =>
@@ -218,8 +250,6 @@ const contextProblems = (text: string, context: Context, tokens: Tokens) => {
     case 'class':
       if (WHOLE_COLOR.test(text.trim()))
         return [{ messageId: 'color', value: text.trim() }];
-      return classListProblems(text, tokens);
-    case 'attribute':
       return classListProblems(text, tokens);
   }
 };
@@ -266,11 +296,13 @@ export const chromeTokens: Rule.RuleModule = {
         });
     };
     const check = (node: ESTree.Node, text: string) => {
-      report(node, problemsOf(text, contextOf(node), tokens));
+      const at = contextOf(node);
+      if (at) report(node, problemsOf(text, at, tokens));
     };
     return {
       Literal(node) {
-        if (typeof node.value === 'string') check(node, node.value);
+        if (typeof node.value === 'string' && !isNameLiteral(node))
+          check(node, node.value);
       },
       TemplateElement(node) {
         check(node, node.value.cooked ?? node.value.raw);
@@ -285,10 +317,7 @@ export const chromeTokens: Rule.RuleModule = {
       SvelteStyleElement(node: ESTree.Node) {
         const style = node as unknown as AST.SvelteStyleElement;
         const css = style.children.map((child) => child.value).join('');
-        report(node, [
-          ...styleProblems(css),
-          ...referenceProblems(css, tokens)
-        ]);
+        report(node, styleBlockProblems(css, tokens));
       }
     };
   }

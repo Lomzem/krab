@@ -1,8 +1,9 @@
 import type { Rule } from 'eslint';
 import type * as ESTree from 'estree';
 import { basename, dirname, join, relative, resolve } from 'node:path';
+import { packageImportTargets } from './package-imports.ts';
 
-type Options = { features: string[] };
+type Options = { features: Partial<Record<string, string[]>> };
 type Statement = { type: string; [key: string]: unknown };
 type MarkupRoot = {
   expression?: ESTree.Node | null;
@@ -10,7 +11,7 @@ type MarkupRoot = {
   value?: ESTree.Node;
 };
 
-const LIB_ALIASES = ['#lib/', '$lib/'];
+const LIB_ALIAS = '$lib/';
 const FEATURE = /^src\/lib\/features\/([^/]+)(?:\/(.*))?$/;
 const ENTRYPOINT = /^index(?:\.(?:js|ts))?$/;
 const ENTRYPOINT_FILE = /^index\.[^/]+$/;
@@ -38,19 +39,39 @@ const MARKUP_ROOTS = [
   'SvelteShorthandAttribute'
 ];
 
-const targetOf = (specifier: string, fromDir: string, cwd: string) => {
-  const path = specifier.split('?', 1)[0] ?? '';
-  const alias = LIB_ALIASES.find((prefix) => path.startsWith(prefix));
-  if (alias)
-    return relative(cwd, resolve(cwd, 'src/lib', path.slice(alias.length)));
+const pathOf = (path: string, fromDir: string, cwd: string) => {
+  if (path.startsWith(LIB_ALIAS))
+    return relative(cwd, resolve(cwd, 'src/lib', path.slice(LIB_ALIAS.length)));
   if (path.startsWith('.')) return relative(cwd, resolve(fromDir, path));
   if (!path.startsWith('/')) return null;
   return relative(cwd, path.startsWith(`${cwd}/`) ? path : join(cwd, path));
 };
 
+const targetsOf = (specifier: string, file: string, cwd: string) => {
+  const path = specifier.split('?', 1)[0] ?? '';
+  const paths = path.startsWith('#')
+    ? packageImportTargets(path, file)
+    : [path];
+  return paths.flatMap((target) => pathOf(target, dirname(file), cwd) ?? []);
+};
+
 const featureOf = (path: string) => {
   const [, name, rest = ''] = FEATURE.exec(path) ?? [];
   return name ? { name, rest } : null;
+};
+
+const reaches = (
+  features: Options['features'],
+  from: string,
+  to: string,
+  seen = new Set<string>()
+): boolean => {
+  if (from === to) return true;
+  if (seen.has(from)) return false;
+  seen.add(from);
+  return (features[from] ?? []).some((next) =>
+    reaches(features, next, to, seen)
+  );
 };
 
 const literalPath = (node: ESTree.Node) => {
@@ -142,7 +163,10 @@ export const featureBoundaries: Rule.RuleModule = {
       {
         type: 'object',
         properties: {
-          features: { type: 'array', items: { type: 'string' } }
+          features: {
+            type: 'object',
+            additionalProperties: { type: 'array', items: { type: 'string' } }
+          }
         },
         required: ['features'],
         additionalProperties: false
@@ -154,7 +178,7 @@ export const featureBoundaries: Rule.RuleModule = {
       routeFile:
         '{{file}} is not a SvelteKit route file. Keep only +page, +layout, +error and +server files in src/routes, and put other code in a feature.',
       undeclared:
-        'Feature {{feature}} is not declared. Add it to FEATURES in eslint.config.js, or move the file into a declared feature.',
+        'Feature {{feature}} is not declared. Add it to ALLOWED_FEATURE_IMPORTS in eslint.config.js, or move the file into a declared feature.',
       entrypoint:
         'Import feature {{feature}} through its public entrypoint, src/lib/features/{{feature}}/index.ts, not {{target}}.',
       entrypointFile:
@@ -169,14 +193,17 @@ export const featureBoundaries: Rule.RuleModule = {
       passThrough:
         'This file only re-exports other modules. Import from those modules instead.',
       thinRoute:
-        'Routes only compose features. Move this {{what}} into a feature.'
+        'Routes only compose features. Move this {{what}} into a feature.',
+      featureImport:
+        'Feature {{from}} may not import feature {{feature}}. Add {{feature}} to ALLOWED_FEATURE_IMPORTS.{{from}} in eslint.config.js, or move the shared code into src/lib/shared.',
+      featureCycle:
+        'Feature {{from}} importing feature {{feature}} closes a cycle, because {{feature}} already reaches {{from}} in ALLOWED_FEATURE_IMPORTS. Move the shared code into src/lib/shared.'
     }
   },
   create: (context) => {
     const [{ features }] = context.options as [Options];
     const cwd = context.cwd;
     const file = relative(cwd, context.filename);
-    const fromDir = dirname(context.filename);
     const ownFeature = featureOf(file);
     const inLib = file.startsWith('src/lib/');
     const inShared = file.startsWith('src/lib/shared/');
@@ -192,8 +219,11 @@ export const featureBoundaries: Rule.RuleModule = {
     };
 
     const checkTarget = (node: ESTree.Node, specifier: string) => {
-      const target = targetOf(specifier, fromDir, cwd);
-      if (target === null) return;
+      for (const target of targetsOf(specifier, context.filename, cwd))
+        checkPath(node, target);
+    };
+
+    const checkPath = (node: ESTree.Node, target: string) => {
       const feature = featureOf(target);
       if (inShared && (feature || target === 'src/lib/features')) {
         report(node, 'shared');
@@ -206,6 +236,13 @@ export const featureBoundaries: Rule.RuleModule = {
         !ENTRYPOINT.test(feature.rest)
       )
         report(node, 'entrypoint', { feature: feature.name, target });
+      if (feature && ownFeature && feature.name !== ownFeature.name) {
+        const edge = { from: ownFeature.name, feature: feature.name };
+        if (!features[edge.from]?.includes(edge.feature))
+          report(node, 'featureImport', edge);
+        else if (reaches(features, edge.feature, edge.from))
+          report(node, 'featureCycle', edge);
+      }
       if (
         inRoutes &&
         target.startsWith('src/') &&
@@ -243,7 +280,7 @@ export const featureBoundaries: Rule.RuleModule = {
       if (!file.startsWith('src/') || inShared || FRAMEWORK_FILE.test(file))
         return;
       if (!ownFeature) report(program, 'placement', { file });
-      else if (!features.includes(ownFeature.name))
+      else if (!Object.hasOwn(features, ownFeature.name))
         report(program, 'undeclared', { feature: ownFeature.name });
       else if (
         ENTRYPOINT_FILE.test(ownFeature.rest) &&
@@ -385,6 +422,9 @@ export const featureBoundaries: Rule.RuleModule = {
       ...visitors,
       [ROUTE_BLOCKS.join(', ')](node: ESTree.Node) {
         report(node, 'thinRoute', { what: 'block' });
+      },
+      SvelteStyleElement(node: ESTree.Node) {
+        report(node, 'thinRoute', { what: 'style block' });
       },
       [MARKUP_ROOTS.join(', ')](node: ESTree.Node) {
         const root = node as unknown as MarkupRoot;

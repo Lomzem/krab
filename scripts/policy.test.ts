@@ -138,6 +138,15 @@ const cases: PolicyCase[] = [
     risk: 'A dynamic import skips the NOAA and OpenFreeMap fixture, or the fixture and expect are refused'
   },
   {
+    name: 'template literal Playwright import versus the providers fixture',
+    file: 'e2e/probe.test.ts',
+    valid: 'export const load = () => import(`./fixtures`);',
+    invalid: 'export const load = () => import(`@playwright/test`);',
+    command: 'lint',
+    diagnostic: "Import test from './fixtures'",
+    risk: 'A template literal import skips the NOAA and OpenFreeMap fixture, or a template literal import of the fixture is refused'
+  },
+  {
     name: 'static Playwright test import versus the providers fixture',
     file: 'e2e/probe.test.ts',
     valid:
@@ -354,7 +363,7 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'feature imported past its entrypoint through the alias',
-    file: 'src/lib/features/map/probe.ts',
+    file: 'src/lib/features/location/probe.ts',
     valid:
       "import type { Trip } from '#lib/features/trip/index.js';\nexport type Probe = Trip;\n",
     invalid:
@@ -365,9 +374,9 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'feature imported past its entrypoint by a relative path',
-    file: 'src/lib/features/map/probe.ts',
+    file: 'src/lib/features/location/probe.ts',
     valid:
-      "import type { Box } from './types';\nimport type { Trip } from '../trip/index';\nexport type Probe = [Box, Trip];\n",
+      "import type { LocationPermission } from './position-watch.svelte';\nimport type { Trip } from '../trip/index';\nexport type Probe = [LocationPermission, Trip];\n",
     invalid:
       "import type { Trip } from '../trip/types';\nexport type Probe = Trip;\n",
     command: 'lint',
@@ -376,7 +385,7 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'feature re-exported past its entrypoint',
-    file: 'src/lib/features/map/probe.ts',
+    file: 'src/lib/features/location/probe.ts',
     valid:
       "export type { Trip } from '#lib/features/trip/index.js';\nexport const probe = 1;\n",
     invalid:
@@ -387,7 +396,7 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'feature type imported past its entrypoint',
-    file: 'src/lib/features/map/probe.ts',
+    file: 'src/lib/features/location/probe.ts',
     valid: "export type Probe = import('#lib/features/trip/index.js').Trip;\n",
     invalid:
       "export type Probe = import('#lib/features/trip/types.js').Trip;\n",
@@ -440,18 +449,18 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'feature imported past its entrypoint through a traversing alias',
-    file: 'src/lib/features/map/probe.ts',
+    file: 'src/lib/features/location/probe.ts',
     valid:
-      "import type { Trip } from '#lib/features/map/../trip/index.js';\nexport type Probe = Trip;\n",
+      "import type { Trip } from '#lib/features/location/../trip/index.js';\nexport type Probe = Trip;\n",
     invalid:
-      "import type { Trip } from '#lib/features/map/../trip/types.js';\nexport type Probe = Trip;\n",
+      "import type { Trip } from '#lib/features/location/../trip/types.js';\nexport type Probe = Trip;\n",
     command: 'lint',
     diagnostic: 'Import feature trip through its public entrypoint',
     risk: 'A path that climbs out of the own feature reaches into another feature unseen'
   },
   {
     name: 'feature imported past its entrypoint by a root path',
-    file: 'src/lib/features/map/probe.ts',
+    file: 'src/lib/features/location/probe.ts',
     valid:
       "import type { Trip } from '/src/lib/features/trip/index.js';\nexport type Probe = Trip;\n",
     invalid:
@@ -528,6 +537,18 @@ const cases: PolicyCase[] = [
     command: 'lint',
     diagnostic: 'Feature probe is not declared',
     risk: 'A new feature folder appears without a declared boundary'
+  },
+  {
+    name: 'feature import outside the allowed table',
+    file: 'src/lib/features/location/probe.ts',
+    invalidFile: 'src/lib/features/trip/probe.ts',
+    valid:
+      "export type { Trip } from '#lib/features/trip/index.js';\nexport const probe = 1;\n",
+    invalid:
+      "export { readiness } from '#lib/features/location/index.js';\nexport const probe = 1;\n",
+    command: 'lint',
+    diagnostic: 'Feature trip may not import feature location',
+    risk: 'Features import each other freely and form a cycle, or an allowed import is refused'
   },
   {
     name: 'second entrypoint file in a feature',
@@ -638,6 +659,18 @@ const cases: PolicyCase[] = [
     command: 'lint',
     diagnostic: 'Move this function into a feature',
     risk: 'Routes hold event handlers instead of composing features'
+  },
+  {
+    name: 'route style block',
+    file: 'src/routes/+page.svelte',
+    valid: page(''),
+    invalid: page(
+      '',
+      '<OnWater />\n\n<style>\n  p {\n    margin: 0;\n  }\n</style>\n'
+    ),
+    command: 'lint',
+    diagnostic: 'Move this style block into a feature',
+    risk: 'Routes carry their own styles instead of composing features'
   },
   {
     name: 'non-route file in routes',
@@ -898,14 +931,71 @@ const cases: PolicyCase[] = [
     risk: 'Paint in a style declaration skips the SVG paint policy, or a gradient reference reads as a hex color'
   },
   {
-    name: 'map canvas exemption',
-    file: 'src/lib/features/map/probe.ts',
-    invalidFile: 'src/lib/features/on-water/probe.ts',
-    valid: "export const sea = { 'background-color': '#d5e2e0' };\n",
-    invalid: "export const sea = { 'background-color': '#d5e2e0' };\n",
+    name: 'map markup is chrome',
+    file: 'src/lib/features/map/Probe.svelte',
+    valid: '<p class="bg-map-sea text-map-ink">Pot</p>\n',
+    invalid: '<p class="bg-[#d5e2e0] text-map-ink">Pot</p>\n',
     command: 'lint',
-    diagnostic: 'Raw color in #d5e2e0',
-    risk: 'MapLibre styling in the map feature is refused, or On Water escapes the token rule'
+    diagnostic: 'Raw color in bg-[#d5e2e0]',
+    risk: 'Map markup escapes the token rule with the MapLibre style, or its map tokens are refused'
+  },
+  {
+    name: 'route markup is chrome',
+    file: 'src/routes/+page.svelte',
+    valid: page('', '<OnWater />\n<p class="text-map-ink">Pot</p>\n'),
+    invalid: page('', '<OnWater />\n<p class="text-[#1a2e2b]">Pot</p>\n'),
+    command: 'lint',
+    diagnostic: 'Raw color in text-[#1a2e2b]',
+    risk: 'A route styles its own markup past the token rule'
+  },
+  {
+    name: 'class lists only in class attributes',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<label for="text-depth">Depth</label>\n<input id="text-depth" name="gap-row" data-part="text-depth" />\n',
+    invalid: '<p panelClass="bg-[tomato]">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'Raw color in bg-[tomato]',
+    risk: 'Ids and names read as utilities, or a class prop skips the token rule'
+  },
+  {
+    name: 'object keys and literal types are not class lists',
+    file: 'src/lib/features/on-water/probe.ts',
+    valid:
+      "export const parts = { 'text-depth': 'text-control' };\nexport type Tone = 'text-depth';\n",
+    invalid: "export const parts = { 'text-depth': 'text-[17px]' };\n",
+    command: 'lint',
+    diagnostic: 'text-[17px] is off the type scale',
+    risk: 'Keys and literal types read as utilities, or class values in an object skip the token rule'
+  },
+  {
+    name: 'parenthesized color token in a text utility',
+    file: 'src/lib/shared/Probe.svelte',
+    valid: '<p class="text-(--color-muted-foreground)">Pot</p>\n',
+    invalid: '<p class="text-(--color-red-500)">Pot</p>\n',
+    command: 'lint',
+    diagnostic: '--color-red-500 is not declared in the global stylesheet',
+    risk: 'The text-(--color-*) form is refused, or an undeclared color passes through it'
+  },
+  {
+    name: 'named color between underscores',
+    file: 'src/lib/features/compass/Probe.svelte',
+    valid: '<p class="shadow-[0_0_0_2px_var(--color-border)]">Pot</p>\n',
+    invalid: '<p class="shadow-[0_0_0_2px_tomato]">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'Raw color in shadow-[0_0_0_2px_tomato]',
+    risk: 'A named color joined by underscores slips past the raw color check'
+  },
+  {
+    name: 'raw color in an @apply list',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<p class="probe">Pot</p>\n\n<style>\n  .probe {\n    @apply bg-card px-edge text-control;\n  }\n</style>\n',
+    invalid:
+      '<p class="probe">Pot</p>\n\n<style>\n  .probe {\n    @apply hover:bg-[#1a2e2b];\n  }\n</style>\n',
+    command: 'lint',
+    diagnostic: 'Raw color in hover:bg-[#1a2e2b]',
+    risk: 'An @apply list in a style block skips the utility check'
   },
   {
     name: 'new bits-ui wrapper beside the four bait command wrappers',
@@ -948,6 +1038,27 @@ const cases: PolicyCase[] = [
     command: 'lint',
     diagnostic: 'Importing bits-ui outside the bait command wrappers',
     risk: 'A dynamic import adds bits-ui past the allowlist'
+  },
+  {
+    name: 'bits-ui through import.meta.resolve',
+    file: 'src/lib/shared/probe.ts',
+    valid:
+      "export const known = (name: string) => name.startsWith('bits-ui');\n",
+    invalid: "export const where = import.meta.resolve('bits-ui');\n",
+    command: 'lint',
+    diagnostic: 'Importing bits-ui outside the bait command wrappers',
+    risk: 'A resolve call loads bits-ui unseen, or any call with a bits-ui string is refused'
+  },
+  {
+    name: 'bits-ui through a package.json imports alias',
+    file: 'src/lib/shared/probe-imports/package.json',
+    invalidFile: 'src/lib/shared/probe-imports/probe.ts',
+    exact: true,
+    valid: '{\n  "imports": { "#controls": "bits-ui" }\n}\n',
+    invalid: "export const load = () => import('#controls');\n",
+    command: 'lint',
+    diagnostic: 'Importing #controls outside the bait command wrappers',
+    risk: 'A subpath import alias hides bits-ui from the import check'
   },
   {
     name: 'shadcn-svelte dependency',

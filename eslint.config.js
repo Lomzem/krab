@@ -22,20 +22,24 @@ const krab = {
   }
 };
 
-const FEATURES = [
-  'app-shell',
-  'compass',
-  'location',
-  'map',
-  'on-water',
-  'trip'
-];
+const ALLOWED_FEATURE_IMPORTS = {
+  'app-shell': [],
+  compass: [],
+  location: ['trip'],
+  map: [],
+  'on-water': ['app-shell', 'compass', 'location', 'map', 'trip'],
+  trip: []
+};
 
 const CHROME = [
   'src/lib/features/on-water/**/*.{ts,svelte}',
   'src/lib/features/compass/**/*.{ts,svelte}',
-  'src/lib/shared/**/*.{ts,svelte}'
+  'src/lib/features/map/**/*.{ts,svelte}',
+  'src/lib/shared/**/*.{ts,svelte}',
+  'src/routes/**/*.svelte'
 ];
+
+const MAP_CANVAS = 'src/lib/features/map/base-style.ts';
 
 const BITS_UI_WRAPPERS = [
   'src/lib/features/on-water/bait-command/command-input.svelte',
@@ -83,7 +87,10 @@ export default defineConfig([
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,svelte}'],
     plugins: { krab },
     rules: {
-      'krab/feature-boundaries': ['error', { features: FEATURES }],
+      'krab/feature-boundaries': [
+        'error',
+        { features: ALLOWED_FEATURE_IMPORTS }
+      ],
       'krab/ui-sdk-priority': ['error', { bitsUi: BITS_UI_WRAPPERS }]
     }
   },
@@ -117,7 +124,7 @@ export default defineConfig([
   },
   {
     files: CHROME,
-    ignores: ['**/*.test.ts', '**/*.d.ts'],
+    ignores: ['**/*.test.ts', '**/*.d.ts', MAP_CANVAS],
     plugins: { krab },
     rules: { 'krab/chrome-tokens': ['error', { stylesheet: 'src/app.css' }] }
   },
@@ -142,7 +149,8 @@ export default defineConfig([
         'error',
         ...EFFECT_ONLY,
         {
-          selector: "ImportExpression[source.value='@playwright/test']",
+          selector:
+            "ImportExpression:matches([source.value='@playwright/test'], [source.quasis.0.value.cooked='@playwright/test'])",
           message: USE_FIXTURE_TEST
         }
       ]
