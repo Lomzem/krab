@@ -195,9 +195,9 @@ test('finding gear on the Map tab and from the Gear list', async ({
   log('Gear > Pot 1 > Show on map returns to the Map focused on Pot 1');
   await capture('03-shown-on-map');
 
-  const street = map.getByRole('button', { name: 'Street map' });
+  const street = map.getByRole('radio', { name: 'Street map' });
   await street.click();
-  await expect(street).toHaveAttribute('aria-pressed', 'true');
+  await expect(street).toBeChecked();
   if (liveProviders) await expect(map).toContainText('OpenStreetMap');
   await map.getByRole('button', { name: 'Centre on my position' }).click();
   await expect(pot).toBeInViewport();

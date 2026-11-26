@@ -12,7 +12,13 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { Effect } from 'effect';
   import { onMount, tick, untrack, type Snippet } from 'svelte';
+  import type { Attachment } from 'svelte/attachments';
   import { SvelteMap } from 'svelte/reactivity';
+  import { Button } from '@ui-sdk/svelte/button';
+  import {
+    SegmentedControl,
+    SegmentedControlItem
+  } from '@ui-sdk/svelte/segmented-control';
   import type { LatLon } from '#lib/shared/lat-lon.js';
   import { accuracyArea } from './accuracy';
   import {
@@ -582,14 +588,14 @@
     };
   };
 
-  const trigger = (node: HTMLButtonElement, key: string) => {
-    triggers.set(key, node);
-    return {
-      destroy: () => {
+  const trigger =
+    (key: string): Attachment<HTMLButtonElement> =>
+    (node) => {
+      triggers.set(key, node);
+      return () => {
         if (triggers.get(key) === node) triggers.delete(key);
-      }
+      };
     };
-  };
 
   export const canvas = (): HTMLElement | null => map?.getCanvas() ?? null;
 
@@ -786,14 +792,10 @@
 <svelte:document onpointerdown={outsideCredits} />
 
 {#snippet baseChoice(choice: Base, text: string)}
-  <button
-    type="button"
-    class="flex min-h-11 w-full touch-manipulation items-center justify-center px-2.5 text-sm font-medium text-muted-foreground tiny-map:w-auto {FOCUS_INSET} {PRESS} active:bg-muted aria-pressed:text-foreground aria-pressed:underline aria-pressed:decoration-2 aria-pressed:underline-offset-4"
-    aria-label="{text} map"
-    aria-pressed={base === choice}
-    onclick={() => {
-      base = choice;
-    }}>{text}</button
+  <SegmentedControlItem
+    value={choice}
+    class="flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center px-2.5 text-sm font-medium text-muted-foreground tiny-map:w-auto {FOCUS_INSET} {PRESS} active:bg-muted data-checked:text-foreground data-checked:underline data-checked:decoration-2 data-checked:underline-offset-4"
+    aria-label="{text} map">{text}</SegmentedControlItem
   >
 {/snippet}
 
@@ -821,19 +823,18 @@
           use:marker={spot}
           onfocusin={revealFocused}
         >
-          <button
-            type="button"
+          <Button
             class="group grid size-11 place-items-center focus-visible:outline-none"
             aria-label={label(spot)}
             aria-haspopup="dialog"
             aria-current={isSelected(spot.ids) || undefined}
-            use:trigger={spot.key}
+            {@attach trigger(spot.key)}
             onclick={() => {
               onactivate(spot);
             }}
           >
             {@render face(spot, isSelected(spot.ids))}
-          </button>
+          </Button>
           {@render beside?.(spot)}
         </div>
       </div>
@@ -943,12 +944,11 @@
       >
         <p>{noticeText}</p>
         {#if canRetry}
-          <button
-            type="button"
+          <Button
             class="-my-1.5 -mr-1.5 flex min-h-11 touch-manipulation items-center rounded-control px-2 text-sm font-semibold text-action underline underline-offset-4 {FOCUS_INSET} {PRESS} active:bg-muted"
             onclick={() => {
               void apply(base);
-            }}>Retry map</button
+            }}>Retry map</Button
           >
         {/if}
       </div>
@@ -959,8 +959,20 @@
       class="z-10 col-start-1 row-start-1 m-3 mb-0 flex min-w-11 flex-col self-start justify-self-end rounded-xl border border-input bg-card text-foreground shadow-sm short-map:flex-row tiny-map:flex-col"
     >
       <div class="flex min-w-11 flex-col tiny-map:flex-row">
-        {@render baseChoice('chart', 'Chart')}
-        {@render baseChoice('street', 'Street')}
+        <SegmentedControl
+          class="flex flex-col tiny-map:flex-row"
+          aria-label="Base map"
+          orientation="vertical"
+          bind:value={
+            () => base,
+            (next) => {
+              if (next === 'chart' || next === 'street') base = next;
+            }
+          }
+        >
+          {@render baseChoice('chart', 'Chart')}
+          {@render baseChoice('street', 'Street')}
+        </SegmentedControl>
         {#if controls}
           <span
             class="mx-2 h-px bg-border tiny-map:mx-0 tiny-map:my-2 tiny-map:h-auto tiny-map:w-px"
@@ -977,18 +989,12 @@
         class="flex min-w-11 flex-col tiny-map:flex-row tiny-map:justify-end"
       >
         {#if places.length > 0}
-          <button
-            type="button"
-            class={ICON_BUTTON}
-            aria-label={fitLabel}
-            onclick={showAll}
-          >
+          <Button class={ICON_BUTTON} aria-label={fitLabel} onclick={showAll}>
             <Icon name="show-all" />
-          </button>
+          </Button>
         {/if}
         {#if locate}
-          <button
-            type="button"
+          <Button
             class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
             aria-label="Centre on my position"
             aria-disabled={me?.current ? undefined : 'true'}
@@ -999,13 +1005,12 @@
             }}
           >
             <Icon name="centre" />
-          </button>
+          </Button>
         {/if}
         {#if places.length > 0 || locate}
           <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
         {/if}
-        <button
-          type="button"
+        <Button
           class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
           aria-label="Zoom in"
           aria-disabled={zoom >= MAX_ZOOM}
@@ -1015,9 +1020,8 @@
           }}
         >
           <Icon name="plus" size={20} />
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
           aria-label="Zoom out"
           aria-disabled={zoom <= MIN_ZOOM}
@@ -1027,7 +1031,7 @@
           }}
         >
           <Icon name="minus" size={20} />
-        </button>
+        </Button>
       </div>
     </div>
 

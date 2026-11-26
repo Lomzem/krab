@@ -100,11 +100,11 @@ test('on the Street map, panning, every map control, Show on map and reload send
     requested.filter(
       (url) => url.startsWith(OPEN_FREE_MAP) && !url.endsWith('.png')
     );
-  const streetMap = mapArea(page).getByRole('button', { name: 'Street map' });
+  const streetMap = streetMapButton(page);
   const chooseStreet = async () => {
     const before = streetTiles().length;
     await streetMap.click();
-    await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+    await expect(streetMap).toBeChecked();
     await expect.poll(() => streetTiles().length).toBeGreaterThan(before);
   };
   await dropPotAndOpenMap(page);
@@ -141,7 +141,7 @@ test('on the Street map, panning, every map control, Show on map and reload send
     .click();
   await sheet.getByRole('button', { name: 'Show on map' }).click();
   await expect(potOnMap(page)).toBeFocused();
-  await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+  await expect(streetMap).toBeChecked();
 
   await page.reload();
   await chooseStreet();
@@ -159,9 +159,14 @@ const reconnect = async (context: BrowserContext) => {
 };
 
 const streetMapButton = (page: Page) =>
-  mapArea(page).getByRole('button', { name: 'Street map' });
+  mapArea(page).getByRole('radio', { name: 'Street map' });
 const chartMapButton = (page: Page) =>
-  mapArea(page).getByRole('button', { name: 'Chart map' });
+  mapArea(page).getByRole('radio', { name: 'Chart map' });
+const mapControl = (page: Page, name: string | RegExp) =>
+  mapArea(page).getByRole(name === 'Street map' ? 'radio' : 'button', {
+    name,
+    exact: true
+  });
 const outageNotice = (page: Page, shown: string | RegExp) =>
   mapArea(page).getByRole('status').filter({ hasText: shown });
 const cannotLoad = (page: Page) =>
@@ -180,29 +185,37 @@ const underlined = (button: Locator) =>
   );
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`in ${colorScheme} mode, Chart and Street mark the one that is on, switch by keyboard, keep their names and stay the same size so no map control moves`, async ({
+  test(`in ${colorScheme} mode, Chart and Street mark the one that is on, take one Tab stop, switch by arrow keys and never turn both off, keep their names and stay the same size so no map control moves`, async ({
     page
   }) => {
     await page.emulateMedia({ colorScheme });
     await dropPotAndOpenMap(page);
     const streetMap = streetMapButton(page);
     const chartMap = chartMapButton(page);
-    const controls = MAP_CONTROLS.map((name) =>
-      mapArea(page).getByRole('button', { name, exact: true })
-    );
+    const filter = mapControl(page, /^Filter/);
+    const controls = MAP_CONTROLS.map((name) => mapControl(page, name));
     const boxes = () => Promise.all(controls.map(boxOf));
-    await expect(chartMap).toHaveAttribute('aria-pressed', 'true');
-    await expect(streetMap).toHaveAttribute('aria-pressed', 'false');
+    await expect(
+      mapArea(page).getByRole('radiogroup', { name: 'Base map' })
+    ).toBeVisible();
+    await expect(chartMap).toBeChecked();
+    await expect(streetMap).not.toBeChecked();
     expect([await underlined(chartMap), await underlined(streetMap)]).toEqual([
       true,
       false
     ]);
     const chart = await boxes();
 
-    await streetMap.focus();
-    await page.keyboard.press('Space');
-    await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
-    await expect(chartMap).toHaveAttribute('aria-pressed', 'false');
+    await chartMap.focus();
+    await page.keyboard.press('Tab');
+    await expect(filter).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(chartMap).toBeFocused();
+
+    await page.keyboard.press('ArrowDown');
+    await expect(streetMap).toBeFocused();
+    await expect(streetMap).toBeChecked();
+    await expect(chartMap).not.toBeChecked();
     await expect(streetMap).toHaveAccessibleName('Street map');
     expect([await underlined(chartMap), await underlined(streetMap)]).toEqual([
       false,
@@ -210,11 +223,25 @@ for (const colorScheme of ['light', 'dark'] as const) {
     ]);
     expect(await boxes()).toEqual(chart);
 
-    await chartMap.focus();
-    await page.keyboard.press('Enter');
-    await expect(chartMap).toHaveAttribute('aria-pressed', 'true');
-    await expect(streetMap).toHaveAttribute('aria-pressed', 'false');
+    await page.keyboard.press('Space');
+    await expect(streetMap).toBeChecked();
+    await page.keyboard.press('Tab');
+    await expect(filter).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(streetMap).toBeFocused();
+
+    await page.keyboard.press('ArrowLeft');
+    await expect(chartMap).toBeFocused();
+    await expect(chartMap).toBeChecked();
+    await expect(streetMap).not.toBeChecked();
     await expect(chartMap).toHaveAccessibleName('Chart map');
+    await page.keyboard.press('ArrowUp');
+    await expect(streetMap).toBeChecked();
+    await page.keyboard.press('ArrowRight');
+    await expect(chartMap).toBeChecked();
+    await chartMap.click();
+    await expect(chartMap).toBeChecked();
+    await expect(streetMap).not.toBeChecked();
     expect(await boxes()).toEqual(chart);
   });
 }
@@ -259,7 +286,7 @@ test('map tiles and a Street style the browser cannot load while it is online sa
 
   providers.refuseCors();
   await streetMapButton(page).click();
-  await expect(streetMapButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(streetMapButton(page)).toBeChecked();
   await expect(notice).toBeVisible();
   await expect(claimsACause(page)).toHaveCount(0);
   await expect(potOnMap(page)).toBeVisible();
@@ -280,7 +307,7 @@ test('while the browser is offline the Map tab says so for map tiles and the Str
   expect(await page.evaluate(() => navigator.onLine)).toBe(false);
 
   await streetMapButton(page).click();
-  await expect(streetMapButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(streetMapButton(page)).toBeChecked();
   await expect(offline(page)).toBeVisible();
   await expect(
     mapArea(page).getByRole('button', { name: 'Retry map' })
@@ -290,7 +317,7 @@ test('while the browser is offline the Map tab says so for map tiles and the Str
   await expect(myPosition(page)).toBeVisible();
 
   await chartMapButton(page).click();
-  await expect(streetMapButton(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect(streetMapButton(page)).not.toBeChecked();
   await expect(offline(page)).toBeVisible();
   await expect(cannotLoad(page)).toHaveCount(0);
 
@@ -398,7 +425,7 @@ test('a Street style the map service refuses or the map cannot use falls back to
   for (const fail of failures) {
     fail();
     await streetMap.click();
-    await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+    await expect(streetMap).toBeChecked();
     await expect(notAnswering(page)).toBeVisible();
     await expect(cannotLoad(page)).toHaveCount(0);
     await expect(offline(page)).toHaveCount(0);
@@ -435,7 +462,7 @@ test('a Street style still loading when Chart is chosen again or the Map tab clo
   await streetMap.click();
   await expect.poll(() => providers.held()).toBeGreaterThan(0);
   await chartMapButton(page).click();
-  await expect(streetMap).toHaveAttribute('aria-pressed', 'false');
+  await expect(streetMap).not.toBeChecked();
   await expect.poll(() => cancelled.length).toBe(1);
   const chartBefore = chartTiles().length;
   providers.serve();
@@ -451,7 +478,7 @@ test('a Street style still loading when Chart is chosen again or the Map tab clo
   await expect.poll(() => cancelled.length).toBe(2);
   providers.serve();
   await page.getByRole('button', { name: 'Map', exact: true }).click();
-  await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+  await expect(streetMap).toBeChecked();
   await expect.poll(() => streetTiles().length).toBeGreaterThan(0);
   await expect(anyOutage(page)).toHaveCount(0);
 });
@@ -482,7 +509,7 @@ test('a Street style that has not arrived after 10 seconds is cancelled and says
   await expect(cannotLoad(page)).toBeVisible();
   await expect(retryMap).toBeVisible();
   await expect(claimsACause(page)).toHaveCount(0);
-  await expect(streetMap).toHaveAttribute('aria-pressed', 'true');
+  await expect(streetMap).toBeChecked();
   await expect(potOnMap(page)).toBeVisible();
   await expect(myPosition(page)).toBeVisible();
 
@@ -809,7 +836,7 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
       await expect(page.getByText('Finding position')).toBeHidden();
       const kind = name.startsWith('Net') ? 'Net' : 'Pot';
       await page
-        .getByRole('group', { name: 'Gear to drop' })
+        .getByRole('radiogroup', { name: 'Gear to drop' })
         .getByText(kind, { exact: true })
         .click();
       await page
@@ -1003,9 +1030,7 @@ const chromeOverGear = async (page: Page) => {
     .evaluateAll(markerFootprints);
   const chrome = [
     chartMapButton(page),
-    ...MAP_CONTROLS.map((name) =>
-      mapArea(page).getByRole('button', { name, exact: true })
-    ),
+    ...MAP_CONTROLS.map((name) => mapControl(page, name)),
     creditsOf(page),
     ...(await anyOutage(page).all())
   ];
@@ -1269,7 +1294,7 @@ test('on a 320 by 640 screen, gear dropped where the map credits show never cove
       'Centre on my position',
       'Zoom in',
       'Zoom out'
-    ].map((name) => mapArea(page).getByRole('button', { name, exact: true }))
+    ].map((name) => mapControl(page, name))
   ];
   await expect
     .poll(async () => {
@@ -1374,7 +1399,7 @@ for (const [width, height] of [
         'Zoom in',
         'Zoom out',
         'Centre on my position'
-      ].map((name) => mapArea(page).getByRole('button', { name, exact: true }));
+      ].map((name) => mapControl(page, name));
       for (const control of controls) await expect(control).toBeVisible();
       expect(await storedDrops(page)).toBe(1);
 
@@ -1403,9 +1428,7 @@ for (const [width, height] of [
           y,
           width: across,
           height: tall
-        } = await boxOf(
-          mapArea(page).getByRole('button', { name, exact: true })
-        );
+        } = await boxOf(mapControl(page, name));
         await page.touchscreen.tap(x + across / 2, y + tall - 3);
       }
       await expect.soft(toastOf(page)).toContainText('Pot 1 dropped');
@@ -1498,9 +1521,7 @@ function watchCredits(frames: number) {
 }
 
 const expectMapWhole = async (page: Page, names: (string | RegExp)[]) => {
-  const controls = names.map((name) =>
-    mapArea(page).getByRole('button', { name, exact: true })
-  );
+  const controls = names.map((name) => mapControl(page, name));
   for (const control of controls) await expect(control).toBeVisible();
   await expect.poll(() => creditsOf(page).evaluate(shownWhole)).toBe(true);
   const missed = await Promise.all(
@@ -2057,9 +2078,7 @@ for (const [width, height] of [
     const told = asFootprint(await boxOf(notice));
     for (const control of [
       chartMapButton(page),
-      ...MAP_CONTROLS.map((name) =>
-        map.getByRole('button', { name, exact: true })
-      )
+      ...MAP_CONTROLS.map((name) => mapControl(page, name))
     ])
       expect(
         overlapping([told, asFootprint(await boxOf(control))]),

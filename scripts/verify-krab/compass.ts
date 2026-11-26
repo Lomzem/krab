@@ -38,7 +38,7 @@ test('without an iPhone compass the map shows no Compass chip', async ({
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const toggle = map.getByRole('button', { name: 'Compass', exact: true });
   await expect(
-    map.getByRole('button', { name: 'Chart map', exact: true })
+    map.getByRole('radio', { name: 'Chart map', exact: true })
   ).toBeVisible();
   await expect(toggle).toHaveCount(0);
   log('no iPhone compass here, so the capsule has no Compass chip');

@@ -365,7 +365,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
   );
   for (let step = outs; step < 9; step += 1) await zoomOut.click();
   await capture('03-live-chart-wide');
-  await map.getByRole('button', { name: 'Street map', exact: true }).click();
+  await map.getByRole('radio', { name: 'Street map', exact: true }).click();
   if (liveProviders) await expect(map).toContainText('OpenStreetMap');
   await capture('04-live-street-wide');
   const streetCredits = await creditsContrast(page);
@@ -512,10 +512,10 @@ test('Street controls after switching from Chart, right away, settled and after 
   for (const size of sizes) {
     await page.setViewportSize(size);
     const tag = `${String(size.width)}x${String(size.height)}`;
-    const street = map.getByRole('button', { name: 'Street map', exact: true });
-    if ((await street.getAttribute('aria-pressed')) === 'true') {
-      await map.getByRole('button', { name: 'Chart map', exact: true }).click();
-      await expect(street).toHaveAttribute('aria-pressed', 'false');
+    const street = map.getByRole('radio', { name: 'Street map', exact: true });
+    if (await street.isChecked()) {
+      await map.getByRole('radio', { name: 'Chart map', exact: true }).click();
+      await expect(street).not.toBeChecked();
       if (liveProviders) await expect(map).not.toContainText('OpenStreetMap');
     }
     await street.click();
@@ -531,7 +531,7 @@ test('Street controls after switching from Chart, right away, settled and after 
       controls: await controlColours(page)
     });
     if (liveProviders) await expect(map).toContainText('OpenStreetMap');
-    await expect(street).toHaveAttribute('aria-pressed', 'true');
+    await expect(street).toBeChecked();
     await capture(`street-${tag}-2-settled`);
     await closeUps(`street-${tag}-2-settled`);
     observations.push({
@@ -655,7 +655,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   await expect(map.getByRole('region', { name: 'Map view' })).toBeVisible();
   providers?.cutOff();
   await context.setOffline(true);
-  await map.getByRole('button', { name: 'Street map', exact: true }).click();
+  await map.getByRole('radio', { name: 'Street map', exact: true }).click();
   const notice = map.getByRole('status').filter({ hasText: 'Map offline' });
   await expect(notice).toBeVisible({ timeout: 15000 });
   await deliverFix(page, {
@@ -741,7 +741,7 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   const pin = map.getByRole('button', { name: /^Pot 1,/ });
   await expect(pin).toBeVisible();
-  const street = map.getByRole('button', { name: 'Street map', exact: true });
+  const street = map.getByRole('radio', { name: 'Street map', exact: true });
   const measure = async () => ({
     pin: await pin.evaluate(footprintOf),
     label: await rectOf(pin.locator('xpath=..').getByText(/\bmin\b|\bh\b|now/)),
