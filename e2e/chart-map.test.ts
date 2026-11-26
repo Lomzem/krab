@@ -1,11 +1,6 @@
 import type { BrowserContext, Locator, Page, Route } from '@playwright/test';
-import {
-  expect,
-  storedDropNames,
-  storedDrops,
-  test,
-  toastOf
-} from './fixtures';
+import { expect, storedDrops, test, toastOf } from './fixtures';
+import { gearSpots, type Spot } from './gear-on-map';
 import { MADE_UP_SEA } from '../playwright.config';
 import { deliverFix, holdFixes } from './held-geolocation';
 import {
@@ -775,24 +770,6 @@ test('eight drops shown apart merge into groups as I zoom out without any marker
   }
 });
 
-const representedOn = async (map: Locator) => {
-  const names = await storedDropNames(map.page());
-  const spots = await map
-    .locator('.maplibregl-marker[data-place] button')
-    .evaluateAll((buttons) =>
-      buttons.map((button) =>
-        (
-          button.getAttribute('data-drop') ??
-          button.getAttribute('data-drops') ??
-          ''
-        )
-          .split(' ')
-          .filter(Boolean)
-      )
-    );
-  return spots.map((ids) => ids.map((id) => names[id] ?? id));
-};
-
 function ringedInMagenta(button: Element) {
   for (const span of button.querySelectorAll('span'))
     if (getComputedStyle(span).boxShadow.includes('rgb(163, 37, 111)'))
@@ -820,6 +797,7 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
     const dialogs = page.getByRole('dialog');
     const names = [1, 2, 3, 4, 5].map((n) => `Pot ${String(n)}`);
     names.push(last === 'Pot' ? 'Pot 6' : 'Net 1');
+    await page.clock.install();
     await holdFixes(page);
     await page.goto('/');
     await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -842,27 +820,24 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
     await page.getByRole('button', { name: 'Map', exact: true }).click();
     await expect.poll(() => storedDrops(page)).toBe(6);
 
-    let seen = '';
-    const everyDropOnce = async () => {
-      const now = JSON.stringify(await representedOn(map));
-      const still = now === seen;
-      seen = now;
-      return still ? (JSON.parse(now) as string[][]) : null;
-    };
+    let spots: Spot[] = [];
     const expectEveryDropOnce = async (when: string) => {
-      await expect.poll(everyDropOnce).not.toBeNull();
-      const spots = JSON.parse(seen) as string[][];
+      spots = await gearSpots(map);
       expect(
-        spots.filter((ids) => ids.length === 0).length,
+        spots.filter(({ gear }) => gear.length === 0).length,
         `markers drawing no gear ${when}`
       ).toBe(0);
-      expect(spots.flat().toSorted(), `gear on the map ${when}`).toEqual(
-        names.toSorted()
-      );
+      expect(
+        spots.flatMap(({ gear }) => gear).toSorted(),
+        `gear on the map ${when}`
+      ).toEqual(names.toSorted());
     };
 
     await expectEveryDropOnce('while Undo shows');
-    await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
+    await expect(toastOf(page)).toBeVisible();
+    await page.mouse.move(0, 0);
+    await page.clock.fastForward(8000);
+    await expect(toastOf(page)).toBeHidden();
     await expectEveryDropOnce('once Undo ends');
 
     const zoomIn = map.getByRole('button', { name: 'Zoom in' });
@@ -910,9 +885,10 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
       if (await own.count()) {
         await own.click();
       } else {
-        const stored = await storedDropNames(page);
-        const id = Object.keys(stored).find((key) => stored[key] === name);
-        await map.locator(`[data-drops~="${String(id)}"]`).click();
+        const group = spots.find(({ gear }) => gear.includes(name));
+        await map
+          .getByRole('button', { name: group?.name, exact: true })
+          .click();
         await dialogs
           .getByRole('button', { name: new RegExp(`^${name},`) })
           .click();
@@ -1468,22 +1444,8 @@ const settled = async (target: Locator) => {
     .toBe(true);
 };
 
-const spotsOf = (buttons: Element[]) =>
-  buttons.map((button) => ({
-    name: button.getAttribute('aria-label') ?? '',
-    ids: (
-      button.getAttribute('data-drop') ??
-      button.getAttribute('data-drops') ??
-      ''
-    ).split(' ')
-  }));
-
-const sharedSpotOf = (
-  spots: { name: string; ids: string[] }[],
-  names: Record<string, string>
-) =>
+const sharedSpotOf = (spots: Spot[]) =>
   spots
-    .map(({ name, ids }) => ({ name, gear: ids.map((id) => names[id]) }))
     .filter(({ gear }) => gear.includes('Pot 3'))
     .map(({ name, gear }) => {
       const sharing = ['Pot 1', 'Pot 2', 'Pot 4'].filter((other) =>
@@ -1679,20 +1641,67 @@ test('my position north of small collected gear shows whole when the map opens a
   await expect.poll(meWhole, 'my position cut after Show all gear').toBe(true);
 });
 
+const seedPastTrip = (page: Page, pots: number, westOfFirst: number) =>
+  page.evaluate(
+    ({ pots, westOfFirst, sea }) =>
+      new Promise<void>((seeded, failed) => {
+        const startedAt = Date.now() - 2 * 60 * 60 * 1000;
+        const gear = Array.from({ length: pots }, (_, index) => ({
+          id: `seeded-pot-${String(index + 1)}`,
+          kind: 'pot',
+          number: index + 1
+        }));
+        const trip = {
+          id: 'seeded-trip',
+          startedAt,
+          endedAt: startedAt + 60 * 60 * 1000,
+          gear,
+          drops: gear.map(({ id }, index) => ({
+            id: `seeded-drop-${String(index + 1)}`,
+            gearId: id,
+            placedAt: startedAt + index * 1000,
+            position: {
+              lat: sea.latitude,
+              lon: sea.longitude - (index === 0 ? westOfFirst : 0),
+              accuracyM: 5
+            },
+            noPosition: null,
+            collectedAt: null,
+            catch: null,
+            label: '',
+            bait: '',
+            depthFt: null,
+            notes: ''
+          })),
+          next: { pot: pots + 1, net: 1 }
+        };
+        const request = indexedDB.open('krab');
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction('trips', 'readwrite');
+          tx.objectStore('trips').put(trip);
+          tx.oncomplete = () => {
+            db.close();
+            seeded();
+          };
+          tx.onabort = () => {
+            db.close();
+            failed(new Error(`seeding aborted: ${String(tx.error?.name)}`));
+          };
+        };
+        request.onerror = () => {
+          failed(new Error('could not open krab'));
+        };
+      }),
+    { pots, westOfFirst, sea: MADE_UP_SEA }
+  );
+
 test('uncollected gear from past trips grouped at the east edge of the map shows whole, its mark and full count included, at +99 and at +100', async ({
   page
 }) => {
-  test.slow();
   const map = mapArea(page);
   const sheet = page.getByRole('dialog');
   const group = map.getByRole('button', { name: /^Pot \d+ \+\d+ more / });
-  const endTrip = async () => {
-    await page.getByRole('button', { name: 'Gear', exact: true }).click();
-    await page.getByRole('button', { name: 'End trip' }).click();
-    await sheet.getByRole('button', { name: 'End trip' }).click();
-    await expect(sheet).toBeHidden();
-    await page.getByRole('button', { name: 'Map', exact: true }).click();
-  };
   const shownWholeAtEdge = async (more: number, first: number) => {
     const names = Array.from(
       { length: more + 1 },
@@ -1701,10 +1710,8 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
     await expect(group).toHaveAccessibleName(
       new RegExp(`^Pot \\d+ \\+${String(more)} more here; all uncollected$`)
     );
-    expect(
-      (await representedOn(map)).find((spot) => spot.length > 1)?.toSorted()
-    ).toEqual(names.toSorted());
-    await expect(group).toContainText(`+${String(more)}`);
+    const count = group.getByText(`+${String(more)}`, { exact: true });
+    await expect(count).toBeVisible();
     await settled(group);
     const [drawn] = await group.evaluateAll(markerFootprints);
     const view = asFootprint(await boxOf(drawnView(page)));
@@ -1716,13 +1723,36 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
       bottom: Math.min(drawn.bottom, view.bottom)
     });
     expect(await group.evaluateAll(takeTapsAtCentre)).toEqual([true]);
+    const corner = await boxOf(count);
+    expect(
+      await group.evaluate(
+        (button, { x, y }) => {
+          const hit = document.elementFromPoint(x, y);
+          return (
+            hit?.closest('button') === button && hit.closest('svg') !== null
+          );
+        },
+        { x: corner.x + corner.width + 3, y: corner.y - 3 }
+      ),
+      'the uncollected mark drawn on the corner of the group'
+    ).toBe(true);
+    expect(
+      (await gearSpots(map))
+        .find(({ gear }) => gear.length > 1)
+        ?.gear.toSorted()
+    ).toEqual(names.toSorted());
   };
   await holdFixes(page);
   await page.goto('/');
+  await expect(
+    page.getByRole('button', { name: 'Turn on location' })
+  ).toBeVisible();
+  await seedPastTrip(page, 101, 0.01);
+  await page.reload();
   await page.getByRole('button', { name: 'Turn on location' }).click();
-  await dropAt(page, 1, 0, -0.01);
-  for (let number = 2; number <= 101; number += 1) await dropAt(page, number);
-  await endTrip();
+  await deliverFix(page, MADE_UP_SEA);
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
   await map.getByRole('button', { name: /^Filter/ }).click();
   await sheet
     .getByRole('group', { name: 'Also show' })
@@ -1733,7 +1763,11 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
   await shownWholeAtEdge(99, 2);
 
   await dropAt(page, 1);
-  await endTrip();
+  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('button', { name: 'End trip' }).click();
+  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await expect(sheet).toBeHidden();
+  await page.getByRole('button', { name: 'Map', exact: true }).click();
   await shownWholeAtEdge(100, 1);
   await expect(
     map.getByRole('button', { name: /^Pot 1, past trip/ })
@@ -1748,11 +1782,7 @@ test('drops that share a spot stay in one group at every zoom, and a group that 
   const zoomIn = map.getByRole('button', { name: 'Zoom in' });
   const SHARED =
     /^(Pot 1\+Pot 2 3 gear here|Pot 1\+Pot 2\+Pot 4 4 gear in this area)$/;
-  const sharedSpot = async () =>
-    sharedSpotOf(
-      await map.getByRole('button', { name: /^Pot \d/ }).evaluateAll(spotsOf),
-      await storedDropNames(page)
-    );
+  const sharedSpot = async () => sharedSpotOf(await gearSpots(map));
   await holdFixes(page, { steady: true });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -2011,10 +2041,9 @@ for (const [width, height] of [
         return whole;
       })
       .toEqual([true, true, true]);
-    expect((await representedOn(map)).flat().toSorted()).toEqual([
-      'Pot 1',
-      'Pot 2'
-    ]);
+    expect(
+      (await gearSpots(map)).flatMap(({ gear }) => gear).toSorted()
+    ).toEqual(['Pot 1', 'Pot 2']);
     await expectMapWhole(page, MAP_CONTROLS);
     await expect(toastOf(page)).toContainText('Pot 2 dropped');
     if (height < 600) {
