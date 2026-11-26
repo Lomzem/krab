@@ -34,7 +34,7 @@ Installation runs `prepare`, which synchronizes SvelteKit types and activates Le
 | `bun run test:e2e`               | Run the Playwright WebKit suite (iPhone emulation, axe WCAG 2.2 AA in both themes) against existing builds   |
 | `bun run test:recipes`           | Run the verify-krab journey recipes against the built app with the e2e provider fixtures                     |
 | `bun run test:e2e:container`     | Build twice, then run `test:e2e` in the `mcr.microsoft.com/playwright:v<version>-noble` image (needs Docker) |
-| `bun run test:recipes:container` | Build twice, then run `test:recipes` in the same image                                                       |
+| `bun run test:recipes:container` | Build once, then run `test:recipes` in the same image                                                        |
 
 WebKit does not launch natively on every Linux host, so run the browser suites locally through the container commands. Test output goes to the ignored `test-results/`.
 
@@ -45,8 +45,9 @@ Every commit runs `secrets:staged`, `format:check`, `lint`, `check` and `test:un
 [GitHub Actions](.github/workflows/ci.yml) runs on pushes to `main`, pull requests and manual dispatch, with read-only repository permission and no deployment. Every job sets `timeout-minutes` of at most 5 and starts at once:
 
 - `checks` scans full history, then runs `format:check`, `lint`, `check`, `test:unit`, `build` and `check:assets`.
-- `policy` runs `test:policy` and `test:security`.
-- `browser` builds twice inside the pinned Playwright container and runs `test:e2e` in 6 shards and `test:recipes` in 4 shards.
+- `policy` runs `test:policy`.
+- `security` runs `test:security`.
+- `browser` builds inside the pinned Playwright container and runs `test:e2e` in 6 shards and `test:recipes` in 4 shards. Only the `test:e2e` shards run `build:next`, because only `e2e/offline-and-update.test.ts` reads the previous build.
 
 CodeRabbit automatic reviews are off in `.coderabbit.yaml`. Request a manual review only when asked.
 
