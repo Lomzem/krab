@@ -102,6 +102,16 @@ const cases: PolicyCase[] = [
     risk: 'A dynamic import skips the NOAA and OpenFreeMap fixture, or the fixture and expect are refused'
   },
   {
+    name: 'static Playwright test import versus the providers fixture',
+    file: 'e2e/probe.test.ts',
+    valid:
+      'import { expect } from "@playwright/test"; import { test } from "./fixtures"; export { expect, test };',
+    invalid: 'import { test } from "@playwright/test"; export { test };',
+    command: 'lint',
+    diagnostic: "Import test from './fixtures'",
+    risk: 'A static import of test skips the NOAA and OpenFreeMap fixture, or the fixture test is refused'
+  },
+  {
     name: 'code depth boundary',
     file: 'src/probe.ts',
     valid:
@@ -402,50 +412,54 @@ await cp(source, root, {
     )
 });
 await symlink(join(source, 'node_modules'), join(root, 'node_modules'));
-const fixtures = cases.map((row, index) => ({
-  ...row,
-  file: join(dirname(row.file), `policy-${String(index)}-${basename(row.file)}`)
-}));
-const batches = [
-  fixtures.filter((row) => row.command === 'lint'),
-  fixtures.filter((row) => row.command === 'check'),
-  fixtures.filter((row) => row.command === 'format:check')
-];
-function diagnosticFor(row: PolicyCase, output: string) {
-  if (row.command !== 'lint') return output;
-  return output
-    .split('\n\n')
-    .find((block) => block.includes(join(root, row.file)));
+const fixtures = cases.map((row, index) => {
+  const variantFile = (variant: string) =>
+    join(
+      dirname(row.file),
+      `policy-${String(index)}-${variant}-${basename(row.file)}`
+    );
+  return {
+    ...row,
+    valid: { file: variantFile('valid'), text: row.valid },
+    invalid: { file: variantFile('invalid'), text: row.invalid }
+  };
+});
+type Fixture = (typeof fixtures)[number];
+function diagnosticFor(row: Fixture, output: string) {
+  const file = join(root, row.invalid.file);
+  if (row.command !== 'lint')
+    return output.includes(row.invalid.file) ? output : undefined;
+  return output.split('\n\n').find((block) => block.includes(file));
 }
-for (const batch of batches) {
-  const first = batch[0];
-  assert.ok(first, 'Every policy command must have fixtures');
-  for (const [variant, expected] of [
-    ['valid', 0],
-    ['invalid', 1]
-  ] as const) {
-    for (const row of batch)
-      await writeFile(join(root, row.file), row[variant]);
-    const result = spawnSync('bun', ['run', first.command], {
-      cwd: root,
-      encoding: 'utf8'
-    });
-    const output = result.stdout + result.stderr;
-    assert.equal(result.status, expected, `${first.command}: ${output}`);
-    for (const row of batch) {
-      assert.ok(
-        expected === 0 || diagnosticFor(row, output)?.includes(row.diagnostic),
-        `${row.name}: missing file-specific diagnostic: ${output}`
-      );
-      assert.equal(
-        await readFile(join(root, row.file), 'utf8'),
-        row[variant],
-        `${row.name}: check rewrote input`
-      );
-    }
-  }
+for (const command of ['lint', 'check', 'format:check'] as const) {
+  const batch = fixtures.filter((row) => row.command === command);
+  assert.ok(batch.length > 0, `${command} must have fixtures`);
+  for (const row of batch)
+    for (const variant of [row.valid, row.invalid])
+      await writeFile(join(root, variant.file), variant.text);
+  const result = spawnSync('bun', ['run', command], {
+    cwd: root,
+    encoding: 'utf8'
+  });
+  const output = result.stdout + result.stderr;
+  assert.equal(result.status, 1, `${command}: ${output}`);
   for (const row of batch) {
-    await rm(join(root, row.file));
+    assert.ok(
+      diagnosticFor(row, output)?.includes(row.diagnostic),
+      `${row.name}: missing file-specific diagnostic: ${output}`
+    );
+    assert.ok(
+      !output.includes(row.valid.file),
+      `${row.name}: valid fixture was flagged: ${output}`
+    );
+    for (const variant of [row.valid, row.invalid]) {
+      assert.equal(
+        await readFile(join(root, variant.file), 'utf8'),
+        variant.text,
+        `${row.name}: ${command} rewrote input`
+      );
+      await rm(join(root, variant.file));
+    }
     console.log(`PASS ${row.name}`);
   }
 }
