@@ -96,4 +96,4 @@ On an affected phone, open Krab online once, then reload. `navigator.serviceWork
 
 ## Code organization
 
-Feature code lives in `src/lib/features/<feature>/`, and `src/routes/` stays thin. `#lib/*` resolves to `src/lib/*` through `package.json` imports. Tailwind theme tokens for light and dark live in `src/app.css`. Third-party attributions live in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Feature code lives in `src/lib/features/<feature>/`, and other features reach it only through its `index.ts`. Code that several features use lives in `src/lib/shared/`, which imports no feature. `src/routes/` stays thin. `#lib/*` resolves to `src/lib/*` through `package.json` imports. Tailwind theme tokens for light and dark live in `src/app.css`. Third-party attributions live in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -49,6 +49,7 @@ const source = process.cwd();
 type PolicyCase = {
   name: string;
   file: string;
+  invalidFile?: string;
   valid: string;
   invalid: string;
   command: 'lint' | 'check' | 'format:check';
@@ -57,6 +58,8 @@ type PolicyCase = {
 };
 const workflow = (job: string) =>
   `on: push\njobs:\n  a:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    steps:\n      - run: true\n  b:\n    runs-on: ubuntu-24.04\n${job}    steps:\n      - run: true\n`;
+const page = (script: string, markup = '<OnWater />\n') =>
+  `<script lang="ts">\n  import { OnWater } from '#lib/features/on-water/index.js';${script}\n</script>\n\n${markup}`;
 const cases: PolicyCase[] = [
   {
     name: 'explicit any in an application feature',
@@ -78,7 +81,7 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'unsafe dependency values in Svelte',
-    file: 'src/Probe.svelte',
+    file: 'src/lib/shared/Probe.svelte',
     valid:
       '<script lang="ts">const data: unknown = JSON.parse("null");</script><p>{String(data)}</p>',
     invalid:
@@ -89,7 +92,7 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'throw syntax versus Effect failure',
-    file: 'src/probe.ts',
+    file: 'src/lib/shared/probe.ts',
     valid:
       'import { Effect } from "effect"; export const result = Effect.fail("unavailable");',
     invalid:
@@ -100,7 +103,7 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'try syntax versus Effect try and catch',
-    file: 'src/probe.ts',
+    file: 'src/lib/shared/probe.ts',
     valid:
       'import { Effect } from "effect"; export const result = Effect.try({ try: () => JSON.parse("null") as unknown, catch: () => "invalid" }).pipe(Effect.catch(() => Effect.succeed(null)));',
     invalid:
@@ -142,7 +145,7 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'code depth boundary',
-    file: 'src/probe.ts',
+    file: 'src/lib/shared/probe.ts',
     valid:
       'export function depth(n: number) { if (n > 0) { if (n > 1) { if (n > 2) { return n; } } } return 0; }',
     invalid:
@@ -153,7 +156,7 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'callback depth boundary',
-    file: 'src/probe.ts',
+    file: 'src/lib/shared/probe.ts',
     valid: 'export const result = [1].map(a => [2].map(b => a + b));',
     invalid:
       'export const result = [1].map(a => [2].map(b => [3].map(c => a + b + c)));',
@@ -163,7 +166,7 @@ const cases: PolicyCase[] = [
   },
   {
     name: 'nested ternaries',
-    file: 'src/probe.ts',
+    file: 'src/lib/shared/probe.ts',
     valid: 'export const choose = (a: boolean) => a ? 1 : 0;',
     invalid:
       'export const choose = (a: boolean, b: boolean) => a ? 1 : b ? 2 : 0;',
@@ -346,6 +349,221 @@ const cases: PolicyCase[] = [
     risk: 'Dashes join phrases into sentences in attribute copy'
   },
   {
+    name: 'feature imported past its entrypoint through the alias',
+    file: 'src/lib/features/map/probe.ts',
+    valid:
+      "import type { Trip } from '#lib/features/trip/index.js';\nexport type Probe = Trip;\n",
+    invalid:
+      "import type { Trip } from '#lib/features/trip/types.js';\nexport type Probe = Trip;\n",
+    command: 'lint',
+    diagnostic: 'Import feature trip through its public entrypoint',
+    risk: 'A feature reaches into the private modules of another feature'
+  },
+  {
+    name: 'feature imported past its entrypoint by a relative path',
+    file: 'src/lib/features/map/probe.ts',
+    valid:
+      "import type { Box } from './types';\nimport type { Trip } from '../trip/index';\nexport type Probe = [Box, Trip];\n",
+    invalid:
+      "import type { Trip } from '../trip/types';\nexport type Probe = Trip;\n",
+    command: 'lint',
+    diagnostic: 'Import feature trip through its public entrypoint',
+    risk: 'Relative paths skip the entrypoint, or a feature cannot import its own modules'
+  },
+  {
+    name: 'feature re-exported past its entrypoint',
+    file: 'src/lib/features/map/probe.ts',
+    valid:
+      "export type { Trip } from '#lib/features/trip/index.js';\nexport const probe = 1;\n",
+    invalid:
+      "export type { Trip } from '#lib/features/trip/types.js';\nexport const probe = 1;\n",
+    command: 'lint',
+    diagnostic: 'Import feature trip through its public entrypoint',
+    risk: 'A re-export republishes the private modules of another feature'
+  },
+  {
+    name: 'feature type imported past its entrypoint',
+    file: 'src/lib/features/map/probe.ts',
+    valid: "export type Probe = import('#lib/features/trip/index.js').Trip;\n",
+    invalid:
+      "export type Probe = import('#lib/features/trip/types.js').Trip;\n",
+    command: 'lint',
+    diagnostic: 'Import feature trip through its public entrypoint',
+    risk: 'An inline import type skips the entrypoint'
+  },
+  {
+    name: 'feature loaded past its entrypoint by dynamic import',
+    file: 'src/lib/features/on-water/probe.ts',
+    valid: "export const load = () => import('#lib/features/map/index.js');\n",
+    invalid:
+      "export const load = () => import('#lib/features/map/ChartMap.svelte');\n",
+    command: 'lint',
+    diagnostic: 'Import feature map through its public entrypoint',
+    risk: 'A lazy load reaches into the private modules of another feature'
+  },
+  {
+    name: 'feature imported past its entrypoint in a Svelte script',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<script lang="ts">\n  import type { Trip } from \'#lib/features/trip/index.js\';\n\n  let { trip }: { trip: Trip } = $props();\n</script>\n\n<p>{typeof trip}</p>\n',
+    invalid:
+      '<script lang="ts">\n  import type { Trip } from \'#lib/features/trip/types.js\';\n\n  let { trip }: { trip: Trip } = $props();\n</script>\n\n<p>{typeof trip}</p>\n',
+    command: 'lint',
+    diagnostic: 'Import feature trip through its public entrypoint',
+    risk: 'Svelte script imports skip the entrypoint'
+  },
+  {
+    name: 'feature loaded past its entrypoint in Svelte markup',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      "{#await import('#lib/features/map/index.js') then loaded}\n  <p>{typeof loaded}</p>\n{/await}\n",
+    invalid:
+      "{#await import('#lib/features/map/ChartMap.svelte') then loaded}\n  <p>{typeof loaded}</p>\n{/await}\n",
+    command: 'lint',
+    diagnostic: 'Import feature map through its public entrypoint',
+    risk: 'Markup imports skip the entrypoint'
+  },
+  {
+    name: 'feature imported past its entrypoint by a script',
+    file: 'scripts/verify-krab/probe.ts',
+    valid:
+      "import type { Trip } from '../../src/lib/features/trip/index';\nexport type Probe = Trip;\n",
+    invalid:
+      "import type { Trip } from '../../src/lib/features/trip/types';\nexport type Probe = Trip;\n",
+    command: 'lint',
+    diagnostic: 'Import feature trip through its public entrypoint',
+    risk: 'Code outside src reaches into the private modules of a feature'
+  },
+  {
+    name: 'computed dynamic import',
+    file: 'src/lib/features/map/probe.ts',
+    valid: 'export const load = () => import(`./types`);\n',
+    invalid: 'export const load = (name: string) => import(`./${name}`);\n',
+    command: 'lint',
+    diagnostic: 'Give import() a literal path',
+    risk: 'A computed path hides a cross-feature import, or a literal template is refused'
+  },
+  {
+    name: 'import.meta.glob',
+    file: 'src/lib/features/map/probe.ts',
+    valid: 'export const url = import.meta.url;\n',
+    invalid: "export const modules = import.meta.glob('../trip/*.ts');\n",
+    command: 'lint',
+    diagnostic: 'import.meta.glob hides imports',
+    risk: 'A glob loads the private modules of another feature unseen'
+  },
+  {
+    name: 'shared module importing a feature',
+    file: 'src/lib/shared/probe.ts',
+    valid:
+      "import type { LatLon } from './lat-lon';\nexport type Probe = LatLon;\n",
+    invalid:
+      "import type { Trip } from '#lib/features/trip/index.js';\nexport type Probe = Trip;\n",
+    command: 'lint',
+    diagnostic: 'src/lib/shared must not import a feature',
+    risk: 'Shared code depends on a feature and makes a cycle'
+  },
+  {
+    name: 'module outside features and shared',
+    file: 'src/lib/shared/probe.ts',
+    invalidFile: 'src/lib/probe.ts',
+    valid: 'export const probe = 1;\n',
+    invalid: 'export const probe = 1;\n',
+    command: 'lint',
+    diagnostic: 'is outside the application layout',
+    risk: 'Application code collects in loose folders outside features and shared'
+  },
+  {
+    name: 'undeclared feature folder',
+    file: 'src/lib/features/map/probe.ts',
+    invalidFile: 'src/lib/features/probe/probe.ts',
+    valid: 'export const probe = 1;\n',
+    invalid: 'export const probe = 1;\n',
+    command: 'lint',
+    diagnostic: 'Feature probe is not declared',
+    risk: 'A new feature folder appears without a declared boundary'
+  },
+  {
+    name: 'wildcard re-export',
+    file: 'src/lib/features/map/probe.ts',
+    valid:
+      "import { chartSource } from './chart-tiles';\nexport const probe = chartSource;\n",
+    invalid: "export * from './chart-tiles';\nexport const probe = 1;\n",
+    command: 'lint',
+    diagnostic: 'Export each name explicitly instead of export *',
+    risk: 'A wildcard publishes every private name of a module'
+  },
+  {
+    name: 'pass-through re-export file',
+    file: 'src/lib/features/map/probe.ts',
+    valid:
+      "export { chartSource } from './chart-tiles';\nexport const probe = 1;\n",
+    invalid: "export { chartSource } from './chart-tiles';\n",
+    command: 'lint',
+    diagnostic: 'This file only re-exports other modules',
+    risk: 'A private barrel adds an indirection that hides the real module'
+  },
+  {
+    name: 'pass-through file that imports then exports',
+    file: 'src/lib/features/map/probe.ts',
+    valid:
+      "import { chartSource } from './chart-tiles';\nexport const probe = chartSource;\n",
+    invalid:
+      "import { chartSource } from './chart-tiles';\nexport { chartSource };\n",
+    command: 'lint',
+    diagnostic: 'This file only re-exports other modules',
+    risk: 'An import and export pair hides a private barrel'
+  },
+  {
+    name: 'route script statement',
+    file: 'src/routes/+page.svelte',
+    valid: page(''),
+    invalid: page("\n  $effect(() => {\n    document.title = 'Krab';\n  });"),
+    command: 'lint',
+    diagnostic: 'Move this statement into a feature',
+    risk: 'Routes hold state or effects instead of composing features'
+  },
+  {
+    name: 'route module statement',
+    file: 'src/routes/+layout.ts',
+    valid: 'export const ssr = false;\n',
+    invalid:
+      "export const ssr = false;\nexport const load = () => ({ title: 'Krab' });\n",
+    command: 'lint',
+    diagnostic: 'Move this statement into a feature',
+    risk: 'Route modules hold logic, or framework options are refused'
+  },
+  {
+    name: 'route markup block',
+    file: 'src/routes/+page.svelte',
+    valid: page(''),
+    invalid: page('', '{#if Math.random() > 0}\n  <OnWater />\n{/if}\n'),
+    command: 'lint',
+    diagnostic: 'Move this block into a feature',
+    risk: 'Routes branch or loop instead of composing features'
+  },
+  {
+    name: 'route markup function',
+    file: 'src/routes/+page.svelte',
+    valid: page(''),
+    invalid: page(
+      '',
+      '<OnWater />\n<button onclick={() => history.back()}>Back</button>\n'
+    ),
+    command: 'lint',
+    diagnostic: 'Move this function into a feature',
+    risk: 'Routes hold event handlers instead of composing features'
+  },
+  {
+    name: 'route-local import',
+    file: 'src/routes/+page.svelte',
+    valid: page("\n  import '../app.css';"),
+    invalid: page("\n  import Helper from './Helper.svelte';", '<Helper />\n'),
+    command: 'lint',
+    diagnostic: 'Move this route-local import into a feature',
+    risk: 'Routes grow private modules instead of composing features, or the app stylesheet is refused'
+  },
+  {
     name: 'CI job without a time limit',
     file: '.github/workflows/ci.yml',
     valid: workflow('    timeout-minutes: 5\n'),
@@ -450,11 +668,14 @@ for (const entry of await readdir(join(source, 'node_modules')))
       join(root, 'node_modules', entry)
     );
 const fixtures = cases.map((row, index) => {
-  const variantFile = (variant: string) =>
-    join(
-      dirname(row.file),
-      `policy-${String(index)}-${variant}-${basename(row.file)}`
+  const variantFile = (variant: 'valid' | 'invalid') => {
+    const file =
+      variant === 'invalid' ? (row.invalidFile ?? row.file) : row.file;
+    return join(
+      dirname(file),
+      `policy-${String(index)}-${variant}-${basename(file)}`
     );
+  };
   return {
     ...row,
     valid: { file: variantFile('valid'), text: row.valid },
@@ -516,8 +737,10 @@ for (const { command, variants } of passes) {
   const inputs = batch.flatMap((row) =>
     variants.map((variant) => ({ row, variant, ...row[variant] }))
   );
-  for (const input of inputs)
+  for (const input of inputs) {
+    await mkdir(join(root, dirname(input.file)), { recursive: true });
     await writeFile(join(root, input.file), input.text);
+  }
   const { status, output } = await run(command);
   const invalid = inputs.filter((input) => input.variant === 'invalid');
   assert.equal(

@@ -7,11 +7,25 @@ import globals from 'globals';
 import * as yaml from 'yaml-eslint-parser';
 import uiCopy from './scripts/ui-copy.ts';
 import { ciTimeLimit } from './scripts/ci-time-limit.ts';
+import { featureBoundaries } from './scripts/feature-boundaries.ts';
 
 const krab = {
   meta: uiCopy.meta,
-  rules: { ...uiCopy.rules, 'ci-time-limit': ciTimeLimit }
+  rules: {
+    ...uiCopy.rules,
+    'ci-time-limit': ciTimeLimit,
+    'feature-boundaries': featureBoundaries
+  }
 };
+
+const FEATURES = [
+  'app-shell',
+  'compass',
+  'location',
+  'map',
+  'on-water',
+  'trip'
+];
 
 const EFFECT_ONLY = [
   {
@@ -47,6 +61,11 @@ export default defineConfig([
       'max-nested-callbacks': ['error', 2],
       'no-nested-ternary': 'error'
     }
+  },
+  {
+    files: ['**/*.{js,mjs,cjs,ts,mts,cts,svelte}'],
+    plugins: { krab },
+    rules: { 'krab/feature-boundaries': ['error', { features: FEATURES }] }
   },
   {
     files: ['**/*.{ts,mts,cts,svelte}'],
