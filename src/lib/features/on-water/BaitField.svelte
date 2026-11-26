@@ -1,6 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import * as Command from './bait-command/index.js';
+  import CommandInput from './bait-command/command-input.svelte';
+  import CommandItem from './bait-command/command-item.svelte';
+  import CommandList from './bait-command/command-list.svelte';
+  import Command from './bait-command/command.svelte';
   import {
     baitChips,
     baitKey,
@@ -106,39 +109,39 @@
   >
   <div id={panelId} hidden={!open}>
     {#if open}
-      <Command.Root
+      <Command
         class="gap-2"
         shouldFilter={false}
         disableInitialScroll
         vimBindings={false}
       >
         {#if listed}
-          <Command.List
+          <CommandList
             id={listId}
             aria-label="Saved baits"
             class="max-h-36 rounded-control border border-border bg-card"
           >
             {#if found.add !== null}
               {@const added = found.add}
-              <Command.Item
+              <CommandItem
                 value={ADD}
                 onSelect={() => {
                   pick(added);
                 }}
                 ><span>Add <strong class="font-semibold">{added}</strong></span
-                ></Command.Item
+                ></CommandItem
               >
             {/if}
             {#each found.matches as match (match.key)}
-              <Command.Item
+              <CommandItem
                 value={match.key}
                 checked={match.key === own}
                 onSelect={() => {
                   pick(match.label);
-                }}>{match.label}</Command.Item
+                }}>{match.label}</CommandItem
               >
             {/each}
-          </Command.List>
+          </CommandList>
         {/if}
         {#if typed === '' && own !== ''}
           <button
@@ -152,7 +155,7 @@
             class="text-sm font-medium text-muted-foreground"
             for="{idPrefix}-bait-search">Find or add bait</label
           >
-          <Command.Input
+          <CommandInput
             id="{idPrefix}-bait-search"
             bind:value={search.query}
             controls={listed ? listId : null}
@@ -169,7 +172,7 @@
             Choose or add bait
           </p>
         {/if}
-      </Command.Root>
+      </Command>
     {/if}
   </div>
 </fieldset>
