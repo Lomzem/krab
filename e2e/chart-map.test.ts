@@ -533,7 +533,10 @@ test('the screen tabs take one Tab stop, arrow keys only move focus between them
       .getByRole('tab', { name, exact: true });
   const panel = (name: string) =>
     page.getByRole('tabpanel', { name, exact: true });
-  const mapView = mapArea(page).getByRole('region', { name: 'Map view' });
+  const mapView = page.getByRole('region', {
+    name: 'Map view',
+    includeHidden: true
+  });
   const focusedTabs = page.locator('[role="tab"]:focus');
   await dropPotAndOpenMap(page);
   await expect(potOnMap(page)).toBeVisible();
@@ -2412,19 +2415,23 @@ test('a focused pin shows a white then navy ring, outside the magenta ring of ge
   const map = mapArea(page);
   const pinShadows = await shadowsWhenTabbedTo(page, potOnMap(page));
   for (const band of MAP_RING_BANDS(0)) expect(pinShadows).toContain(band);
-  const zoomIn = map.getByRole('button', { name: 'Zoom in' });
-  await shadowsWhenTabbedTo(page, zoomIn);
-  expect(
-    await zoomIn.evaluate((focused) => {
-      const style = getComputedStyle(focused);
-      return [
-        style.outlineStyle,
-        style.outlineWidth,
-        style.outlineColor,
-        style.outlineOffset
-      ];
-    })
-  ).toEqual(['solid', '3px', 'rgb(29, 78, 216)', '-6px']);
+  for (const control of [
+    map.getByRole('button', { name: 'Zoom in' }),
+    creditsOf(page)
+  ]) {
+    await shadowsWhenTabbedTo(page, control);
+    expect(
+      await control.evaluate((focused) => {
+        const style = getComputedStyle(focused);
+        return [
+          style.outlineStyle,
+          style.outlineWidth,
+          style.outlineColor,
+          style.outlineOffset
+        ];
+      })
+    ).toEqual(['solid', '3px', 'rgb(29, 78, 216)', '-6px']);
+  }
 
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();

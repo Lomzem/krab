@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '#lib/shared/Icon.svelte';
-  import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
+  import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import {
     Map as MapLibre,
     Marker,
@@ -1059,7 +1059,7 @@
           {@attach (node: HTMLButtonElement) => {
             chip = node;
           }}
-          class="min-h-11 min-w-11 touch-manipulation rounded-[6px] border border-input bg-card px-2 py-1 text-left text-sm leading-[1.3] font-medium text-muted-foreground {FOCUS} {PRESS} active:bg-muted"
+          class="min-h-11 min-w-11 touch-manipulation rounded-[6px] border border-input bg-card px-2 py-1 text-left text-sm leading-[1.3] font-medium text-muted-foreground {FOCUS_INSET} {PRESS} active:bg-muted"
           >{credit}</PopoverTrigger
         >
         <PopoverContent

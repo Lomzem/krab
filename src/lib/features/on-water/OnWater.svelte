@@ -626,7 +626,7 @@
     notice={water.notice}
   />
 
-  <div
+  <footer
     class={[
       'grid grid-cols-1 border-t border-border bg-card',
       !dockShown && 'hidden',
@@ -699,7 +699,7 @@
         {/if}
       </DockRow>
     </div>
-  </div>
+  </footer>
 </Tabs>
 
 <LocationSteps
