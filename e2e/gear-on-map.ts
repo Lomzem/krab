@@ -57,6 +57,10 @@ export const gearSpots = async (map: Locator) => {
     const names = await settledNames(map);
     const read = await readSpots(map, names);
     expect(await gearNames(map)).toEqual(names);
+    expect(
+      await map.locator('[data-place] button').count(),
+      'marker buttons, named or not'
+    ).toBe(names.length);
     spots = read;
   }).toPass({ timeout: 20000 });
   return spots;

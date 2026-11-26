@@ -1783,6 +1783,7 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
   await expect(
     page.getByRole('button', { name: 'Turn on location' })
   ).toBeVisible();
+  await expect(page.getByText('Loading trip')).toBeHidden();
   await seedPastTrip(page, 101, 0.01);
   await page.reload();
   await page.getByRole('button', { name: 'Turn on location' }).click();

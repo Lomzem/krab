@@ -214,13 +214,29 @@ type TapCounter = { krabTaps?: { count: number; stop: () => void } };
 export const tapsDuring = async (page: Page, steps: () => Promise<void>) => {
   await page.evaluate(() => {
     const counter = { count: 0, stop: () => undefined };
-    const count = (event: PointerEvent) => {
-      if (event.isTrusted && event.isPrimary && event.pointerType === 'touch')
+    const press = (event: PointerEvent) => {
+      if (event.isTrusted && event.isPrimary && event.button === 0)
         counter.count += 1;
     };
-    addEventListener('pointerdown', count, { capture: true });
+    const typing = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        target.matches(
+          'textarea, input:not([type=checkbox], [type=radio], [type=button], [type=submit], [type=reset])'
+        ));
+    const activate = (event: KeyboardEvent) => {
+      if (
+        event.isTrusted &&
+        !event.repeat &&
+        (event.key === 'Enter' || (event.key === ' ' && !typing(event.target)))
+      )
+        counter.count += 1;
+    };
+    addEventListener('pointerdown', press, { capture: true });
+    addEventListener('keydown', activate, { capture: true });
     counter.stop = () => {
-      removeEventListener('pointerdown', count, { capture: true });
+      removeEventListener('pointerdown', press, { capture: true });
+      removeEventListener('keydown', activate, { capture: true });
     };
     (window as TapCounter).krabTaps = counter;
   });
