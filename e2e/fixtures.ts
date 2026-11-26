@@ -183,16 +183,6 @@ const storedTrips = (page: Page) =>
 export const storedDrops = async (page: Page) =>
   (await storedTrips(page)).reduce((sum, trip) => sum + trip.drops.length, 0);
 
-const dropNames = (trip: StoredTrip) =>
-  trip.drops.map((drop) => {
-    const gear = trip.gear.find(({ id }) => id === drop.gearId);
-    const kind = gear?.kind === 'net' ? 'Net' : 'Pot';
-    return [drop.id, `${kind} ${String(gear?.number)}`] as const;
-  });
-
-export const storedDropNames = async (page: Page) =>
-  Object.fromEntries((await storedTrips(page)).flatMap(dropNames));
-
 export const storedCollections = async (page: Page) =>
   (await storedTrips(page)).flatMap((trip) =>
     trip.drops.map((drop) => ({
