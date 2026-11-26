@@ -1696,6 +1696,31 @@ const seedPastTrip = (page: Page, pots: number, westOfFirst: number) =>
     { pots, westOfFirst, sea: MADE_UP_SEA }
   );
 
+const shareInColour = async (page: Page, clip: Box, colour: string) =>
+  page.evaluate(
+    async ({ png, colour }) => {
+      const want = (colour.match(/\d+/g) ?? []).map(Number);
+      const bytes = Uint8Array.from(atob(png), (char) => char.charCodeAt(0));
+      const image = await createImageBitmap(
+        new Blob([bytes], { type: 'image/png' })
+      );
+      const canvas = new OffscreenCanvas(image.width, image.height);
+      const context = canvas.getContext('2d');
+      if (!context) return 0;
+      context.drawImage(image, 0, 0);
+      const { data } = context.getImageData(0, 0, image.width, image.height);
+      let near = 0;
+      for (let at = 0; at < data.length; at += 4)
+        if (want.every((value, part) => Math.abs(data[at + part] - value) < 24))
+          near += 1;
+      return near / (data.length / 4);
+    },
+    {
+      png: (await page.screenshot({ clip, scale: 'css' })).toString('base64'),
+      colour
+    }
+  );
+
 test('uncollected gear from past trips grouped at the east edge of the map shows whole, its mark and full count included, at +99 and at +100', async ({
   page
 }) => {
@@ -1724,18 +1749,29 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
     });
     expect(await group.evaluateAll(takeTapsAtCentre)).toEqual([true]);
     const corner = await boxOf(count);
+    const mark = await group.evaluate(
+      (button, { x, y }) => {
+        const hit = document.elementFromPoint(x, y);
+        const svg = hit?.closest('button') === button && hit.closest('svg');
+        const circle = svg && svg.querySelector('circle');
+        if (!circle) return null;
+        const box = svg.getBoundingClientRect();
+        return {
+          box: { x: box.x, y: box.y, width: box.width, height: box.height },
+          fill: getComputedStyle(circle).fill
+        };
+      },
+      { x: corner.x + corner.width + 3, y: corner.y - 3 }
+    );
     expect(
-      await group.evaluate(
-        (button, { x, y }) => {
-          const hit = document.elementFromPoint(x, y);
-          return (
-            hit?.closest('button') === button && hit.closest('svg') !== null
-          );
-        },
-        { x: corner.x + corner.width + 3, y: corner.y - 3 }
-      ),
+      mark,
       'the uncollected mark drawn on the corner of the group'
-    ).toBe(true);
+    ).not.toBeNull();
+    if (mark)
+      expect(
+        await shareInColour(page, mark.box, mark.fill),
+        'share of the uncollected mark painted in its fill'
+      ).toBeGreaterThan(0.2);
     expect(
       (await gearSpots(map))
         .find(({ gear }) => gear.length > 1)

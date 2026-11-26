@@ -825,7 +825,7 @@ test('two failed drops share one Retry that saves the oldest, then offers the ot
   expect(await storedDrops(page)).toBe(1);
 });
 
-test("ending the trip retires a failed drop's Retry so it never saves into the next trip, and the Trip ended notice leaves after exactly 4 seconds", async ({
+test("ending the trip retires a failed drop's Retry so it never saves into the next trip, and the Trip ended notice expires after exactly 4 seconds", async ({
   page
 }) => {
   const failedSave = toastOf(page).filter({
@@ -855,12 +855,12 @@ test("ending the trip retires a failed drop's Retry so it never saves into the n
   await expect(sheet).toBeHidden();
   await expect(failedSave).toBeHidden();
   await releaseStorage(page);
-  const tripEnded = toastOf(page).filter({ hasText: 'Trip ended' });
-  await shownOnceStored(page, tripEnded);
+  const tripEndedNotice = toastOf(page).filter({ hasText: 'Trip ended' });
+  await shownOnceStored(page, tripEndedNotice);
   await page.clock.runFor(3999);
-  await expect(tripEnded).toBeVisible();
+  await expect(tripEndedNotice).toBeVisible();
   await page.clock.runFor(1);
-  await expect(toastOf(page)).toBeHidden();
+  await expect(toastOf(page)).toHaveCount(0);
   await expect(failedSave).toBeHidden();
   expect(await storedPlacements(page)).toEqual([
     { kind: 'pot', placedAt: PAUSED.getTime(), lat: FIRST_FIX.latitude }

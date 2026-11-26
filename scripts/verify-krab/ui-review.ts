@@ -685,6 +685,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   await page.mouse.move(0, 0);
   await page.clock.fastForward(8000);
   await expect(toastOf(page)).toBeHidden();
+  await expect(map.getByRole('img', { name: 'Last position' })).toBeVisible();
   const expired = await newest.evaluate(footprintOf);
   await capture(`newest-${tag}-2-after-undo-expires`);
   keep('newest-during-undo.json', { size, view, covers, during, expired });
@@ -708,7 +709,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   expect(expired.left).toBe(during.left);
   expect(expired.top).toBe(during.top);
   log(
-    `At ${tag}, offline Street shows the Offline notice; Pot 2, dropped south of Pot 1, is captured while its Undo toast shows, its whole marker and time label clear of toast, notice and credits, with the centre and four inset corners of its tap area all hitting it; after the toast expires it has not moved. Kept in newest-during-undo.json`
+    `At ${tag}, offline Street shows the Offline notice; Pot 2, dropped south of Pot 1, is captured while its Undo toast shows, its whole marker and time label clear of toast, notice and credits, with the centre and four inset corners of its tap area all hitting it; after the toast expires and the position shows as Last position it has not moved. Kept in newest-during-undo.json`
   );
 });
 
@@ -885,19 +886,20 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
     'Map'
   );
   await context.grantPermissions(['geolocation']);
-  await holdFixes(page);
+  await holdFixes(page, { steady: true });
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const sheet = page.getByRole('dialog');
   const finding = page.getByText('Finding position');
   const names = ['Pot 1', 'Pot 2', 'Pot 3', 'Pot 4', 'Pot 5', 'Net 1'];
+  const fixAt = (index: number) => ({
+    latitude: MADE_UP_SEA.latitude + index * 0.0012,
+    longitude: MADE_UP_SEA.longitude + index * 0.0004
+  });
   await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   for (const [index, name] of names.entries()) {
-    await deliverFix(page, {
-      latitude: MADE_UP_SEA.latitude + index * 0.0012,
-      longitude: MADE_UP_SEA.longitude + index * 0.0004
-    });
+    await deliverFix(page, fixAt(index));
     await expect(finding).toBeHidden();
     const kind = name.startsWith('Net') ? 'Net' : 'Pot';
     await page
@@ -916,8 +918,10 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   const settledMarkers = () =>
     settledObservation(() => markers.evaluateAll(markerStates));
   const chain: Record<string, Awaited<ReturnType<typeof gearSpots>>> = {};
+  const currentPosition = map.getByRole('img', { name: /^Current position/ });
   const expectEveryDropOnce = async (state: string) => {
     await settledMarkers();
+    await expect(currentPosition).toBeVisible();
     await capture(state);
     const spots = await gearSpots(map);
     chain[state] = spots;
@@ -930,6 +934,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await page.mouse.move(0, 0);
   await page.clock.fastForward(8000);
   await expect(toastOf(page)).toBeHidden();
+  await deliverFix(page, fixAt(names.length - 1));
   await expectEveryDropOnce('six-2-settled');
   const zoomIn = map.getByRole('button', { name: 'Zoom in' });
   const zoomOut = map.getByRole('button', { name: 'Zoom out' });
