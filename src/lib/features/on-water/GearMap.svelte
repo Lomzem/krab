@@ -36,6 +36,7 @@
     keepClear = null,
     fitLabel,
     controls,
+    status = null,
     frame
   }: {
     items: MapItem[];
@@ -51,6 +52,7 @@
     keepClear?: string | null;
     fitLabel?: string;
     controls?: Snippet;
+    status?: string | null;
     frame?: Snippet<[map: Snippet]>;
   } = $props();
 
@@ -138,6 +140,7 @@
       {keepClear}
       {fitLabel}
       {controls}
+      {status}
       {label}
       onactivate={activate}
     >

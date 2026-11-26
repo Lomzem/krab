@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from '@ui-sdk/svelte/button';
+  import { Toggle } from '@ui-sdk/svelte/toggle';
   import { elementRef } from '#lib/shared/element-ref.js';
   import type { Snippet } from 'svelte';
   import Icon from '#lib/shared/Icon.svelte';
@@ -113,6 +114,9 @@
 
   const compassOn = $derived(
     compass.kind !== 'off' && compass.kind !== 'unavailable'
+  );
+  const motionDenied = $derived(
+    compass.kind === 'unavailable' && compass.reason === 'denied'
   );
   const compassState = $derived.by(() => {
     if (compass.kind !== 'unavailable') return COMPASS_STATES[compass.kind];
@@ -266,6 +270,7 @@
 </script>
 
 <GearMap
+  status={motionDenied ? 'Motion access off' : null}
   items={mapItems}
   {itemOf}
   {onopen}
@@ -302,18 +307,21 @@
       </Button>
     {/if}
     {#if compassShown}
-      <button
-        type="button"
+      <Toggle
         class="{CAPSULE_BUTTON} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
         aria-label="Compass"
-        aria-pressed={compassOn}
         aria-describedby="compass-state"
-        onclick={oncompass}
+        bind:pressed={
+          () => compassOn,
+          () => {
+            oncompass();
+          }
+        }
       >
         <Icon
           name={compass.kind === 'unavailable' ? 'compass-off' : 'compass'}
         />
-      </button>
+      </Toggle>
       <span id="compass-state" class="sr-only">{compassState}</span>
     {/if}
   {/snippet}

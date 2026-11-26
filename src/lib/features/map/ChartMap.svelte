@@ -67,6 +67,7 @@
     beside,
     onactivate,
     controls,
+    status = null,
     keepClear = null,
     fitLabel = 'Show all gear'
   }: {
@@ -83,6 +84,7 @@
     beside?: Snippet<[spot: Spot]>;
     onactivate: (spot: Spot) => void;
     controls?: Snippet;
+    status?: string | null;
     keepClear?: string | null;
     fitLabel?: string;
   } = $props();
@@ -103,6 +105,7 @@
   let framePending = false;
   let capsule = $state<HTMLDivElement>();
   let notice = $state<HTMLDivElement>();
+  let statusNote = $state<HTMLParagraphElement>();
   const noticeText = $derived.by(() => {
     if (loadingStyle) return 'Loading map';
     return availability === 'available' ? null : OUTAGE_NOTICE[availability];
@@ -271,20 +274,22 @@
   type Rect = { left: number; right: number; top: number; bottom: number };
 
   const coversIn = (area: DOMRect, without?: HTMLElement): Rect[] =>
-    [chip, capsule, notice].flatMap((element) => {
-      const box =
-        element === without ? undefined : element?.getBoundingClientRect();
-      return box
-        ? [
-            {
-              left: box.left - area.left - CLEAR_GAP,
-              right: box.right - area.left + CLEAR_GAP,
-              top: box.top - area.top - CLEAR_GAP,
-              bottom: box.bottom - area.top + CLEAR_GAP
-            }
-          ]
-        : [];
-    });
+    [chip, capsule, notice, status ? statusNote : undefined].flatMap(
+      (element) => {
+        const box =
+          element === without ? undefined : element?.getBoundingClientRect();
+        return box
+          ? [
+              {
+                left: box.left - area.left - CLEAR_GAP,
+                right: box.right - area.left + CLEAR_GAP,
+                top: box.top - area.top - CLEAR_GAP,
+                bottom: box.bottom - area.top + CLEAR_GAP
+              }
+            ]
+          : [];
+      }
+    );
 
   const drawnOf = ({ at, box }: Pick<Spot, 'at' | 'box'>): Rect | null => {
     if (!map) return null;
@@ -978,7 +983,21 @@
             class="mx-2 h-px bg-border tiny-map:mx-0 tiny-map:my-2 tiny-map:h-auto tiny-map:w-px"
             aria-hidden="true"
           ></span>
-          {@render controls()}
+          <div class="relative flex flex-col tiny-map:flex-row">
+            {@render controls()}
+            <div
+              class="pointer-events-none absolute right-full bottom-0 mr-3 flex h-11 items-center tiny-map:top-full tiny-map:right-0 tiny-map:bottom-auto tiny-map:mt-14 tiny-map:mr-0"
+            >
+              <p
+                bind:this={statusNote}
+                role="status"
+                class={status &&
+                  'rounded-control border border-input bg-card px-2.5 py-1.5 text-sm leading-tight font-medium whitespace-nowrap text-foreground shadow-sm'}
+              >
+                {status ?? ''}
+              </p>
+            </div>
+          </div>
         {/if}
       </div>
       <span

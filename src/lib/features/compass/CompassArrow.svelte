@@ -1,5 +1,6 @@
 <script lang="ts">
   import { FOCUS } from '#lib/shared/control-states.js';
+  import { Button } from '@ui-sdk/svelte/button';
   import type { Snippet } from 'svelte';
   import BearingArrow from './BearingArrow.svelte';
   import { arrowDeg } from './heading';
@@ -55,8 +56,7 @@
     ? 'grid flex-none grid-cols-[auto_auto] items-center gap-x-2.5'
     : 'flex flex-none flex-col items-center'}
 >
-  <button
-    type="button"
+  <Button
     class={[
       `grid size-11 touch-manipulation place-items-center rounded-full border ${FOCUS}`,
       compass.kind === 'usable'
@@ -67,7 +67,7 @@
     onclick={ontoggle}
   >
     <BearingArrow degrees={shown} />
-  </button>
+  </Button>
   {@render beside?.()}
   <span
     class={[
