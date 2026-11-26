@@ -147,6 +147,7 @@ test('finding gear on the Map tab and from the Gear list', async ({
   log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
+  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeHidden();
@@ -161,7 +162,9 @@ test('finding gear on the Map tab and from the Gear list', async ({
   await expect(
     map.getByRole('img', { name: /^Current position/ })
   ).toBeVisible();
-  await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
+  await page.mouse.move(0, 0);
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   await expect(
     page.getByRole('button', { name: /^Nearest gear: Pot 1\b.*At gear$/ })
   ).toBeVisible();

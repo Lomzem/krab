@@ -260,6 +260,7 @@ test('visual inventory with location denied', async ({
   );
   keep('doctor.json', doctor());
   await context.clearPermissions();
+  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(
@@ -283,7 +284,8 @@ test('visual inventory with location denied', async ({
   await steps.getByRole('button', { name: 'Close' }).click();
   await expect(steps).toBeHidden();
   await page.mouse.move(0, 0);
-  await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   const row = page
     .getByRole('main')
     .getByRole('button')

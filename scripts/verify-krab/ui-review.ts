@@ -4,6 +4,7 @@ import { expect, test } from './recipe';
 import AxeBuilder from '@axe-core/playwright';
 import { MADE_UP_SEA } from '../../playwright.config';
 import { toastOf } from '../../e2e/fixtures';
+import { gearSpots } from '../../e2e/gear-on-map';
 import { deliverFix, holdFixes } from '../../e2e/held-geolocation';
 import { doctor } from './doctor';
 import { readTrips, recorder } from './evidence';
@@ -274,6 +275,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
     if (message.type() === 'error') log(`console: ${message.text()}`);
   });
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
+  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   for (let number = 1; number <= 8; number += 1) {
@@ -300,7 +302,8 @@ test('supplemental UI review with live maps and accessibility observations', asy
   await expect(credits).toBeInViewport();
   await capture('01a-toast-above-credits');
   await page.mouse.move(0, 0);
-  await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const spots = map.getByRole('button', { name: /^Pot \d+[ ,]/ });
   const drawn = async () =>
@@ -641,6 +644,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
     : { width: 402, height: 681 };
   const map = page.getByRole('region', { name: 'Map', exact: true });
   await page.setViewportSize(size);
+  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   const finding = page.getByText('Finding position');
@@ -661,9 +665,11 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   await expect(finding).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
-  const newest = map.getByRole('button', {
-    name: /^(Pot 2,|Pot \d+ .*gear (?:here|in this area)[^:]*: .*\bPot 2\b)/
-  });
+  const holding = (await gearSpots(map)).find(({ gear }) =>
+    gear.includes('Pot 2')
+  );
+  const lead = /^(?:Pot|Net) \d+/.exec(holding?.name ?? '')?.[0] ?? 'Pot 2';
+  const newest = map.getByRole('button', { name: new RegExp(`^${lead}[ ,]`) });
   const during = await settledObservation(() => newest.evaluate(footprintOf));
   const tag = `${String(size.width)}x${String(size.height)}`;
   const covers = {
@@ -676,7 +682,9 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   const view = await rectOf(map.getByRole('region', { name: 'Map view' }));
   await capture(`newest-${tag}-1-during-undo-and-notice`);
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
-  await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
+  await page.mouse.move(0, 0);
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   const expired = await newest.evaluate(footprintOf);
   await capture(`newest-${tag}-2-after-undo-expires`);
   keep('newest-during-undo.json', { size, view, covers, during, expired });
@@ -724,6 +732,7 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
   const tag = `${String(size.width)}x${String(size.height)}`;
   const map = page.getByRole('region', { name: 'Map', exact: true });
   await page.setViewportSize(size);
+  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeHidden();
@@ -751,7 +760,9 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
   const settled = await measure();
   await capture(`single-${tag}-2-settled`);
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
-  await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
+  await page.mouse.move(0, 0);
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   const expired = { pin: await pin.evaluate(footprintOf) };
   await capture(`single-${tag}-3-after-undo-expires`);
   keep('single-newest-street.json', {
@@ -783,7 +794,7 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
   );
 });
 
-test('Trip ended leaves on its own with the real clock running', async ({
+test('Trip ended shows, then leaves on its own', async ({
   page,
   context
 }, info) => {
@@ -795,6 +806,7 @@ test('Trip ended leaves on its own with the real clock running', async ({
   );
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation(MADE_UP_SEA);
+  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeHidden();
@@ -808,31 +820,21 @@ test('Trip ended leaves on its own with the real clock running', async ({
   await page.mouse.move(0, 0);
   const ended = toastOf(page).getByText('Trip ended');
   await expect(ended).toBeVisible();
-  const shownAt = Date.now();
   await capture('1-trip-ended-shown');
-  await expect(ended).toBeHidden({ timeout: 10000 });
-  const lasted = Date.now() - shownAt;
+  await page.clock.fastForward(4000);
+  await expect(ended).toBeHidden();
   await capture('2-trip-ended-gone');
-  expect(lasted).toBeGreaterThan(3000);
-  expect(lasted).toBeLessThan(6000);
   log(
-    `With no fake clock, Trip ended showed then left by itself after about ${String(Math.round(lasted / 100) / 10)} s`
+    'Trip ended showed, then left by itself once the clock moved on; e2e/undo.test.ts proves its exact 4 s lifetime'
   );
 });
 
-function spotsOf(markers: Element[]) {
-  return markers.map((marker) => {
-    const button = marker.querySelector('button');
-    const name = button?.getAttribute('aria-label') ?? '';
-    const single = /^((?:Pot|Net) \d+),/.exec(name)?.[1];
-    const listed = /gear (?:here|in this area)[^:]*: ([^;]*)/.exec(name)?.[1];
-    return {
-      key: marker.getAttribute('data-place'),
-      gear: single ? [single] : (listed?.split(', ') ?? []),
-      current: button?.getAttribute('aria-current') ?? null,
-      focused: button !== null && button === document.activeElement
-    };
-  });
+function markerStates(buttons: Element[]) {
+  return buttons.map((button) => ({
+    name: button.getAttribute('aria-label'),
+    current: button.getAttribute('aria-current'),
+    focused: button === document.activeElement
+  }));
 }
 
 function nameOfFocused() {
@@ -888,6 +890,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   const sheet = page.getByRole('dialog');
   const finding = page.getByText('Finding position');
   const names = ['Pot 1', 'Pot 2', 'Pot 3', 'Pot 4', 'Pot 5', 'Net 1'];
+  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   for (const [index, name] of names.entries()) {
@@ -909,21 +912,24 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await expect
     .poll(async () => (await readTrips(page))[0]?.drops.length)
     .toBe(6);
-  const markers = map.locator('.maplibregl-marker[data-place]');
-  const settledSpots = () =>
-    settledObservation(() => markers.evaluateAll(spotsOf));
-  const chain: Record<string, ReturnType<typeof spotsOf>> = {};
+  const markers = map.getByRole('button', { name: /^(?:Pot|Net) \d+\b/ });
+  const settledMarkers = () =>
+    settledObservation(() => markers.evaluateAll(markerStates));
+  const chain: Record<string, Awaited<ReturnType<typeof gearSpots>>> = {};
   const expectEveryDropOnce = async (state: string) => {
-    const spots = await settledSpots();
-    chain[state] = spots;
+    await settledMarkers();
     await capture(state);
+    const spots = await gearSpots(map);
+    chain[state] = spots;
     expect(spots.filter(({ gear }) => gear.length === 0)).toEqual([]);
     expect(spots.flatMap(({ gear }) => gear).toSorted()).toEqual(
       names.toSorted()
     );
   };
   await expectEveryDropOnce('six-1-during-undo');
-  await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
+  await page.mouse.move(0, 0);
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   await expectEveryDropOnce('six-2-settled');
   const zoomIn = map.getByRole('button', { name: 'Zoom in' });
   const zoomOut = map.getByRole('button', { name: 'Zoom out' });
@@ -945,16 +951,16 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
     await sheet.getByRole('button', { name: 'Show on map' }).click();
     await expect(sheet).toHaveCount(0);
   };
-  const selection: Record<string, ReturnType<typeof spotsOf>> = {};
+  const selection: Record<string, ReturnType<typeof markerStates>> = {};
   const pot3 = map.getByRole('button', { name: /^Pot 3,/ });
   await showFromGear('Pot 3');
   await expect(pot3).toBeFocused();
-  selection['selected-1-single-focused'] = await settledSpots();
+  selection['selected-1-single-focused'] = await settledMarkers();
   await capture('selected-1-single-focused');
   await page.keyboard.press('Tab');
   await expect(pot3).not.toBeFocused();
   await expect(pot3).toHaveAttribute('aria-current', 'true');
-  selection['selected-2-single-focus-moved'] = await settledSpots();
+  selection['selected-2-single-focus-moved'] = await settledMarkers();
   await capture('selected-2-single-focus-moved');
 
   await deliverFix(page, MADE_UP_SEA);
@@ -965,17 +971,19 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
     .click();
   await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(toastOf(page)).toContainText('Pot 6 dropped');
-  await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
+  await page.mouse.move(0, 0);
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   const ledByPot6 = map.getByRole('button', { name: /^Pot 6 \+/ });
   await showFromGear('Pot 6');
   await expect(ledByPot6).toBeFocused();
   await expect(ledByPot6).toHaveAttribute('aria-current', 'true');
-  selection['selected-3-group-focused'] = await settledSpots();
+  selection['selected-3-group-focused'] = await settledMarkers();
   await capture('selected-3-group-focused');
   const mapView = map.getByRole('region', { name: 'Map view' });
   for (const key of ['ArrowRight', 'ArrowDown']) await mapView.press(key);
   await expect(map.locator('[aria-current="true"]')).toHaveCount(0);
-  selection['selected-4-cleared-after-pan'] = await settledSpots();
+  selection['selected-4-cleared-after-pan'] = await settledMarkers();
   await capture('selected-4-cleared-after-pan');
   keep('show-on-map-selection.json', selection);
 
