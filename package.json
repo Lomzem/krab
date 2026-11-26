@@ -17,7 +17,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p src/service-worker",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint . --max-warnings 0 --concurrency 2",
     "ci": "bun run --parallel --no-exit-on-error 'bun run format:check && bun run lint && bun run check && bun run test:unit' test:policy",
     "test:policy": "bun run scripts/policy.test.ts",
     "setup:security": "bun run scripts/install-gitleaks.ts && lefthook install",

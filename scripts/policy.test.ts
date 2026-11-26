@@ -814,10 +814,66 @@ const cases: PolicyCase[] = [
     file: 'src/lib/features/on-water/Probe.svelte',
     valid:
       '<p\n  class="pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"\n  style="padding-top: calc(0.75rem + env(safe-area-inset-top))"\n>\n  Pot\n</p>\n',
-    invalid: '<p class="pb-[max(0.5rem,1rem)]">Pot</p>\n',
+    invalid:
+      '<p class="pb-[max(0.5rem,var(--safe-area-inset-bottom))]">Pot</p>\n',
     command: 'lint',
-    diagnostic: 'pb-[max(0.5rem,1rem)] is off the spacing scale',
-    risk: 'Safe-area insets are refused, or the exemption admits any arbitrary spacing'
+    diagnostic:
+      'pb-[max(0.5rem,var(--safe-area-inset-bottom))] is off the spacing scale',
+    risk: 'Safe-area insets are refused, or the exemption admits spacing that only names a safe-area inset'
+  },
+  {
+    name: 'arbitrary font size property in chrome',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p class="[font-size:var(--text-control)]">Pot</p>\n',
+    invalid: '<p class="[font-size:17px]">Pot</p>\n',
+    command: 'lint',
+    diagnostic: '[font-size:17px] is off the type scale',
+    risk: 'An arbitrary property utility sets a font size off the type scale'
+  },
+  {
+    name: 'arbitrary padding property in chrome',
+    file: 'src/lib/features/compass/Probe.svelte',
+    valid: '<p class="[padding:var(--spacing-edge)]">Pot</p>\n',
+    invalid: '<p class="[padding:13px]">Pot</p>\n',
+    command: 'lint',
+    diagnostic: '[padding:13px] is off the spacing scale',
+    risk: 'An arbitrary property utility sets spacing off the scale'
+  },
+  {
+    name: 'named color in an arbitrary chrome utility',
+    file: 'src/lib/shared/Probe.svelte',
+    valid: '<p class="bg-[var(--color-card)]">Pot</p>\n',
+    invalid: '<p class="bg-[tomato]">Pot</p>\n',
+    command: 'lint',
+    diagnostic: 'Raw color in bg-[tomato]',
+    risk: 'A CSS named color slips past the raw color check'
+  },
+  {
+    name: 'undeclared color token in a chrome utility',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid: '<p class="bg-(--color-card)">Pot</p>\n',
+    invalid: '<p class="bg-(--color-red-500)">Pot</p>\n',
+    command: 'lint',
+    diagnostic: '--color-red-500 is not declared in the global stylesheet',
+    risk: 'A Tailwind palette variable stands in for a semantic color token'
+  },
+  {
+    name: 'undeclared text token in a chrome inline style',
+    file: 'src/lib/shared/Probe.svelte',
+    valid: '<p style="font-size: var(--text-title)">Pot</p>\n',
+    invalid: '<p style="font-size: var(--text-lg)">Pot</p>\n',
+    command: 'lint',
+    diagnostic: '--text-lg is not declared in the global stylesheet',
+    risk: 'A Tailwind default size variable stands in for the type scale'
+  },
+  {
+    name: 'undeclared spacing token in an arbitrary chrome utility',
+    file: 'src/lib/features/compass/Probe.svelte',
+    valid: '<p class="px-[var(--spacing-edge)]">Pot</p>\n',
+    invalid: '<p class="px-[var(--spacing-wide)]">Pot</p>\n',
+    command: 'lint',
+    diagnostic: '--spacing-wide is not declared in the global stylesheet',
+    risk: 'Any name under the spacing prefix passes as a spacing token'
   },
   {
     name: 'SVG icon paint exemption',
@@ -831,6 +887,17 @@ const cases: PolicyCase[] = [
     risk: 'Icons and arrows hard-code paint, or currentColor and vector geometry are refused'
   },
   {
+    name: 'SVG paint exemption in a style declaration',
+    file: 'src/lib/shared/Probe.svelte',
+    valid:
+      '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">\n  <path d="M12 20V4M5.5 10.5 12 4l6.5 6.5" style="fill: url(#fade)" />\n</svg>\n',
+    invalid:
+      '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">\n  <path d="M12 20V4M5.5 10.5 12 4l6.5 6.5" style="fill: red" />\n</svg>\n',
+    command: 'lint',
+    diagnostic: 'SVG paint fill: red',
+    risk: 'Paint in a style declaration skips the SVG paint policy, or a gradient reference reads as a hex color'
+  },
+  {
     name: 'map canvas exemption',
     file: 'src/lib/features/map/probe.ts',
     invalidFile: 'src/lib/features/on-water/probe.ts',
@@ -841,16 +908,37 @@ const cases: PolicyCase[] = [
     risk: 'MapLibre styling in the map feature is refused, or On Water escapes the token rule'
   },
   {
-    name: 'bits-ui import outside the bait command wrappers',
+    name: 'new bits-ui wrapper beside the four bait command wrappers',
     file: 'src/lib/features/on-water/bait-command/probe.svelte',
-    invalidFile: 'src/lib/features/on-water/Probe.svelte',
     valid:
-      '<script lang="ts">\n  import { Command } from \'bits-ui\';\n</script>\n\n<Command.Root />\n',
+      '<script lang="ts">\n  import Command from \'./command.svelte\';\n</script>\n\n<Command />\n',
     invalid:
       '<script lang="ts">\n  import { Command } from \'bits-ui\';\n</script>\n\n<Command.Root />\n',
     command: 'lint',
     diagnostic: 'Importing bits-ui outside the bait command wrappers',
-    risk: 'bits-ui spreads past the wrappers UI SDK replaces, or the wrappers are refused'
+    risk: 'A new bits-ui wrapper joins the four the allowlist names, or the folder cannot use them'
+  },
+  {
+    name: 'bits-ui import outside the bait command folder',
+    file: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<script lang="ts">\n  import Command from \'./bait-command/command.svelte\';\n</script>\n\n<Command />\n',
+    invalid:
+      '<script lang="ts">\n  import { Command } from \'bits-ui\';\n</script>\n\n<Command.Root />\n',
+    command: 'lint',
+    diagnostic: 'Importing bits-ui outside the bait command wrappers',
+    risk: 'bits-ui spreads past the wrappers UI SDK replaces, or the wrappers cannot be composed'
+  },
+  {
+    name: 'bits-ui through createRequire',
+    file: 'src/lib/shared/probe.ts',
+    valid:
+      "import { createRequire } from 'node:module';\n\nconst load = createRequire(import.meta.url);\nexport const effect: unknown = load('effect');\n",
+    invalid:
+      "import { createRequire } from 'node:module';\n\nconst load = createRequire(import.meta.url);\nexport const controls: unknown = load('bits-ui');\n",
+    command: 'lint',
+    diagnostic: 'Importing bits-ui outside the bait command wrappers',
+    risk: 'An aliased require loads bits-ui past the allowlist'
   },
   {
     name: 'dynamic bits-ui import',
@@ -871,6 +959,28 @@ const cases: PolicyCase[] = [
     command: 'lint',
     diagnostic: 'shadcn-svelte in devDependencies',
     risk: 'shadcn-svelte comes back as a dependency, or the temporary bits-ui dependency is refused'
+  },
+  {
+    name: 'npm alias for shadcn-svelte',
+    file: 'probe-alias/package.json',
+    invalidFile: 'probe-shadcn-alias/package.json',
+    exact: true,
+    valid: '{\n  "dependencies": { "effect": "npm:effect@4.1.2" }\n}\n',
+    invalid: '{\n  "dependencies": { "ui": "npm:shadcn-svelte@1.0.0" }\n}\n',
+    command: 'lint',
+    diagnostic: 'ui in dependencies aliases shadcn-svelte',
+    risk: 'shadcn-svelte comes back under another name, or plain npm aliases are refused'
+  },
+  {
+    name: 'npm alias for bits-ui',
+    file: 'probe-bits-ui/package.json',
+    invalidFile: 'probe-bits-ui-alias/package.json',
+    exact: true,
+    valid: '{\n  "dependencies": { "bits-ui": "npm:bits-ui@2.21.0" }\n}\n',
+    invalid: '{\n  "dependencies": { "controls": "npm:bits-ui@2.21.0" }\n}\n',
+    command: 'lint',
+    diagnostic: 'controls in dependencies aliases bits-ui',
+    risk: 'bits-ui imports hide behind an alias the import check cannot see'
   },
   {
     name: 'shadcn-svelte registry scaffolding',
@@ -1053,9 +1163,10 @@ const passes: {
   takes: (row: Pick<PolicyCase, 'warningOnly'>, variant: Variant) => boolean;
 }[] = [
   { command: 'lint', takes: () => true },
+  { command: 'check', takes: (_row, variant) => variant === 'valid' },
   {
     command: 'check',
-    takes: (row, variant) => variant === 'valid' || row.warningOnly === true
+    takes: (row, variant) => variant === 'invalid' && row.warningOnly === true
   },
   {
     command: 'check',
@@ -1098,7 +1209,8 @@ for (const { command, takes } of passes) {
       found.some(
         (diagnostic) =>
           diagnostic.file === input.file &&
-          diagnostic.text.includes(input.row.diagnostic)
+          diagnostic.text.includes(input.row.diagnostic) &&
+          (!input.row.warningOnly || / WARNING /.test(diagnostic.text))
       ),
       `${input.row.name}: missing file-specific diagnostic: ${output}`
     );

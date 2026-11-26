@@ -37,7 +37,12 @@ const CHROME = [
   'src/lib/shared/**/*.{ts,svelte}'
 ];
 
-const BITS_UI_WRAPPERS = ['src/lib/features/on-water/bait-command/'];
+const BITS_UI_WRAPPERS = [
+  'src/lib/features/on-water/bait-command/command-input.svelte',
+  'src/lib/features/on-water/bait-command/command-item.svelte',
+  'src/lib/features/on-water/bait-command/command-list.svelte',
+  'src/lib/features/on-water/bait-command/command.svelte'
+];
 
 const EFFECT_ONLY = [
   {

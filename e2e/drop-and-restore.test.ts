@@ -36,7 +36,7 @@ test('a pot dropped with a granted fix is listed under Gear and survives a reloa
   await turnOnLocation.click();
   await expect(page.getByText('Finding position')).toBeHidden();
   const dropTaps = await tapsDuring(page, async () => {
-    await page.getByRole('button', { name: 'Drop pot' }).click();
+    await page.getByRole('button', { name: 'Drop pot' }).tap();
     await expect(toastOf(page)).toContainText('Pot 1 dropped');
   });
   expect(dropTaps, 'taps to drop with a fresh fix').toBe(1);

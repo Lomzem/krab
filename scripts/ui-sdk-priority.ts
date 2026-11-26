@@ -22,29 +22,36 @@ const specifierOf = (node: ESTree.Node | null | undefined) => {
   return null;
 };
 
-const shadcnDependencies = (manifest: unknown) =>
+const NPM_ALIAS = /^npm:((?:@[^/@]+\/)?[^@]+)/;
+
+const dependencyProblems = (manifest: unknown) =>
   DEPENDENCY_FIELDS.flatMap((field) => {
     const dependencies =
       typeof manifest === 'object' && manifest !== null
         ? (manifest as Record<string, unknown>)[field]
         : null;
-    return typeof dependencies === 'object' && dependencies !== null
-      ? Object.keys(dependencies)
-          .filter((name) => SHADCN.test(name))
-          .map((name) => ({ name, field }))
-      : [];
+    if (typeof dependencies !== 'object' || dependencies === null) return [];
+    return Object.entries(dependencies).flatMap(([name, version]) => {
+      const target =
+        typeof version === 'string' ? NPM_ALIAS.exec(version)?.[1] : undefined;
+      if (SHADCN.test(name))
+        return [{ messageId: 'shadcnDependency', data: { name, field } }];
+      if (
+        target !== undefined &&
+        target !== name &&
+        (SHADCN.test(target) || BITS_UI.test(target))
+      )
+        return [{ messageId: 'alias', data: { name, field, target } }];
+      return [];
+    });
   });
 
 const checkManifest = (context: Rule.RuleContext, program: AST.YAMLProgram) => {
   for (const document of program.body)
-    for (const data of shadcnDependencies(
+    for (const problem of dependencyProblems(
       document.content ? getStaticYAMLValue(document.content) : null
     ))
-      context.report({
-        loc: document.loc,
-        messageId: 'shadcnDependency',
-        data
-      });
+      context.report({ loc: document.loc, ...problem });
 };
 
 export const uiSdkPriority: Rule.RuleModule = {
@@ -63,6 +70,8 @@ export const uiSdkPriority: Rule.RuleModule = {
         '{{name}} in {{field}} brings shadcn-svelte back. Build controls with UI SDK primitives instead.',
       registry:
         'components.json is shadcn-svelte registry scaffolding. Build controls with UI SDK primitives instead.',
+      alias:
+        '{{name}} in {{field}} aliases {{target}} under another name. Build controls with UI SDK primitives instead.',
       shadcnImport:
         'Importing {{specifier}} brings shadcn-svelte back. Build controls with UI SDK primitives instead.',
       bitsUi:
@@ -73,7 +82,7 @@ export const uiSdkPriority: Rule.RuleModule = {
     const [{ bitsUi }] = context.options as [Options];
     const file = relative(context.cwd, context.filename);
     const name = basename(file);
-    const bitsUiAllowed = bitsUi.some((prefix) => file.startsWith(prefix));
+    const bitsUiAllowed = bitsUi.includes(file);
 
     const check = (
       node: ESTree.Node,
@@ -114,8 +123,7 @@ export const uiSdkPriority: Rule.RuleModule = {
         check(node, node.source);
       },
       CallExpression(node) {
-        if (node.callee.type === 'Identifier' && node.callee.name === 'require')
-          check(node, node.arguments[0]);
+        check(node, node.arguments[0]);
       },
       'TSImportType, TSExternalModuleReference'(node: ESTree.Node) {
         const typed = node as unknown as {

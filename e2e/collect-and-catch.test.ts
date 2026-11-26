@@ -46,15 +46,19 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
   await gearTab(page).click();
 
   const collectTaps = await tapsDuring(page, async () => {
-    await inWaterRow(page, 'Pot 1').click();
+    await inWaterRow(page, 'Pot 1').tap();
     await expect(
       sheet.getByRole('button', { name: 'Delete drop' })
     ).toBeVisible();
     await expectAccessibleInBothThemes(page);
-    await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+    await sheet.getByRole('button', { name: 'Collect', exact: true }).tap();
     await expect(sheet.getByRole('heading', { name: 'Catch' })).toBeFocused();
     await expect.poll(collections).toEqual([{ collected: true, catch: null }]);
   });
+  expect(
+    collectTaps,
+    'taps to collect from the Gear list'
+  ).toBeGreaterThanOrEqual(1);
   expect(collectTaps, 'taps to collect from the Gear list').toBeLessThanOrEqual(
     2
   );

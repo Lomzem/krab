@@ -5,12 +5,23 @@ import { resolve } from 'node:path';
 import type { AST } from 'svelte-eslint-parser';
 
 type Options = { stylesheet: string };
-type Tokens = { colors: Set<string>; text: Set<string>; spacing: Set<string> };
+type Tokens = {
+  colors: Set<string>;
+  text: Set<string>;
+  spacing: Set<string>;
+  declared: Set<string>;
+};
 type Parented = { type: string; parent?: Parented | null };
 type Problem = { messageId: string; value: string };
 
-const RAW_COLOR =
-  /#[0-9a-f]{3,8}(?![\w-])|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i;
+const NAMED_COLORS =
+  'aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen';
+const RAW_COLOR = new RegExp(
+  `#[0-9a-f]{3,8}(?![\\w-])|\\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\\(|(?<![\\w-])(?:${NAMED_COLORS.replaceAll(' ', '|')})(?![\\w-])`,
+  'i'
+);
+const hasRawColor = (text: string) =>
+  RAW_COLOR.test(text.replace(/url\([^)]*\)|'[^']*'|"[^"]*"/g, ''));
 const WHOLE_COLOR =
   /^(?:#[0-9a-f]{3,8}|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(.*\))$/i;
 const COLOR_PREFIX =
@@ -41,17 +52,19 @@ const SPACING =
 const SPACING_KEYWORDS = new Set(['px', 'auto', 'reverse']);
 const SPACING_PROPERTY =
   /^(?:padding|margin|gap|row-gap|column-gap|scroll-padding|scroll-margin)(?:-[a-z-]+)?$/;
-const SAFE_AREA = 'safe-area-inset-';
+const SAFE_AREA = /\benv\(\s*safe-area-inset-(?:top|right|bottom|left)\b/;
+const TOKEN_REFERENCE = /\((--(?:color|text|spacing)(?:-[\w-]+)?)\b/g;
+const ARBITRARY_PROPERTY = /^\[(-?-?[a-z][a-z-]*):(.+)\]$/;
 const SVG_PAINT =
   /^(?:currentColor|none|transparent|inherit|url\(#[\w-]+\)|var\(--[\w-]+\))$/;
-const PAINT_ATTRIBUTES = new Set([
+const PAINT_PROPERTIES = new Set([
   'fill',
   'stroke',
-  'color',
   'stop-color',
   'flood-color',
   'lighting-color'
 ]);
+const PAINT_ATTRIBUTES = new Set([...PAINT_PROPERTIES, 'color']);
 
 const loaded = new Map<string, Tokens>();
 const tokensOf = (path: string) => {
@@ -63,7 +76,8 @@ const tokensOf = (path: string) => {
   const tokens = {
     colors: names(/--color-([a-z0-9]+(?:-[a-z0-9]+)*)\s*:/g),
     text: names(/--text-([a-z0-9]+(?:-[a-z0-9]+)*)\s*:/g),
-    spacing: names(/--spacing-([a-z0-9]+(?:-[a-z0-9]+)*)\s*:/g)
+    spacing: names(/--spacing-([a-z0-9]+(?:-[a-z0-9]+)*)\s*:/g),
+    declared: new Set(['--spacing', ...names(/(--[\w-]+)\s*:/g)])
   };
   loaded.set(path, tokens);
   return tokens;
@@ -96,7 +110,7 @@ const spacingProblem = (value: string, tokens: Tokens) => {
   if (tokens.spacing.has(value)) return null;
   if (
     isArbitrary(value) &&
-    (value.includes(SAFE_AREA) || value.includes('--spacing'))
+    (SAFE_AREA.test(value) || value.includes('--spacing'))
   )
     return null;
   return 'spacing';
@@ -104,7 +118,13 @@ const spacingProblem = (value: string, tokens: Tokens) => {
 
 const classProblems = (token: string, tokens: Tokens): Problem[] => {
   const utility = utilityOf(token);
-  if (/[[(]/.test(utility) && RAW_COLOR.test(utility))
+  const declaration = ARBITRARY_PROPERTY.exec(utility);
+  if (declaration)
+    return declarationProblems(
+      declaration[1],
+      declaration[2].replaceAll('_', ' ')
+    ).map((problem) => ({ ...problem, value: token }));
+  if (/[[(]/.test(utility) && hasRawColor(utility))
     return [{ messageId: 'color', value: token }];
   if (PALETTE.test(utility)) return [{ messageId: 'palette', value: token }];
   const text = TEXT.exec(utility)?.[1];
@@ -118,13 +138,17 @@ const classProblems = (token: string, tokens: Tokens): Problem[] => {
 
 const declarationProblems = (property: string, value: string): Problem[] => {
   const shown = `${property}: ${value.trim()}`;
-  if (RAW_COLOR.test(value)) return [{ messageId: 'color', value: shown }];
+  if (PAINT_PROPERTIES.has(property))
+    return SVG_PAINT.test(value.trim())
+      ? []
+      : [{ messageId: 'paint', value: shown }];
+  if (hasRawColor(value)) return [{ messageId: 'color', value: shown }];
   if (property === 'font-size' && !/var\(--text-/.test(value))
     return [{ messageId: 'typography', value: shown }];
   if (
     SPACING_PROPERTY.test(property) &&
     !/^\s*(?:0|auto)?\s*$/.test(value) &&
-    !value.includes(SAFE_AREA) &&
+    !SAFE_AREA.test(value) &&
     !value.includes('var(--spacing')
   )
     return [{ messageId: 'spacing', value: shown }];
@@ -166,7 +190,22 @@ const contextOf = (node: Parented): Context => {
   return { kind: 'class' };
 };
 
-const problemsOf = (text: string, context: Context, tokens: Tokens) => {
+const referenceProblems = (text: string, tokens: Tokens): Problem[] =>
+  [...text.matchAll(TOKEN_REFERENCE)]
+    .map(([, name = '']) => name)
+    .filter((name) => !tokens.declared.has(name))
+    .map((name) => ({ messageId: 'token', value: name }));
+
+const problemsOf = (
+  text: string,
+  context: Context,
+  tokens: Tokens
+): Problem[] => [
+  ...contextProblems(text, context, tokens),
+  ...referenceProblems(text, tokens)
+];
+
+const contextProblems = (text: string, context: Context, tokens: Tokens) => {
   switch (context.kind) {
     case 'style':
       return styleProblems(text);
@@ -206,7 +245,9 @@ export const chromeTokens: Rule.RuleModule = {
       spacing:
         '{{value}} is off the spacing scale. Use the numeric scale or a spacing token ({{spacing}}); only safe-area insets take arbitrary values.',
       paint:
-        'SVG paint {{value}} is not currentColor, none, url(#id) or a var(--token).'
+        'SVG paint {{value}} is not currentColor, none, url(#id) or a var(--token).',
+      token:
+        '{{value}} is not declared in the global stylesheet. Use a color, text size or spacing token it declares.'
     }
   },
   create: (context) => {
@@ -243,10 +284,11 @@ export const chromeTokens: Rule.RuleModule = {
       },
       SvelteStyleElement(node: ESTree.Node) {
         const style = node as unknown as AST.SvelteStyleElement;
-        report(
-          node,
-          styleProblems(style.children.map((child) => child.value).join(''))
-        );
+        const css = style.children.map((child) => child.value).join('');
+        report(node, [
+          ...styleProblems(css),
+          ...referenceProblems(css, tokens)
+        ]);
       }
     };
   }

@@ -1,11 +1,12 @@
 import {
+  expect,
   test as base,
   type BrowserContext,
   type Page,
   type Route
 } from '@playwright/test';
 
-export { expect } from '@playwright/test';
+export { expect };
 
 const NOAA = 'https://gis.charttools.noaa.gov/**';
 const OPEN_FREE_MAP = 'https://tiles.openfreemap.org/**';
@@ -214,7 +215,8 @@ export const tapsDuring = async (page: Page, steps: () => Promise<void>) => {
   await page.evaluate(() => {
     const counter = { count: 0, stop: () => undefined };
     const count = (event: PointerEvent) => {
-      if (event.isTrusted && event.isPrimary) counter.count += 1;
+      if (event.isTrusted && event.isPrimary && event.pointerType === 'touch')
+        counter.count += 1;
     };
     addEventListener('pointerdown', count, { capture: true });
     counter.stop = () => {
@@ -223,9 +225,11 @@ export const tapsDuring = async (page: Page, steps: () => Promise<void>) => {
     (window as TapCounter).krabTaps = counter;
   });
   await steps();
-  return page.evaluate(() => {
+  const taps = await page.evaluate(() => {
     const counter = (window as TapCounter).krabTaps;
     counter?.stop();
-    return counter?.count ?? 0;
+    return counter?.count ?? null;
   });
+  expect(taps, 'the tap counter survives the steps').not.toBeNull();
+  return taps ?? 0;
 };
