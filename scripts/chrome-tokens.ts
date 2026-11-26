@@ -255,10 +255,7 @@ const markupContextOf = (at: Parented): Context | null => {
     const directive = at as unknown as { key: { name: { name: string } } };
     return { kind: 'property', property: directive.key.name.name };
   }
-  if (at.type === 'SvelteDirective')
-    return (at as unknown as AST.SvelteDirective).kind === 'Class'
-      ? { kind: 'class' }
-      : null;
+  if (at.type === 'SvelteDirective') return null;
   const name = (at as unknown as { key: { name: string } }).key.name;
   if (name === 'style') return { kind: 'style' };
   if (PAINT_ATTRIBUTES.has(name)) return { kind: 'paint' };
@@ -471,7 +468,11 @@ export const chromeTokens: Rule.RuleModule = {
       },
       SvelteDirective(node: ESTree.Node) {
         const directive = node as unknown as AST.SvelteDirective;
-        if (directive.kind === 'Class') check(node, directive.key.name.name);
+        if (directive.kind === 'Class')
+          report(
+            node,
+            problemsOf(directive.key.name.name, { kind: 'class' }, tokens)
+          );
       },
       SvelteStyleElement(node: ESTree.Node) {
         const style = node as unknown as AST.SvelteStyleElement;

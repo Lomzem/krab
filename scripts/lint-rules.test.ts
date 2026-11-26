@@ -157,7 +157,9 @@ tester.run('chrome-tokens', chromeTokens, {
     markup("<p class={map['text-depth']}>Pot</p>"),
     markup('<p class={PAD[mode]}>Pot</p>'),
     markup("<div use:action={'px-move'}></div>"),
-    markup("<Comp {...{ id: 'text-depth' }} />")
+    markup("<Comp {...{ id: 'text-depth' }} />"),
+    markup("<p class:active={pick('text-depth')}>Pot</p>"),
+    markup('<p class:text-sm={mode}>Pot</p>')
   ],
   invalid: [
     {
@@ -226,6 +228,14 @@ tester.run('chrome-tokens', chromeTokens, {
         "<script lang=\"ts\">\n  let { mode } = $props();\n  const PAD = { 'text-depth': 'p-fluid' };\n</script>\n\n<p class={PAD[mode]}>Pot</p>\n",
         'Probe.svelte'
       ),
+      errors: [{ messageId: 'spacing' }]
+    },
+    {
+      ...markup('<p class:text-lg={mode}>Pot</p>'),
+      errors: [{ messageId: 'typography' }]
+    },
+    {
+      ...markup('<p class:p-fluid={mode}>Pot</p>'),
       errors: [{ messageId: 'spacing' }]
     }
   ]
