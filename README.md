@@ -1,6 +1,6 @@
 # Krab
 
-A client-rendered SvelteKit app for keeping track of crab pots and nets on the water. It drops gear at the phone's location, records bait and depth for each drop and catch for each collected drop, and lists gear in the water with distance, direction and time in the water. The Map tab shows drops on NOAA charts or OpenFreeMap streets. Ending a trip keeps it under Past trips, where its days and drops can be reviewed on the map or the trip deleted. After one online load, Krab launches and restores the active trip with no signal.
+A client-rendered SvelteKit app for keeping track of crab pots and nets on the water. It drops gear at the phone's location, records bait and depth for each drop and can record catch for collected drops, and lists gear in the water with distance, direction and time in the water. The Map tab shows drops on NOAA charts or OpenFreeMap streets. Ending a trip keeps it under Past trips, where its days and drops can be reviewed on the map or the trip deleted. After one online load, Krab launches and restores the active trip with no signal.
 
 All trip data stays on the phone in IndexedDB. There is no account, cloud database or authentication, and clearing or evicting the site's data loses the active trip and past trips. Map provider requests carry no position. Read [GLOSSARY.md](GLOSSARY.md) before product work.
 
@@ -75,7 +75,8 @@ After a deploy, check the app shell, the worker headers and body, and one immuta
 curl -sI https://krab.lomzem.dev/
 curl -sI https://krab.lomzem.dev/service-worker.js
 curl -s https://krab.lomzem.dev/service-worker.js | head -c 200
-curl -sI "https://krab.lomzem.dev$(curl -s https://krab.lomzem.dev/ | grep -o '/_app/immutable/[^"]*\.js' | head -n 1)"
+asset="$(curl -s https://krab.lomzem.dev/ | grep -o '/_app/immutable/[^"]*\.js' | head -n 1)"
+curl -sI "https://krab.lomzem.dev${asset:?no immutable script in the app shell}"
 ```
 
 `/` must answer `200` directly with an HTML `Content-Type`, because the worker rejects a redirected app shell. The worker must have a JavaScript `Content-Type` and `Cache-Control: no-cache`, and its body must be the worker, not the HTML fallback. The immutable asset must have `Cache-Control: public, max-age=31536000, immutable`.

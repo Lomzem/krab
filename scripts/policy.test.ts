@@ -370,6 +370,28 @@ const cases: PolicyCase[] = [
     command: 'format:check',
     diagnostic: 'probe.json',
     risk: 'Formatting check accepts unformatted files'
+  },
+  {
+    name: 'Tailwind class order in cn calls with a theme class',
+    file: 'src/Probe.svelte',
+    valid:
+      '<script lang="ts">\n  const style = cn(\'flex bg-map-sea\');\n</script>\n\n<p class={style}>Pot</p>\n',
+    invalid:
+      '<script lang="ts">\n  const style = cn(\'bg-map-sea flex\');\n</script>\n\n<p class={style}>Pot</p>\n',
+    command: 'format:check',
+    diagnostic: 'Probe.svelte',
+    risk: 'Class sorting skips cn calls or misses the theme stylesheet'
+  },
+  {
+    name: 'Tailwind class order in tv calls with a theme class',
+    file: 'src/Probe.svelte',
+    valid:
+      '<script lang="ts">\n  const button = tv({ base: \'flex bg-map-sea\' });\n</script>\n\n<p class={button()}>Pot</p>\n',
+    invalid:
+      '<script lang="ts">\n  const button = tv({ base: \'bg-map-sea flex\' });\n</script>\n\n<p class={button()}>Pot</p>\n',
+    command: 'format:check',
+    diagnostic: 'Probe.svelte',
+    risk: 'Class sorting skips tv calls or misses the theme stylesheet'
   }
 ];
 await cp(source, root, {
