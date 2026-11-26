@@ -24,18 +24,20 @@ const signalGroup = (pid: number, signal: string) =>
   spawnSync('kill', [`-${signal}`, '--', `-${String(pid)}`], {
     stdio: 'ignore'
   }).status === 0;
-let running: number | undefined;
+const running = new Set<number>();
 let stopping = false;
 async function stop(code: number) {
   if (stopping) return;
   stopping = true;
-  const group = running;
-  if (group !== undefined) {
-    signalGroup(group, 'TERM');
-    for (let waited = 0; waited < 5000 && signalGroup(group, '0'); waited += 50)
-      await sleep(50);
-    signalGroup(group, 'KILL');
-  }
+  const groups = [...running];
+  for (const group of groups) signalGroup(group, 'TERM');
+  for (
+    let waited = 0;
+    waited < 5000 && groups.some((group) => signalGroup(group, '0'));
+    waited += 50
+  )
+    await sleep(50);
+  for (const group of groups) signalGroup(group, 'KILL');
   cleanup();
   process.exit(code);
 }
@@ -1193,22 +1195,16 @@ const cases: PolicyCase[] = [
     risk: 'Class sorting skips tv calls or misses the theme stylesheet'
   }
 ];
-await cp(source, root, {
-  recursive: true,
-  filter: (path) =>
-    !['.git', 'node_modules', '.svelte-kit', 'build', '.scratch'].some((part) =>
-      path.slice(source.length).split('/').includes(part)
-    )
-});
+const COPIED_OUT = [
+  '.git',
+  'node_modules',
+  '.svelte-kit',
+  'build',
+  '.scratch',
+  '.tools'
+];
 const writable = (entry: string) =>
   entry === '$app' || (entry.startsWith('.') && entry !== '.bin');
-await mkdir(join(root, 'node_modules'));
-for (const entry of await readdir(join(source, 'node_modules')))
-  if (!writable(entry))
-    await symlink(
-      join(source, 'node_modules', entry),
-      join(root, 'node_modules', entry)
-    );
 const fixtures = cases.map((row, index) => {
   const variantFile = (variant: 'valid' | 'invalid') => {
     const file =
@@ -1227,14 +1223,17 @@ const fixtures = cases.map((row, index) => {
 });
 type Command = PolicyCase['command'];
 type Diagnostic = { file: string; text: string };
-const diagnostics: Record<Command, (output: string) => Diagnostic[]> = {
-  lint: (output) =>
+const diagnostics: Record<
+  Command,
+  (output: string, copy: string) => Diagnostic[]
+> = {
+  lint: (output, copy) =>
     output
       .split('\n\n')
       .map((block) => block.trim())
-      .filter((block) => block.startsWith(`${root}/`))
+      .filter((block) => block.startsWith(`${copy}/`))
       .map((block) => ({
-        file: block.slice(root.length + 1).split('\n', 1)[0] ?? '',
+        file: block.slice(copy.length + 1).split('\n', 1)[0] ?? '',
         text: block
       })),
   check: (output) =>
@@ -1248,10 +1247,11 @@ const diagnostics: Record<Command, (output: string) => Diagnostic[]> = {
       return file === undefined ? [] : [{ file, text: line }];
     })
 };
-const run = (...args: string[]) =>
+const run = (copy: string, ...args: string[]) =>
   new Promise<{ status: number | null; output: string }>((resolve, reject) => {
-    const child = spawn('bun', ['run', ...args], { cwd: root, detached: true });
-    running = child.pid;
+    const child = spawn('bun', ['run', ...args], { cwd: copy, detached: true });
+    const group = child.pid;
+    if (group !== undefined) running.add(group);
     let output = '';
     child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
       output += chunk;
@@ -1262,12 +1262,30 @@ const run = (...args: string[]) =>
     child.on('error', reject);
     child.on('close', (status) => {
       if (stopping) return;
-      running = undefined;
+      if (group !== undefined) running.delete(group);
       resolve({ status, output });
     });
   });
-const sync = await run('svelte-kit', 'sync');
-assert.equal(sync.status, 0, `svelte-kit sync: ${sync.output}`);
+const copyOf = async (name: string) => {
+  const copy = join(root, name);
+  await cp(source, copy, {
+    recursive: true,
+    filter: (path) =>
+      !COPIED_OUT.some((part) =>
+        path.slice(source.length).split('/').includes(part)
+      )
+  });
+  await mkdir(join(copy, 'node_modules'));
+  for (const entry of await readdir(join(source, 'node_modules')))
+    if (!writable(entry))
+      await symlink(
+        join(source, 'node_modules', entry),
+        join(copy, 'node_modules', entry)
+      );
+  const sync = await run(copy, 'svelte-kit', 'sync');
+  assert.equal(sync.status, 0, `svelte-kit sync: ${sync.output}`);
+  return copy;
+};
 type Variant = 'valid' | 'invalid';
 const passes: {
   command: Command;
@@ -1285,7 +1303,11 @@ const passes: {
   },
   { command: 'format:check', takes: () => true }
 ];
-for (const { command, takes } of passes) {
+const runPass = async (
+  { command, takes }: (typeof passes)[number],
+  index: number
+) => {
+  const copy = await copyOf(`pass-${String(index)}`);
   const batch = fixtures.filter((row) => row.command === command);
   assert.ok(batch.length > 0, `${command} must have fixtures`);
   const inputs = batch.flatMap((row) =>
@@ -1295,20 +1317,20 @@ for (const { command, takes } of passes) {
   );
   for (const input of inputs) {
     assert.ok(
-      !existsSync(join(root, input.file)),
+      !existsSync(join(copy, input.file)),
       `${input.row.name}: ${input.file} already exists`
     );
-    await mkdir(join(root, dirname(input.file)), { recursive: true });
-    await writeFile(join(root, input.file), input.text);
+    await mkdir(join(copy, dirname(input.file)), { recursive: true });
+    await writeFile(join(copy, input.file), input.text);
   }
-  const { status, output } = await run(command);
+  const { status, output } = await run(copy, command);
   const invalid = inputs.filter((input) => input.variant === 'invalid');
   assert.equal(
     status,
     invalid.length > 0 ? 1 : 0,
     `${command} with ${inputs.map((input) => input.variant).join(', ')} fixtures: ${output}`
   );
-  const found = diagnostics[command](output);
+  const found = diagnostics[command](output, copy);
   const expected = new Set(invalid.map((input) => input.file));
   for (const diagnostic of found)
     assert.ok(
@@ -1327,12 +1349,16 @@ for (const { command, takes } of passes) {
     );
   for (const input of inputs) {
     assert.equal(
-      await readFile(join(root, input.file), 'utf8'),
+      await readFile(join(copy, input.file), 'utf8'),
       input.text,
       `${input.row.name}: ${command} rewrote input`
     );
-    await rm(join(root, input.file));
     if (input.variant === 'invalid') console.log(`PASS ${input.row.name}`);
   }
-}
+  await rm(copy, { recursive: true, force: true });
+};
+await Promise.all(passes.map(runPass)).catch((error: unknown) => {
+  console.error(error);
+  return stop(1);
+});
 cleanup();
