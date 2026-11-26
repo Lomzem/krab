@@ -28,6 +28,10 @@ const propertyName = (member: ESTree.MemberExpression) =>
     ? specifierOf(member.property)
     : (member.property as ESTree.Identifier).name;
 
+type ScopeOf = (node: ESTree.Node) => Scope.Scope;
+
+const NODE_MODULE = new Set(['node:module', 'module']);
+
 const variableOf = (name: string, scope: Scope.Scope | null) => {
   for (let at = scope; at; at = at.upper) {
     const variable = at.set.get(name);
@@ -36,51 +40,90 @@ const variableOf = (name: string, scope: Scope.Scope | null) => {
   return null;
 };
 
+const keyName = (property: ESTree.Property) =>
+  property.key.type === 'Identifier' && !property.computed
+    ? property.key.name
+    : specifierOf(property.key);
+
 const importsCreateRequire = (definition: Scope.Definition) =>
   definition.type === 'ImportBinding' &&
   definition.node.type === 'ImportSpecifier' &&
+  NODE_MODULE.has(String(definition.parent.source.value)) &&
   (definition.node.imported.type === 'Identifier'
     ? definition.node.imported.name
     : definition.node.imported.value) === 'createRequire';
 
+const destructuresCreateRequire = (definition: Scope.Definition) => {
+  if (definition.type !== 'Variable') return false;
+  const { id, init } = definition.node;
+  const loaded = init?.type === 'AwaitExpression' ? init.argument : init;
+  if (
+    id.type !== 'ObjectPattern' ||
+    loaded?.type !== 'ImportExpression' ||
+    !NODE_MODULE.has(specifierOf(loaded.source) ?? '')
+  )
+    return false;
+  return id.properties.some(
+    (property) =>
+      property.type === 'Property' &&
+      (property.value === definition.name ||
+        (property.value.type === 'AssignmentPattern' &&
+          property.value.left === definition.name)) &&
+      keyName(property) === 'createRequire'
+  );
+};
+
+const namesCreateRequire = (
+  node: ESTree.Node | null | undefined,
+  scopeOf: ScopeOf,
+  seen = new Set<Scope.Variable>()
+): boolean => {
+  if (node?.type === 'MemberExpression')
+    return propertyName(node) === 'createRequire';
+  if (node?.type !== 'Identifier') return false;
+  const variable = variableOf(node.name, scopeOf(node));
+  if (!variable) return node.name === 'createRequire';
+  if (seen.has(variable)) return false;
+  seen.add(variable);
+  return variable.defs.some(
+    (definition) =>
+      importsCreateRequire(definition) ||
+      destructuresCreateRequire(definition) ||
+      (definition.type === 'Variable' &&
+        definition.node.id.type === 'Identifier' &&
+        namesCreateRequire(definition.node.init, scopeOf, seen))
+  );
+};
+
 const isCreateRequire = (
   node: ESTree.Node | null | undefined,
-  scope: Scope.Scope | null
-) => {
-  if (node?.type !== 'CallExpression') return false;
-  const callee = node.callee;
-  if (callee.type === 'MemberExpression')
-    return propertyName(callee) === 'createRequire';
-  if (callee.type !== 'Identifier') return false;
-  const variable = variableOf(callee.name, scope);
-  return variable
-    ? variable.defs.some(importsCreateRequire)
-    : callee.name === 'createRequire';
-};
+  scopeOf: ScopeOf
+) =>
+  node?.type === 'CallExpression' && namesCreateRequire(node.callee, scopeOf);
 
 const isImportMeta = (node: ESTree.Node) =>
   node.type === 'MetaProperty' &&
   node.meta.name === 'import' &&
   node.property.name === 'meta';
 
-const isRequire = (node: ESTree.Node, scope: Scope.Scope | null) => {
-  if (node.type !== 'Identifier') return isCreateRequire(node, scope);
+const isRequire = (node: ESTree.Node, scopeOf: ScopeOf) => {
+  if (node.type !== 'Identifier') return isCreateRequire(node, scopeOf);
   if (node.name === 'require') return true;
   return (
-    variableOf(node.name, scope)?.defs.some(
+    variableOf(node.name, scopeOf(node))?.defs.some(
       (definition) =>
         definition.node.type === 'VariableDeclarator' &&
-        isCreateRequire(definition.node.init, scope)
+        isCreateRequire(definition.node.init, scopeOf)
     ) ?? false
   );
 };
 
-const isLoader = (call: ESTree.CallExpression, scope: Scope.Scope | null) => {
+const isLoader = (call: ESTree.CallExpression, scopeOf: ScopeOf) => {
   const callee = call.callee;
-  if (callee.type !== 'MemberExpression') return isRequire(callee, scope);
+  if (callee.type !== 'MemberExpression') return isRequire(callee, scopeOf);
   return (
     propertyName(callee) === 'resolve' &&
-    (isImportMeta(callee.object) || isRequire(callee.object, scope))
+    (isImportMeta(callee.object) || isRequire(callee.object, scopeOf))
   );
 };
 
@@ -197,7 +240,7 @@ export const uiSdkPriority: Rule.RuleModule = {
         check(node, node.source);
       },
       CallExpression(node) {
-        if (isLoader(node, context.sourceCode.getScope(node)))
+        if (isLoader(node, (at) => context.sourceCode.getScope(at)))
           check(node, node.arguments[0]);
       },
       'TSImportType, TSExternalModuleReference'(node: ESTree.Node) {

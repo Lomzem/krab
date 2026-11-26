@@ -9,14 +9,14 @@ import {
   symlink,
   writeFile
 } from 'node:fs/promises';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { stripVTControlCharacters } from 'node:util';
 
-const root = await mkdtemp(join(tmpdir(), 'krab-policy-'));
+const root = realpathSync(await mkdtemp(join(tmpdir(), 'krab-policy-')));
 const cleanup = () => {
   rmSync(root, { recursive: true, force: true });
 };

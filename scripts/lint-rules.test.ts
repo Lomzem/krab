@@ -61,6 +61,9 @@ tester.run('ui-sdk-priority', uiSdkPriority, {
     },
     source(
       "import path from 'node:path';\nconst catalog = new Map();\ncatalog.resolve('bits-ui');\npath.resolve('bits-ui');\n"
+    ),
+    source(
+      "import { createRequire } from 'probe-loader';\nconst load = createRequire(import.meta.url);\nload.resolve('bits-ui');\n"
     )
   ],
   invalid: [
@@ -100,6 +103,24 @@ tester.run('ui-sdk-priority', uiSdkPriority, {
         "import * as modules from 'node:module';\nimport { createRequire as cr } from 'node:module';\ncr(import.meta.url).resolve('bits-ui');\nconst load = modules['createRequire'](import.meta.url);\nload.resolve('bits-ui');\n"
       ),
       errors: [{ messageId: 'bitsUi' }, { messageId: 'bitsUi' }]
+    },
+    {
+      ...source(
+        "const { createRequire } = await import('node:module');\nconst req = createRequire(import.meta.url);\nreq.resolve('bits-ui');\nconst { createRequire: cr } = await import('module');\ncr(import.meta.url).resolve('bits-ui');\n"
+      ),
+      errors: [{ messageId: 'bitsUi' }, { messageId: 'bitsUi' }]
+    },
+    {
+      ...source(
+        "import { createRequire } from 'node:module';\nconst cr = createRequire;\ncr(import.meta.url).resolve('bits-ui');\n"
+      ),
+      errors: [{ messageId: 'bitsUi' }]
+    },
+    {
+      ...source(
+        "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nexport const find = (createRequire) => load.resolve('bits-ui');\n"
+      ),
+      errors: [{ messageId: 'bitsUi' }]
     }
   ]
 });
@@ -110,6 +131,11 @@ const chrome = (code: string, file = 'probe.ts') => ({
   languageOptions: file.endsWith('.svelte') ? { parser: svelte } : {},
   options: [{ stylesheet: 'src/app.css' }]
 });
+const markup = (code: string) =>
+  chrome(
+    `<script lang="ts">\n  let { mode, map, pick, action, Comp } = $props();\n  const PAD = { 'text-depth': 'p-1' };\n</script>\n\n${code}\n`,
+    'Probe.svelte'
+  );
 
 tester.run('chrome-tokens', chromeTokens, {
   valid: [
@@ -127,7 +153,11 @@ tester.run('chrome-tokens', chromeTokens, {
     chrome(
       '<p class="probe">Pot</p>\n\n<style>\n  .probe {\n    @apply bg-card }\n</style>\n',
       'Probe.svelte'
-    )
+    ),
+    markup("<p class={map['text-depth']}>Pot</p>"),
+    markup('<p class={PAD[mode]}>Pot</p>'),
+    markup("<div use:action={'px-move'}></div>"),
+    markup("<Comp {...{ id: 'text-depth' }} />")
   ],
   invalid: [
     {
@@ -171,6 +201,29 @@ tester.run('chrome-tokens', chromeTokens, {
     {
       ...chrome(
         "<script lang=\"ts\">\n  const PAD = { sm: 'p-1', lg: 'p-fluid' };\n</script>\n\n<p class={['flex', PAD.lg]}>Pot</p>\n",
+        'Probe.svelte'
+      ),
+      errors: [{ messageId: 'spacing' }]
+    },
+    {
+      ...markup("<p class={['flex', 'bg-red-500'].join(' ')}>Pot</p>"),
+      errors: [{ messageId: 'palette' }]
+    },
+    {
+      ...markup("<p class={['flex', 'p-fluid'].filter(Boolean)}>Pot</p>"),
+      errors: [{ messageId: 'spacing' }]
+    },
+    {
+      ...markup("<p class={pick('text-red-600')}>Pot</p>"),
+      errors: [{ messageId: 'palette' }]
+    },
+    {
+      ...markup("<p style:padding={'13px'.trim()}>Pot</p>"),
+      errors: [{ messageId: 'spacing' }]
+    },
+    {
+      ...chrome(
+        "<script lang=\"ts\">\n  let { mode } = $props();\n  const PAD = { 'text-depth': 'p-fluid' };\n</script>\n\n<p class={PAD[mode]}>Pot</p>\n",
         'Probe.svelte'
       ),
       errors: [{ messageId: 'spacing' }]

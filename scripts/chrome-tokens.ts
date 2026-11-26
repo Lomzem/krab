@@ -236,21 +236,29 @@ const bindingOf = (node: Parented, from: Parented) => {
   }
 };
 
-const consumes = (node: Parented, from: Parented) => {
+const isOperand = (node: Parented, from: Parented) => {
   const at = node as Fields;
   return (
-    at.type === 'CallExpression' ||
-    at.type === 'MemberExpression' ||
     (at.type === 'BinaryExpression' && at.operator !== '+') ||
-    (at.type === 'ConditionalExpression' && at.test === from)
+    (at.type === 'ConditionalExpression' && at.test === from) ||
+    (at.type === 'MemberExpression' && at.property === from)
   );
 };
+
+const consumes = (node: Parented, from: Parented) =>
+  node.type === 'CallExpression' ||
+  node.type === 'MemberExpression' ||
+  isOperand(node, from);
 
 const markupContextOf = (at: Parented): Context | null => {
   if (at.type === 'SvelteStyleDirective') {
     const directive = at as unknown as { key: { name: { name: string } } };
     return { kind: 'property', property: directive.key.name.name };
   }
+  if (at.type === 'SvelteDirective')
+    return (at as unknown as AST.SvelteDirective).kind === 'Class'
+      ? { kind: 'class' }
+      : null;
   const name = (at as unknown as { key: { name: string } }).key.name;
   if (name === 'style') return { kind: 'style' };
   if (PAINT_ATTRIBUTES.has(name)) return { kind: 'paint' };
@@ -260,25 +268,24 @@ const markupContextOf = (at: Parented): Context | null => {
 const MARKUP = new Set([
   'SvelteStyleDirective',
   'SvelteAttribute',
-  'SvelteStartTag'
+  'SvelteDirective'
 ]);
 
 const contextOf = (node: Parented): Context | null => {
   let bearing = false;
   let consumed = false;
+  let operand = false;
   let holder: Parented | undefined;
   let settled = false;
   for (let from = node, at = node.parent; at; from = at, at = at.parent) {
     if (MARKUP.has(at.type)) {
-      if (consumed) return null;
-      return at.type === 'SvelteStartTag'
-        ? { kind: 'class' }
-        : markupContextOf(at);
+      return operand ? null : markupContextOf(at);
     }
     const helper = at.type === 'CallExpression' ? calleeName(at) : null;
     if (!consumed && helper !== null && CLASS_HELPERS.has(helper))
       return { kind: 'class', helper };
     consumed ||= consumes(at, from);
+    operand ||= isOperand(at, from);
     if (consumed || settled) continue;
     const binding = bindingOf(at, from);
     if (binding === null) continue;
@@ -396,45 +403,56 @@ export const chromeTokens: Rule.RuleModule = {
           data: { ...data, value: problem.value }
         });
     };
-    const feeds = new WeakMap<Parented, boolean>();
-    const feedsClass = (holder: Parented) => {
-      const known = feeds.get(holder);
-      if (known !== undefined) return known;
-      const variables = context.sourceCode.getDeclaredVariables(
+    type Uses = { feeds: boolean; direct: boolean; lookedUp: boolean };
+    const known = new WeakMap<Parented, Uses>();
+    const usesOf = (holder: Parented) => {
+      const cached = known.get(holder);
+      if (cached) return cached;
+      const uses = { feeds: false, direct: false, lookedUp: false };
+      for (const variable of context.sourceCode.getDeclaredVariables(
         holder as unknown as ESTree.Node
-      );
-      const result = variables.some((variable) =>
-        variable.references.some((reference) => {
+      ))
+        for (const reference of variable.references) {
           let use = reference.identifier as unknown as Parented;
+          const lookup =
+            use.parent?.type === 'MemberExpression' &&
+            (use.parent as Fields).object === use;
           while (
             use.parent?.type === 'MemberExpression' &&
             (use.parent as Fields).object === use
           )
             use = use.parent;
-          return contextOf(use)?.kind === 'class';
-        })
-      );
-      feeds.set(holder, result);
-      return result;
+          const inClass = contextOf(use)?.kind === 'class';
+          uses.feeds ||= inClass;
+          uses.direct ||= inClass && !lookup;
+          uses.lookedUp ||= lookup;
+        }
+      known.set(holder, uses);
+      return uses;
     };
     const contextAt = (node: ESTree.Node): Context | null => {
       const at = contextOf(node);
       if (at?.kind !== 'script' || at.bearing || !at.holder) return at;
-      return { kind: 'script', bearing: feedsClass(at.holder) };
+      return { kind: 'script', bearing: usesOf(at.holder).feeds };
     };
     const check = (node: ESTree.Node, text: string, whole = text) => {
       const at = contextAt(node);
       if (at) report(node, problemsOf(text, at, tokens, whole));
     };
-    const isClassKey = (at: Context | null) =>
-      at?.kind === 'class'
-        ? at.helper !== 'tv' && at.helper !== 'cva'
-        : at?.kind === 'script' && at.bearing;
+    const isClassKey = (node: ESTree.Node) => {
+      const at = contextOf(node);
+      if (at?.kind === 'class')
+        return at.helper !== 'tv' && at.helper !== 'cva';
+      if (at?.kind !== 'script') return false;
+      if (!at.holder) return at.bearing;
+      const uses = usesOf(at.holder);
+      return uses.direct || (at.bearing && !uses.lookedUp);
+    };
     return {
       Literal(node) {
         if (typeof node.value !== 'string') return;
         if (!isNameLiteral(node)) check(node, node.value);
-        else if (isObjectKey(node) && isClassKey(contextAt(node)))
+        else if (isObjectKey(node) && isClassKey(node))
           report(node, problemsOf(node.value, { kind: 'class' }, tokens));
       },
       TemplateElement(node) {
