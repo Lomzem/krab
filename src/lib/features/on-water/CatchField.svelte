@@ -54,11 +54,14 @@
   };
 
   const step = (side: Side, by: number) => {
-    const from = countOf(value?.[side] ?? '') ?? 0;
-    set(
-      side,
-      String(Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, from + by)))
-    );
+    const text = value?.[side] ?? '';
+    const from = countOf(text);
+    if (from === null && text.trim() !== '') {
+      leave(side);
+      return;
+    }
+    const next = (from ?? 0) + by;
+    if (next >= 0 && next <= Number.MAX_SAFE_INTEGER) set(side, String(next));
   };
 
   const spoken = (text: string | undefined) => {
@@ -134,9 +137,11 @@
       <Button
         class={stepper}
         aria-label="One fewer {side}"
-        aria-disabled={count ? undefined : 'true'}
+        aria-disabled={count === 0 || (text ?? '').trim() === ''
+          ? 'true'
+          : undefined}
         onclick={() => {
-          if (count) step(side, -1);
+          step(side, -1);
         }}
       >
         <Icon name="minus" />
@@ -161,8 +166,7 @@
           const by = ARROW_STEPS[event.key];
           if (by === undefined || modified(event)) return;
           event.preventDefault();
-          if (by < 0 ? count : count !== Number.MAX_SAFE_INTEGER)
-            step(side, by);
+          step(side, by);
         }}
         onblur={() => {
           leave(side);
@@ -173,7 +177,7 @@
         aria-label="One more {side}"
         aria-disabled={count === Number.MAX_SAFE_INTEGER ? 'true' : undefined}
         onclick={() => {
-          if (count !== Number.MAX_SAFE_INTEGER) step(side, 1);
+          step(side, 1);
         }}
       >
         <Icon name="plus" />

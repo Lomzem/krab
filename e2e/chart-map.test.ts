@@ -246,6 +246,43 @@ for (const colorScheme of ['light', 'dark'] as const) {
   });
 }
 
+for (const [width, height, axis] of [
+  [402, 681, 'vertical'],
+  [852, 340, 'horizontal']
+] as const) {
+  test(`on a ${String(width)} by ${String(height)} screen, Chart and Street run ${axis === 'vertical' ? 'one above the other' : 'side by side'}, say they run ${axis}ly, and switch by the arrow keys along that line`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width, height });
+    await dropPotAndOpenMap(page);
+    const choices = mapArea(page).getByRole('radiogroup', { name: 'Base map' });
+    const chartMap = chartMapButton(page);
+    const streetMap = streetMapButton(page);
+    const chart = await boxOf(chartMap);
+    const street = await boxOf(streetMap);
+    if (axis === 'vertical') {
+      expect(street.y).toBeGreaterThanOrEqual(chart.y + chart.height - 1);
+      expect(street.x).toBeCloseTo(chart.x, 0);
+    } else {
+      expect(street.x).toBeGreaterThanOrEqual(chart.x + chart.width - 1);
+      expect(street.y).toBeCloseTo(chart.y, 0);
+    }
+    await expect(choices).toHaveAttribute('aria-orientation', axis);
+
+    const [next, back] =
+      axis === 'vertical'
+        ? (['ArrowDown', 'ArrowUp'] as const)
+        : (['ArrowRight', 'ArrowLeft'] as const);
+    await chartMap.focus();
+    await page.keyboard.press(next);
+    await expect(streetMap).toBeFocused();
+    await expect(streetMap).toBeChecked();
+    await page.keyboard.press(back);
+    await expect(chartMap).toBeFocused();
+    await expect(chartMap).toBeChecked();
+  });
+}
+
 test('map tiles and a Street style the browser cannot load while it is online say the map cannot load right now, never naming a cause, while the toast still expires, gear and my position still show, through reconnects that load nothing, and clear once a map tile arrives', async ({
   context,
   page,

@@ -574,7 +574,7 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   await expect(collectedRow(page, 'Pot 1')).toContainText('Nothing caught');
 });
 
-test('Up and Down Arrow in a count step it like One more and One fewer, leaving a blank catch blank and a refused count refused', async ({
+test('Up and Down Arrow in a count step it like One more and One fewer, leaving a blank catch blank, and on text that is not a whole number both keep the text and name the fix', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -602,18 +602,34 @@ test('Up and Down Arrow in a count step it like One more and One fewer, leaving 
   await expect(kept).toHaveValue('0');
   await expect(nothingCaught).toHaveAttribute('aria-pressed', 'true');
 
-  await released.fill('2.5');
-  await page.keyboard.press('ArrowDown');
-  await expect(released).toHaveValue('2.5');
-  await page.keyboard.press('Tab');
-  await expect(released).toHaveAttribute('aria-invalid', 'true');
-  await expect(released).toHaveAccessibleDescription(
-    'Whole number for Released'
-  );
+  const stepsOf = [
+    () => page.keyboard.press('ArrowUp'),
+    () => page.keyboard.press('ArrowDown'),
+    () => sheet.getByRole('button', { name: 'One more released' }).click(),
+    () => sheet.getByRole('button', { name: 'One fewer released' }).click()
+  ];
+  for (const typed of ['-1', '2.5']) {
+    for (const stepBy of stepsOf) {
+      await released.fill('0');
+      await released.fill(typed);
+      await expect(released).not.toHaveAttribute('aria-invalid');
+      await expect(released).toHaveAccessibleDescription('');
+      await stepBy();
+      await expect(released).toHaveValue(typed);
+      await expect(released).toHaveAttribute('aria-invalid', 'true');
+      await expect(released).toHaveAccessibleDescription(
+        'Whole number for Released'
+      );
+      await expect(kept).toHaveValue('0');
+    }
+  }
+
+  await released.fill('');
   await released.focus();
   await page.keyboard.press('ArrowUp');
   await expect(released).toHaveValue('1');
   await expect(released).not.toHaveAttribute('aria-invalid');
+  await expect(released).toHaveAccessibleDescription('');
 
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(sheet).toBeHidden();

@@ -106,6 +106,8 @@
   let capsule = $state<HTMLDivElement>();
   let notice = $state<HTMLDivElement>();
   let statusNote = $state<HTMLParagraphElement>();
+  const statusCover = $derived(status ? statusNote : undefined);
+  let baseAxis = $state<'horizontal' | 'vertical'>('vertical');
   const noticeText = $derived.by(() => {
     if (loadingStyle) return 'Loading map';
     return availability === 'available' ? null : OUTAGE_NOTICE[availability];
@@ -197,7 +199,11 @@
     const area = container?.getBoundingClientRect();
     if (!area) return 0;
     const credits = chip?.getBoundingClientRect();
-    const controls = capsule?.getBoundingClientRect();
+    const controlsLeft = Math.min(
+      ...[capsule, statusCover].flatMap((cover) =>
+        cover ? [cover.getBoundingClientRect().left] : []
+      )
+    );
     const told = notice?.getBoundingClientRect();
     const [up, down] = squeeze(
       { cover: told ? told.bottom - area.top + CLEAR_GAP : 0, reach: reach.up },
@@ -210,7 +216,9 @@
     const [left, right] = squeeze(
       { cover: 0, reach: reach.side },
       {
-        cover: controls ? area.right - controls.left + CLEAR_GAP : 0,
+        cover: Number.isFinite(controlsLeft)
+          ? area.right - controlsLeft + CLEAR_GAP
+          : 0,
         reach: reach.side
       },
       area.width
@@ -274,22 +282,20 @@
   type Rect = { left: number; right: number; top: number; bottom: number };
 
   const coversIn = (area: DOMRect, without?: HTMLElement): Rect[] =>
-    [chip, capsule, notice, status ? statusNote : undefined].flatMap(
-      (element) => {
-        const box =
-          element === without ? undefined : element?.getBoundingClientRect();
-        return box
-          ? [
-              {
-                left: box.left - area.left - CLEAR_GAP,
-                right: box.right - area.left + CLEAR_GAP,
-                top: box.top - area.top - CLEAR_GAP,
-                bottom: box.bottom - area.top + CLEAR_GAP
-              }
-            ]
-          : [];
-      }
-    );
+    [chip, capsule, notice, statusCover].flatMap((element) => {
+      const box =
+        element === without ? undefined : element?.getBoundingClientRect();
+      return box
+        ? [
+            {
+              left: box.left - area.left - CLEAR_GAP,
+              right: box.right - area.left + CLEAR_GAP,
+              top: box.top - area.top - CLEAR_GAP,
+              bottom: box.bottom - area.top + CLEAR_GAP
+            }
+          ]
+        : [];
+    });
 
   const drawnOf = ({ at, box }: Pick<Spot, 'at' | 'box'>): Rect | null => {
     if (!map) return null;
@@ -377,7 +383,7 @@
     return best.hidden < still ? best : { dx: 0, dy: 0, hidden: still };
   };
 
-  const clearOf = (cover: HTMLElement) => {
+  const clearOf = (cover: HTMLElement, across: boolean) => {
     const area = container?.getBoundingClientRect();
     if (!area) return;
     const box = cover.getBoundingClientRect();
@@ -395,7 +401,7 @@
       return shown ? [shown] : [];
     });
     if (drawn.every((shown) => overlapOf(shown, block) === 0)) return;
-    shiftBy(clearShift(drawn, area, false, cover));
+    shiftBy(clearShift(drawn, area, across, cover));
   };
 
   const separate = (id: string) => {
@@ -758,19 +764,35 @@
     });
   });
 
-  $effect(() => {
-    const shown = notice;
+  const followCover = (shown: HTMLElement | undefined, across: boolean) => {
     if (!shown) return;
     const watch = new ResizeObserver(() => {
       if (overview) void frameSoon();
-      else clearOf(shown);
+      else clearOf(shown, across);
     });
     watch.observe(shown);
     return () => {
       watch.disconnect();
       if (overview) void frameSoon();
     };
-  });
+  };
+
+  $effect(() => followCover(notice, false));
+
+  $effect(() => followCover(statusCover, true));
+
+  const followAxis: Attachment<HTMLElement> = (choices) => {
+    const watch = new ResizeObserver(() => {
+      baseAxis =
+        getComputedStyle(choices).flexDirection === 'row'
+          ? 'horizontal'
+          : 'vertical';
+    });
+    watch.observe(choices);
+    return () => {
+      watch.disconnect();
+    };
+  };
 
   $effect(() => {
     const id = keepClear;
@@ -967,7 +989,8 @@
         <SegmentedControl
           class="flex flex-col tiny-map:flex-row"
           aria-label="Base map"
-          orientation="vertical"
+          orientation={baseAxis}
+          {@attach followAxis}
           bind:value={
             () => base,
             (next) => {
