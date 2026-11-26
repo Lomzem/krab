@@ -17,7 +17,7 @@ bun run setup:security
 bun scripts/verify-krab/run.ts
 ```
 
-The executable helper reuses `scripts/e2e-container.ts`: build the static app with `bun run build` and again with `bun run build:next`, mount this checkout at `/work`, run as the host UID/GID, and use the checkout's dependencies. The custom Playwright config launches `vite preview --host 127.0.0.1 --port 4173 --strictPort`. Readiness requires the HTTP response followed by the visible first-launch location explanation. Each journey starts with empty localStorage and IndexedDB in a fresh browser context. There is no account, backend, migration or seed step: Krab creates its IndexedDB schema on first use.
+The executable helper reuses `scripts/e2e-container.ts`: build the static app once with `bun run build` (`--skip-next-build` skips `bun run build:next`, which only `e2e/offline-and-update.test.ts` needs), mount this checkout at `/work`, run as the host UID/GID, and use the checkout's dependencies. The custom Playwright config launches `vite preview --host 127.0.0.1 --port 4173 --strictPort`. Readiness requires the HTTP response followed by the visible first-launch location explanation. Each journey starts with empty localStorage and IndexedDB in a fresh browser context. There is no account, backend, migration or seed step: Krab creates its IndexedDB schema on first use.
 
 Launch, doctor, drive, evidence copy and cleanup are one bounded command. Success is every configured journey passing, exit 0, and `Evidence retained after cleanup: <absolute path>`. Build/test output is saved to `run.log` at that path.
 

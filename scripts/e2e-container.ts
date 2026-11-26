@@ -5,15 +5,15 @@ import { missingPlaywrightImage, playwrightImage } from './playwright-image';
 const run = (command: string, args: string[]) =>
   spawnSync(command, args, { stdio: 'inherit' }).status ?? 1;
 
-const playwrightArgs = process.argv.slice(2);
-const runsUpdateTest = !playwrightArgs.some(
-  (arg) => arg === '--config' || arg.startsWith('--config=') || arg === '-c'
-);
+const skipNextBuild = '--skip-next-build';
+const args = process.argv.slice(2);
+const buildsNext = !args.includes(skipNextBuild);
+const playwrightArgs = args.filter((arg) => arg !== skipNextBuild);
 
 const test = (image: string) => {
   const build = run('bun', ['run', 'build']);
   if (build !== 0) return build;
-  const next = runsUpdateTest ? run('bun', ['run', 'build:next']) : 0;
+  const next = buildsNext ? run('bun', ['run', 'build:next']) : 0;
   if (next !== 0) return next;
   const { uid, gid } = userInfo();
   return run('docker', [

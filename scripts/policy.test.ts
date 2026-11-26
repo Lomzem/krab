@@ -1,7 +1,9 @@
 import { strict as assert } from 'node:assert';
 import {
+  mkdir,
   mkdtemp,
   cp,
+  readdir,
   readFile,
   rm,
   symlink,
@@ -10,12 +12,39 @@ import {
 import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 const root = await mkdtemp(join(tmpdir(), 'krab-policy-'));
-process.on('exit', () => {
+const cleanup = () => {
   rmSync(root, { recursive: true, force: true });
-});
+};
+process.on('exit', cleanup);
+const signalGroup = (pid: number, signal: string) =>
+  spawnSync('kill', [`-${signal}`, '--', `-${String(pid)}`], {
+    stdio: 'ignore'
+  }).status === 0;
+let running: number | undefined;
+let stopping = false;
+async function stop(code: number) {
+  if (stopping) return;
+  stopping = true;
+  const group = running;
+  if (group !== undefined) {
+    signalGroup(group, 'TERM');
+    for (let waited = 0; waited < 5000 && signalGroup(group, '0'); waited += 50)
+      await sleep(50);
+    signalGroup(group, 'KILL');
+  }
+  cleanup();
+  process.exit(code);
+}
+for (const [signal, code] of [
+  ['SIGHUP', 129],
+  ['SIGINT', 130],
+  ['SIGTERM', 143]
+] as const)
+  process.on(signal, () => void stop(code));
 const source = process.cwd();
 type PolicyCase = {
   name: string;
@@ -411,7 +440,15 @@ await cp(source, root, {
       path.slice(source.length).split('/').includes(part)
     )
 });
-await symlink(join(source, 'node_modules'), join(root, 'node_modules'));
+const writable = (entry: string) =>
+  entry === '$app' || (entry.startsWith('.') && entry !== '.bin');
+await mkdir(join(root, 'node_modules'));
+for (const entry of await readdir(join(source, 'node_modules')))
+  if (!writable(entry))
+    await symlink(
+      join(source, 'node_modules', entry),
+      join(root, 'node_modules', entry)
+    );
 const fixtures = cases.map((row, index) => {
   const variantFile = (variant: string) =>
     join(
@@ -424,43 +461,94 @@ const fixtures = cases.map((row, index) => {
     invalid: { file: variantFile('invalid'), text: row.invalid }
   };
 });
-type Fixture = (typeof fixtures)[number];
-function diagnosticFor(row: Fixture, output: string) {
-  const file = join(root, row.invalid.file);
-  if (row.command !== 'lint')
-    return output.includes(row.invalid.file) ? output : undefined;
-  return output.split('\n\n').find((block) => block.includes(file));
-}
-for (const command of ['lint', 'check', 'format:check'] as const) {
+type Command = PolicyCase['command'];
+type Diagnostic = { file: string; text: string };
+const diagnostics: Record<Command, (output: string) => Diagnostic[]> = {
+  lint: (output) =>
+    output
+      .split('\n\n')
+      .map((block) => block.trim())
+      .filter((block) => block.startsWith(`${root}/`))
+      .map((block) => ({
+        file: block.slice(root.length + 1).split('\n', 1)[0] ?? '',
+        text: block
+      })),
+  check: (output) =>
+    output.split('\n').flatMap((line) => {
+      const file = /^\d+ (?:ERROR|WARNING) "([^"]+)" /.exec(line)?.[1];
+      return file === undefined ? [] : [{ file, text: line }];
+    }),
+  'format:check': (output) =>
+    output.split('\n').flatMap((line) => {
+      const file = /^(\S.*) \([\d.]+m?s\)$/.exec(line)?.[1];
+      return file === undefined ? [] : [{ file, text: line }];
+    })
+};
+const run = (...args: string[]) =>
+  new Promise<{ status: number | null; output: string }>((resolve, reject) => {
+    const child = spawn('bun', ['run', ...args], { cwd: root, detached: true });
+    running = child.pid;
+    let output = '';
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+      output += chunk;
+    });
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+      output += chunk;
+    });
+    child.on('error', reject);
+    child.on('close', (status) => {
+      if (stopping) return;
+      running = undefined;
+      resolve({ status, output });
+    });
+  });
+const sync = await run('svelte-kit', 'sync');
+assert.equal(sync.status, 0, `svelte-kit sync: ${sync.output}`);
+const passes = [
+  { command: 'lint', variants: ['valid', 'invalid'] },
+  { command: 'check', variants: ['valid'] },
+  { command: 'check', variants: ['invalid'] },
+  { command: 'format:check', variants: ['valid', 'invalid'] }
+] as const;
+for (const { command, variants } of passes) {
   const batch = fixtures.filter((row) => row.command === command);
   assert.ok(batch.length > 0, `${command} must have fixtures`);
-  for (const row of batch)
-    for (const variant of [row.valid, row.invalid])
-      await writeFile(join(root, variant.file), variant.text);
-  const result = spawnSync('bun', ['run', command], {
-    cwd: root,
-    encoding: 'utf8'
-  });
-  const output = result.stdout + result.stderr;
-  assert.equal(result.status, 1, `${command}: ${output}`);
-  for (const row of batch) {
+  const inputs = batch.flatMap((row) =>
+    variants.map((variant) => ({ row, variant, ...row[variant] }))
+  );
+  for (const input of inputs)
+    await writeFile(join(root, input.file), input.text);
+  const { status, output } = await run(command);
+  const invalid = inputs.filter((input) => input.variant === 'invalid');
+  assert.equal(
+    status,
+    invalid.length > 0 ? 1 : 0,
+    `${command} with ${variants.join(' and ')} fixtures: ${output}`
+  );
+  const found = diagnostics[command](output);
+  const expected = new Set(invalid.map((input) => input.file));
+  for (const diagnostic of found)
     assert.ok(
-      diagnosticFor(row, output)?.includes(row.diagnostic),
-      `${row.name}: missing file-specific diagnostic: ${output}`
+      expected.has(diagnostic.file),
+      `${command}: unexpected diagnostic for ${diagnostic.file}: ${output}`
     );
+  for (const input of invalid)
     assert.ok(
-      !output.includes(row.valid.file),
-      `${row.name}: valid fixture was flagged: ${output}`
+      found.some(
+        (diagnostic) =>
+          diagnostic.file === input.file &&
+          diagnostic.text.includes(input.row.diagnostic)
+      ),
+      `${input.row.name}: missing file-specific diagnostic: ${output}`
     );
-    for (const variant of [row.valid, row.invalid]) {
-      assert.equal(
-        await readFile(join(root, variant.file), 'utf8'),
-        variant.text,
-        `${row.name}: ${command} rewrote input`
-      );
-      await rm(join(root, variant.file));
-    }
-    console.log(`PASS ${row.name}`);
+  for (const input of inputs) {
+    assert.equal(
+      await readFile(join(root, input.file), 'utf8'),
+      input.text,
+      `${input.row.name}: ${command} rewrote input`
+    );
+    await rm(join(root, input.file));
+    if (input.variant === 'invalid') console.log(`PASS ${input.row.name}`);
   }
 }
-await rm(root, { recursive: true, force: true });
+cleanup();

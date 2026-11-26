@@ -89,6 +89,7 @@ const result = spawnSync(
   [
     'run',
     'scripts/e2e-container.ts',
+    '--skip-next-build',
     '--config',
     config,
     ...process.argv.slice(2).filter((arg) => arg !== '--visual')
