@@ -8,13 +8,15 @@ import * as yaml from 'yaml-eslint-parser';
 import uiCopy from './scripts/ui-copy.ts';
 import { ciTimeLimit } from './scripts/ci-time-limit.ts';
 import { featureBoundaries } from './scripts/feature-boundaries.ts';
+import { uiSdkPriority } from './scripts/ui-sdk-priority.ts';
 
 const krab = {
   meta: uiCopy.meta,
   rules: {
     ...uiCopy.rules,
     'ci-time-limit': ciTimeLimit,
-    'feature-boundaries': featureBoundaries
+    'feature-boundaries': featureBoundaries,
+    'ui-sdk-priority': uiSdkPriority
   }
 };
 
@@ -26,6 +28,8 @@ const FEATURES = [
   'on-water',
   'trip'
 ];
+
+const BITS_UI_WRAPPERS = ['src/lib/features/on-water/bait-command/'];
 
 const EFFECT_ONLY = [
   {
@@ -65,7 +69,16 @@ export default defineConfig([
   {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts,svelte}'],
     plugins: { krab },
-    rules: { 'krab/feature-boundaries': ['error', { features: FEATURES }] }
+    rules: {
+      'krab/feature-boundaries': ['error', { features: FEATURES }],
+      'krab/ui-sdk-priority': ['error', { bitsUi: BITS_UI_WRAPPERS }]
+    }
+  },
+  {
+    files: ['**/package.json', '**/components.json'],
+    languageOptions: { parser: yaml },
+    plugins: { krab },
+    rules: { 'krab/ui-sdk-priority': ['error', { bitsUi: BITS_UI_WRAPPERS }] }
   },
   {
     files: ['**/*.{ts,mts,cts,svelte}'],

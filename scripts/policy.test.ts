@@ -717,6 +717,50 @@ const cases: PolicyCase[] = [
     risk: 'Svelte compiler and accessibility warnings pass typechecking'
   },
   {
+    name: 'bits-ui import outside the bait command wrappers',
+    file: 'src/lib/features/on-water/bait-command/probe.svelte',
+    invalidFile: 'src/lib/features/on-water/Probe.svelte',
+    valid:
+      '<script lang="ts">\n  import { Command } from \'bits-ui\';\n</script>\n\n<Command.Root />\n',
+    invalid:
+      '<script lang="ts">\n  import { Command } from \'bits-ui\';\n</script>\n\n<Command.Root />\n',
+    command: 'lint',
+    diagnostic: 'Importing bits-ui outside the bait command wrappers',
+    risk: 'bits-ui spreads past the wrappers UI SDK replaces, or the wrappers are refused'
+  },
+  {
+    name: 'dynamic bits-ui import',
+    file: 'src/lib/shared/probe.ts',
+    valid: "export const load = () => import('effect');\n",
+    invalid: "export const load = () => import('bits-ui');\n",
+    command: 'lint',
+    diagnostic: 'Importing bits-ui outside the bait command wrappers',
+    risk: 'A dynamic import adds bits-ui past the allowlist'
+  },
+  {
+    name: 'shadcn-svelte dependency',
+    file: 'probe-ui-sdk/package.json',
+    invalidFile: 'probe-shadcn/package.json',
+    exact: true,
+    valid: '{\n  "dependencies": { "bits-ui": "2.21.0" }\n}\n',
+    invalid: '{\n  "devDependencies": { "shadcn-svelte": "1.0.0" }\n}\n',
+    command: 'lint',
+    diagnostic: 'shadcn-svelte in devDependencies',
+    risk: 'shadcn-svelte comes back as a dependency, or the temporary bits-ui dependency is refused'
+  },
+  {
+    name: 'shadcn-svelte registry scaffolding',
+    file: 'probe-registry/package.json',
+    invalidFile: 'probe-registry/components.json',
+    exact: true,
+    valid: '{\n  "name": "probe"\n}\n',
+    invalid:
+      '{\n  "$schema": "https://shadcn-svelte.com/schema.json",\n  "registry": "https://shadcn-svelte.com/registry"\n}\n',
+    command: 'lint',
+    diagnostic: 'components.json is shadcn-svelte registry scaffolding',
+    risk: 'A shadcn-svelte registry returns, or plain manifests are refused'
+  },
+  {
     name: 'CI job without a time limit',
     file: '.github/workflows/ci.yml',
     valid: workflow('    timeout-minutes: 5\n'),
