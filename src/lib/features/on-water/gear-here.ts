@@ -1,5 +1,4 @@
-import type { MapPlace } from '#lib/features/map/index.js';
-import type { ChipFace } from './pin-chip';
+import type { ChipFace, Layer } from './pin-chip';
 
 export type HereItem = ChipFace & {
   id: string;
@@ -12,15 +11,11 @@ export type HereItem = ChipFace & {
 export const spokenItem = (item: HereItem) =>
   [item.name, item.label, ...item.details].filter(Boolean).join(', ');
 
-const LAYER_RANK: readonly MapPlace['layer'][] = [
-  'in-water',
-  'collected',
-  'past'
-];
+const LAYER_RANK: readonly Layer[] = ['in-water', 'collected', 'past'];
 
 export type GroupChip = {
   face: ChipFace;
-  others: MapPlace['layer'];
+  others: Layer;
   more: number;
   uncollected: boolean;
   label: string;
@@ -31,7 +26,7 @@ const listed = (parts: readonly string[]) =>
     ? `${parts.slice(0, -1).join(', ')} and ${String(parts.at(-1))}`
     : parts.join('');
 
-const LAYER_WORDS: Record<MapPlace['layer'], string> = {
+const LAYER_WORDS: Record<Layer, string> = {
   'in-water': 'in the water',
   collected: 'collected',
   past: 'from past trips'

@@ -1,9 +1,8 @@
 <script lang="ts">
   import { PIN_FOCUS } from '#lib/shared/control-states.js';
-  import type { MapPlace } from '#lib/features/map/index.js';
   import { groupChip, type HereItem } from './gear-here';
   import PinChip from './PinChip.svelte';
-  import { MARK_SIZE, SELECTED_RING } from './pin-chip';
+  import { MARK_SIZE, SELECTED_RING, type Layer } from './pin-chip';
   import UncollectedMark from './UncollectedMark.svelte';
 
   let {
@@ -20,7 +19,7 @@
     onopen: (opener: HTMLElement) => void;
   } = $props();
 
-  const SEGMENT: Record<MapPlace['layer'], string> = {
+  const SEGMENT: Record<Layer, string> = {
     'in-water': 'border-solid border-map-ink bg-map-paper text-map-ink shadow',
     collected: 'border-dashed border-map-muted bg-map-paper/85 text-map-muted',
     past: 'border-dotted border-map-muted bg-map-paper/85 text-map-muted'

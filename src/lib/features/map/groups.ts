@@ -4,7 +4,7 @@ import type { Box, MapPlace } from './types';
 export type Spot = {
   key: string;
   at: LatLon;
-  layer: MapPlace['layer'];
+  priority: number;
   lead: string;
   ids: string[];
   box: Box;
@@ -16,11 +16,6 @@ export const MAX_ZOOM = 19;
 const TILE_PX = 512;
 const GAP_PX = 4;
 const MAX_LAT = 85.051129;
-const SEED_ORDER: Record<MapPlace['layer'], number> = {
-  'in-water': 0,
-  collected: 1,
-  past: 2
-};
 
 const onScreen = (at: LatLon, zoom: number) => {
   const world = TILE_PX * 2 ** zoom;
@@ -130,11 +125,13 @@ export const spotsAt = (
   zoom: number,
   first: readonly string[] = []
 ): Spot[] => {
-  const rank = (place: MapPlace) => {
-    const featured = first.indexOf(place.id);
-    return featured === -1 ? first.length + SEED_ORDER[place.layer] : featured;
+  const featured = (place: MapPlace) => {
+    const index = first.indexOf(place.id);
+    return index === -1 ? first.length : index;
   };
-  const ordered = [...places].sort((a, b) => rank(a) - rank(b));
+  const ordered = places.toSorted(
+    (a, b) => featured(a) - featured(b) || b.priority - a.priority
+  );
   const stacks = new Map<string, readonly MapPlace[]>();
   for (const { members } of clear(
     greedy(ordered, MAX_ZOOM, (place) => [place]),
@@ -148,7 +145,7 @@ export const spotsAt = (
     ({ seed, crowded, box, members }) => ({
       key: crowded ? `group:${seed.id}` : seed.id,
       at: seed.at,
-      layer: seed.layer,
+      priority: seed.priority,
       lead: seed.id,
       ids: members.map(({ id }) => id),
       box,

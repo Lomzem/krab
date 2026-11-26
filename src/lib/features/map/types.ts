@@ -7,7 +7,7 @@ export type Box = { left: number; right: number; up: number; down: number };
 export type MapPlace = {
   id: string;
   at: LatLon;
-  layer: 'in-water' | 'collected' | 'past';
+  priority: number;
   alone: Box;
   leading: (more: number) => Box;
 };

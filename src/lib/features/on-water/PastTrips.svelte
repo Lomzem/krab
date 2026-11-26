@@ -21,7 +21,7 @@
   import GroupPin from './GroupPin.svelte';
   import LoadFailed from './LoadFailed.svelte';
   import PinChip from './PinChip.svelte';
-  import { chipBoxes } from './pin-chip';
+  import { chipBoxes, LAYER_PRIORITY } from './pin-chip';
   import SelectedCheck from './SelectedCheck.svelte';
   import Sheet from './Sheet.svelte';
   import type { Notice } from './on-water.svelte';
@@ -167,7 +167,7 @@
               {
                 id: drop.id,
                 at: drop.position,
-                layer: 'past',
+                priority: LAYER_PRIORITY.past,
                 ...chipBoxes(item, null)
               }
             ]

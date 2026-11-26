@@ -1,13 +1,13 @@
 <script lang="ts">
   import { PIN_FOCUS } from '#lib/shared/control-states.js';
-  import type { MapPlace } from '#lib/features/map/index.js';
   import DayMarker from './DayMarker.svelte';
   import GearIcon from './GearIcon.svelte';
   import {
     CHIP_METRICS,
     MARK_SIZE,
     SELECTED_RING,
-    type ChipFace
+    type ChipFace,
+    type Layer
   } from './pin-chip';
   import UncollectedMark from './UncollectedMark.svelte';
 
@@ -23,14 +23,14 @@
     selected?: boolean;
   } = $props();
 
-  const LOOK: Record<MapPlace['layer'], string> = {
+  const LOOK: Record<Layer, string> = {
     'in-water':
       'border-solid border-map-ink bg-map-ink text-sm text-map-paper shadow',
     collected:
       'border-dashed border-map-muted bg-map-paper/85 text-sm text-map-muted',
     past: 'border-dotted border-map-muted bg-map-paper/85 text-sm text-map-muted'
   };
-  const PAD: Record<MapPlace['layer'], string> = {
+  const PAD: Record<Layer, string> = {
     'in-water': 'p-1',
     collected: 'py-0.5 pr-1 pl-0.5',
     past: 'py-0.5 pr-1 pl-0.5'

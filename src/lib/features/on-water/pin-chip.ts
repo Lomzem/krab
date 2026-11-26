@@ -1,9 +1,17 @@
 import type { Box, MapPlace } from '#lib/features/map/index.js';
 import type { Day, Kind } from '#lib/features/trip/index.js';
 
+export type Layer = 'in-water' | 'collected' | 'past';
+
+export const LAYER_PRIORITY: Record<Layer, number> = {
+  past: 2,
+  collected: 3,
+  'in-water': 4
+};
+
 export type ChipFace = {
   kind: Kind;
-  layer: MapPlace['layer'];
+  layer: Layer;
   number: number | null;
   day: Day | null;
   uncollected: boolean;
@@ -16,7 +24,7 @@ type Metrics = {
   day: number;
 };
 
-export const CHIP_METRICS: Record<MapPlace['layer'], Metrics> = {
+export const CHIP_METRICS: Record<Layer, Metrics> = {
   'in-water': { pad: { left: 4, right: 4, y: 4 }, icon: 17, text: 14, day: 15 },
   collected: { pad: { left: 2, right: 4, y: 2 }, icon: 15, text: 14, day: 14 },
   past: { pad: { left: 2, right: 4, y: 2 }, icon: 15, text: 14, day: 14 }
@@ -64,7 +72,7 @@ const faceSize = (face: ChipFace) => {
   };
 };
 
-const segmentWidth = (layer: MapPlace['layer'], more: number) =>
+const segmentWidth = (layer: Layer, more: number) =>
   2 * BORDER +
   2 * SEGMENT_PAD +
   (PLUS_EM + Math.max(MIN_SEGMENT_DIGITS, digits(more)) * DIGIT_EM) *

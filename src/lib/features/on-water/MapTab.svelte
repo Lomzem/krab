@@ -33,7 +33,7 @@
   } from './map-filter';
   import MapFilterSheet from './MapFilterSheet.svelte';
   import PinChip from './PinChip.svelte';
-  import { chipBoxes } from './pin-chip';
+  import { chipBoxes, LAYER_PRIORITY } from './pin-chip';
 
   let {
     trip,
@@ -267,7 +267,14 @@
   ): MapPlace[] =>
     itemOf(id).flatMap((item) =>
       at && shown
-        ? [{ id, at, layer: item.layer, ...chipBoxes(item, timeLabel(id)) }]
+        ? [
+            {
+              id,
+              at,
+              priority: LAYER_PRIORITY[item.layer],
+              ...chipBoxes(item, timeLabel(id))
+            }
+          ]
         : []
     );
   const places = $derived([

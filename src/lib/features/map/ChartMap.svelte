@@ -34,11 +34,6 @@
   const MY_EXTENT = { left: 30, right: 30, up: 30, down: 30 };
   const OVERVIEW_MAX_ZOOM = 17;
   const ME_ORDER = 1;
-  const LAYER_ORDER: Record<MapPlace['layer'], number> = {
-    past: 2,
-    collected: 3,
-    'in-water': 4
-  };
   const MIN_ZOOM = 0;
   const MIN_FIT_SPAN = 48;
   const CLEAR_GAP = 8;
@@ -819,7 +814,7 @@
       <div class="contents">
         <div
           data-place={spot.key}
-          style:z-index={LAYER_ORDER[spot.layer]}
+          style:z-index={spot.priority}
           use:marker={spot.at}
           onfocusin={revealFocused}
         >
