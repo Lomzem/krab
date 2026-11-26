@@ -1,9 +1,7 @@
-import {
-  dropsInDays,
-  isMultiDay,
-  type DaySelection,
-  type Drop,
-  type Trip
+import type {
+  ActiveGear,
+  DaySelection,
+  Drop
 } from '#lib/features/trip/index.js';
 
 export type MapFilter = {
@@ -22,21 +20,15 @@ export const DEFAULT_MAP_FILTER: MapFilter = {
 
 export const filterToShow = (
   filter: MapFilter,
-  trip: Trip,
-  target: Drop,
-  now: number
+  inDays: ReadonlySet<string>,
+  target: Drop
 ): MapFilter => ({
   ...filter,
   collected: filter.collected || target.collectedAt !== null,
-  days: dropsInDays(trip, filter.days, now).some(
-    (drop) => drop.id === target.id
-  )
-    ? filter.days
-    : 'all'
+  days: inDays.has(target.id) ? filter.days : 'all'
 });
 
-export const filterHides = (filter: MapFilter, trip: Trip | null) =>
-  trip !== null &&
-  ((filter.days !== 'all' && isMultiDay(trip)) ||
-    (!filter.collected &&
-      trip.drops.some((drop) => drop.collectedAt !== null)));
+export const filterHides = (filter: MapFilter, gear: ActiveGear | null) =>
+  gear !== null &&
+  ((filter.days !== 'all' && gear.multiDay) ||
+    (!filter.collected && gear.collected.length > 0));

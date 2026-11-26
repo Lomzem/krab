@@ -2,11 +2,10 @@
   import { arrowDeg, BearingArrow } from '#lib/features/compass/index.js';
   import type { CompassState } from '#lib/features/compass/index.js';
   import {
-    gearCounts,
     roughness,
+    type ActiveGear,
     type Availability,
-    type GearRow,
-    type Trip
+    type GearRow
   } from '#lib/features/trip/index.js';
   import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import GearIcon from './GearIcon.svelte';
@@ -15,7 +14,7 @@
     screen,
     status,
     loaded = true,
-    trip,
+    gear,
     nearest,
     compass,
     onopen,
@@ -24,7 +23,7 @@
     screen: 'map' | 'gear';
     status: Availability | null;
     loaded?: boolean;
-    trip: Trip | null;
+    gear: ActiveGear | null;
     nearest: GearRow | null;
     compass: CompassState;
     onopen: (dropId: string, opener: HTMLElement) => void;
@@ -35,7 +34,7 @@
   const LINE_2 = 'flex items-center gap-1.5 text-sm text-muted-foreground';
   const count = $derived.by(() => {
     if (!loaded) return null;
-    return trip ? gearCounts(trip).inWater : 'Nothing in the water';
+    return gear?.counts.inWater ?? 'Nothing in the water';
   });
   const rough = $derived(status?.kind === 'ready' && roughness(status.fix));
   const direction = $derived(

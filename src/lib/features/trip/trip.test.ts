@@ -2,18 +2,13 @@ import { Effect } from 'effect';
 import { IDBDatabase, IDBFactory, IDBTransaction } from 'fake-indexeddb';
 import { afterEach, assert, expect, expectTypeOf, it, vi } from 'vitest';
 import {
+  activeGear,
   canDropAgain,
   canUndoCollect,
-  collectedGear,
   dayGroups,
   dayOf,
-  dropsInDays,
-  gearCounts,
   gearName,
-  gearInWater,
-  isMultiDay,
-  nearestGear,
-  pastDrops,
+  pastGear,
   pastTripSummaries,
   tripBook,
   type DaySelection,
@@ -414,7 +409,7 @@ it('flags a fix worse than 50 m as rough, in feet, on the drop and its gear row'
   const exact = await place(book, 'pot');
   state.fix = { ...SEA, accuracyM: 51, at: T0 };
   const rough = await place(book, 'net');
-  const rows = gearInWater(rough.trip, SEA, T0);
+  const rows = activeGear(rough.trip, SEA, T0, 'all').inWater;
 
   expect(exact.rough).toBeNull();
   expect(rough.rough).toEqual({ short: '170 ft', spoken: '170 feet' });
@@ -734,7 +729,7 @@ it('sorts by great-circle distance with bearing, compass point and distance text
   await dropAt(book, state, 'net', { north: -0.0004, east: -0.001 });
   const last = await dropAt(book, state, 'net', null);
 
-  const rows = gearInWater(last.trip, SEA, state.now);
+  const rows = activeGear(last.trip, SEA, state.now, 'all').inWater;
 
   expect(
     rows.map((row) => [
@@ -767,7 +762,7 @@ it('marks gear under 0.5 ft away as at gear with no bearing', async () => {
   await dropAt(book, state, 'pot', { north: 0.000001, east: 0 });
   const last = await dropAt(book, state, 'net', { north: 0.000002, east: 0 });
 
-  const rows = gearInWater(last.trip, SEA, state.now);
+  const rows = activeGear(last.trip, SEA, state.now, 'all').inWater;
 
   expect(rows[0]?.direction).toMatchObject({ atGear: true, bearingDeg: null });
   expect(rows[1]?.direction).toMatchObject({ atGear: true, bearingDeg: null });
@@ -797,12 +792,12 @@ it('finds the nearest gear in the water with a position, skipping a closer colle
   };
   const { trip } = await dropAgain(book, pulled.drop.id);
 
-  const nearest = nearestGear(gearInWater(trip, SEA, state.now));
+  const nearest = activeGear(trip, SEA, state.now, 'all').nearest;
 
   expect(nearest?.name).toBe('Net 2');
   expect(nearest?.direction?.feet).toBeCloseTo(109.44, 1);
   expect(nearest?.direction?.bearingDeg).toBeCloseTo(90, 3);
-  expect(nearestGear(gearInWater(trip, null, state.now))).toBeNull();
+  expect(activeGear(trip, null, state.now, 'all').nearest).toBeNull();
 });
 
 it('has no nearest gear when no gear in the water has a position', async () => {
@@ -810,7 +805,7 @@ it('has no nearest gear when no gear in the water has a position', async () => {
   const book = await open();
   const last = await dropAt(book, state, 'pot', null);
 
-  expect(nearestGear(gearInWater(last.trip, SEA, state.now))).toBeNull();
+  expect(activeGear(last.trip, SEA, state.now, 'all').nearest).toBeNull();
 });
 
 it('formats time in the water as minutes, hours and days', async () => {
@@ -824,7 +819,7 @@ it('formats time in the water as minutes, hours and days', async () => {
   state.now = query - 45 * 60_000 - 30_000;
   const last = await place(book, 'pot');
 
-  const rows = gearInWater(last.trip, null, query);
+  const rows = activeGear(last.trip, null, query, 'all').inWater;
 
   expect(
     rows.map((row) => [row.name, row.timeInWater.short, row.timeInWater.spoken])
@@ -1188,12 +1183,16 @@ it('collects at the tap time once, and undo collect puts it back with no catch',
   ]);
   expect(again.trip.drops[0]?.collectedAt).toBe(T0 + 90 * 60_000);
   expect(
-    gearInWater(again.trip, null, state.now).map((row) => row.name)
+    activeGear(again.trip, null, state.now, 'all').inWater.map(
+      (row) => row.name
+    )
   ).toEqual(['Net 1']);
   expect([undone.changed, undoneAgain.changed]).toEqual([true, false]);
   expect(stored).toMatchObject({ collectedAt: null, catch: null });
   expect(
-    gearInWater(undone.trip, null, state.now).map((row) => row.name)
+    activeGear(undone.trip, null, state.now, 'all').inWater.map(
+      (row) => row.name
+    )
   ).toEqual(['Pot 1', 'Net 1']);
 });
 
@@ -1393,7 +1392,7 @@ it('counts gear in the water and collected drops from the records, newest collec
   const deleted = await place(book, 'pot');
   await run(book.collect(deleted.drop.id));
   await run(book.deleteDrop(deleted.drop.id));
-  const single = gearCounts(net2.trip);
+  const single = activeGear(net2.trip, null, T0, 'all').counts;
   advance(60_000);
   await run(book.collect(pot2.drop.id));
   await run(
@@ -1426,12 +1425,15 @@ it('counts gear in the water and collected drops from the records, newest collec
     inWater: '4 in the water',
     collected: 'Nothing collected'
   });
-  expect(gearCounts(last.trip)).toEqual({
+  expect(activeGear(last.trip, null, T0, 'all').counts).toEqual({
     inWater: '2 in the water',
     collected: '3 collected'
   });
   expect(
-    collectedGear(last.trip).map((row) => [row.name, row.catchText])
+    activeGear(last.trip, null, T0, 'all').collected.map((row) => [
+      row.name,
+      row.catchText
+    ])
   ).toEqual([
     ['Net 2', 'Catch not recorded'],
     ['Net 1', '4 kept, 1 released'],
@@ -1463,9 +1465,9 @@ it('gives a drop the local calendar date it was placed, so a drop just after loc
   const afterMidnight = await placeAt(book, state, '2026-06-02T00:30:00-04:00');
   const { trip } = afterMidnight;
 
-  expect(isMultiDay(oneDay)).toBe(false);
+  expect(activeGear(oneDay, null, T0, 'all').multiDay).toBe(false);
   expect(dayOf(oneDay, lateEvening.drop)).toBeNull();
-  expect(isMultiDay(trip)).toBe(true);
+  expect(activeGear(trip, null, T0, 'all').multiDay).toBe(true);
   expect(dayOf(trip, lateEvening.drop)).toEqual({ number: 1, text: 'Day 1' });
   expect(dayOf(trip, afterMidnight.drop)).toEqual({
     number: 2,
@@ -1517,7 +1519,7 @@ it('numbers days from the date the trip started, keeping a gap day and a deleted
   expect(dayOf(withoutFirst, dayThree.drop)?.text).toBe('Day 3');
   expect(dayOf(withoutFirst, dayFour.drop)?.text).toBe('Day 4');
   assert(undoneTo);
-  expect(isMultiDay(undoneTo)).toBe(false);
+  expect(activeGear(undoneTo, null, T0, 'all').multiDay).toBe(false);
   expect(dayOf(undoneTo, dayThree.drop)).toBeNull();
 });
 
@@ -1532,14 +1534,20 @@ it('gear rows and collected rows carry the day of their drop on a multi-day trip
   const at = state.now;
 
   expect(
-    gearInWater(trip, null, at).map((row) => [row.name, row.day?.text])
+    activeGear(trip, null, at, 'all').inWater.map((row) => [
+      row.name,
+      row.day?.text
+    ])
   ).toEqual([
     ['Pot 2', 'Day 2'],
     ['Pot 3', 'Day 2']
   ]);
-  expect(collectedGear(trip).map((row) => [row.name, row.day?.text])).toEqual([
-    ['Pot 1', 'Day 1']
-  ]);
+  expect(
+    activeGear(trip, null, T0, 'all').collected.map((row) => [
+      row.name,
+      row.day?.text
+    ])
+  ).toEqual([['Pot 1', 'Day 1']]);
 });
 
 it('groups rows by day, oldest day first, keeping the order they came in within a day', async () => {
@@ -1561,10 +1569,9 @@ it('groups rows by day, oldest day first, keeping the order they came in within 
     rows.map(({ name }) => name);
 
   expect(
-    dayGroups(collectedGear(trip)).map(({ day, rows }) => [
-      day.text,
-      names(rows)
-    ])
+    dayGroups(activeGear(trip, null, T0, 'all').collected).map(
+      ({ day, rows }) => [day.text, names(rows)]
+    )
   ).toEqual([
     ['Day 1', ['Pot 2', 'Pot 1']],
     ['Day 2', ['Pot 3']]
@@ -1598,9 +1605,13 @@ it.each<{ selection: DaySelection; now: string; names: string[] }>([
     await placeAt(book, state, '2026-09-04T23:59:00-04:00');
     const { trip } = await placeAt(book, state, '2026-09-05T00:00:00-04:00');
 
-    const selected = dropsInDays(trip, selection, Date.parse(now));
+    const { inDays } = activeGear(trip, null, Date.parse(now), selection);
 
-    expect(selected.map((drop) => nameOf(trip, drop))).toEqual(names);
+    expect(
+      trip.drops
+        .filter((drop) => inDays.has(drop.id))
+        .map((drop) => nameOf(trip, drop))
+    ).toEqual(names);
   }
 );
 
@@ -1611,8 +1622,8 @@ it('selects every drop of a one-day trip whatever day is chosen, even when that 
   const { trip } = await placeAt(book, state, '2026-09-04T11:00:00-04:00');
   const nextMorning = Date.parse('2026-09-05T07:00:00-04:00');
 
-  expect(dropsInDays(trip, 'today', nextMorning)).toHaveLength(2);
-  expect(dropsInDays(trip, 'earlier', nextMorning)).toHaveLength(2);
+  expect(activeGear(trip, null, nextMorning, 'today').inDays.size).toBe(2);
+  expect(activeGear(trip, null, nextMorning, 'earlier').inDays.size).toBe(2);
 });
 
 const flip = <A, E>(effect: Effect.Effect<A, E>) =>
@@ -1838,7 +1849,7 @@ const statusOf = (row: { name: string; status: string }) => [
 ];
 
 const statusByDay = (trip: Trip) =>
-  dayGroups(pastDrops(trip, 'all')).map(({ day, rows }) => [
+  dayGroups(pastGear(trip, 'all').rows).map(({ day, rows }) => [
     day.text,
     rows.map(statusOf)
   ]);
@@ -1867,7 +1878,7 @@ it.each<{ selection: PastDaySelection; names: string[] }>([
     await run(book.collect(net.drop.id));
     const ended = await run(book.endTrip(net.trip.id));
 
-    const rows = pastDrops(ended, selection);
+    const rows = pastGear(ended, selection).rows;
 
     expect(rows.map((row) => row.name)).toEqual(names);
     expect(statusByDay(ended)).toEqual([

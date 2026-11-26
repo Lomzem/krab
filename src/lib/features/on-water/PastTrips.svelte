@@ -3,8 +3,7 @@
   import { tick } from 'svelte';
   import {
     dayGroups,
-    isMultiDay,
-    pastDrops,
+    pastGear,
     pastTripSummaries,
     type PastDaySelection,
     type PastDropRow,
@@ -74,10 +73,9 @@
     selected !== null ? (summaryById.get(selected) ?? null) : null
   );
   const trip = $derived(current?.trip ?? null);
-  const multiDay = $derived(trip !== null && isMultiDay(trip));
-  const rows = $derived(
-    trip ? pastDrops(trip, multiDay ? selection : 'all') : []
-  );
+  const shown = $derived(trip ? pastGear(trip, selection) : null);
+  const multiDay = $derived(shown?.multiDay ?? false);
+  const rows = $derived(shown?.rows ?? []);
   const rowsById = $derived(new Map(rows.map((row) => [row.drop.id, row])));
   const byDay = $derived(dayGroups(rows));
   const mapShow = $derived(show !== null && rowsById.has(show) ? show : null);

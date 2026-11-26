@@ -7,23 +7,17 @@
     type CompassState
   } from '#lib/features/compass/index.js';
   import {
-    collectedGear,
-    gearCounts,
     dayGroups,
-    gearInWater,
+    type ActiveGear,
     type CollectedRow,
-    type GearRow,
-    type Trip
+    type GearRow
   } from '#lib/features/trip/index.js';
-  import type { LatLon } from '#lib/shared/lat-lon.js';
   import DayMarker from './DayMarker.svelte';
   import GearIcon from './GearIcon.svelte';
 
   let {
-    trip,
-    from,
+    gear,
     compass,
-    now,
     onopen,
     canEnd,
     onend,
@@ -32,10 +26,8 @@
     endButton = $bindable(),
     heading = $bindable()
   }: {
-    trip: Trip | null;
-    from: LatLon | null;
+    gear: ActiveGear | null;
     compass: CompassState;
-    now: number;
     onopen: (dropId: string, opener: HTMLElement) => void;
     canEnd: boolean;
     onend: () => void;
@@ -45,9 +37,9 @@
     heading?: HTMLHeadingElement;
   } = $props();
 
-  const rows = $derived(trip ? gearInWater(trip, from, now) : []);
-  const collected = $derived(trip ? collectedGear(trip) : []);
-  const counts = $derived(trip ? gearCounts(trip) : null);
+  const rows = $derived(gear?.inWater ?? []);
+  const collected = $derived(gear?.collected ?? []);
+  const counts = $derived(gear?.counts ?? null);
   const inWaterByDay = $derived(dayGroups(rows));
   const collectedByDay = $derived(dayGroups(collected));
 
@@ -72,7 +64,7 @@
       </p>
     {/if}
   </div>
-  {#if trip}
+  {#if gear}
     <button
       bind:this={endButton}
       type="button"
@@ -198,7 +190,7 @@
   </ul>
 {/snippet}
 
-{#if trip}
+{#if gear}
   <div class="pb-6">
     {#if inWaterByDay.length > 0}
       {#each inWaterByDay as group (group.day.number)}

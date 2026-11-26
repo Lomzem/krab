@@ -14,9 +14,7 @@
   import type { Base, Camera } from '#lib/features/map/index.js';
   import {
     canUndoCollect,
-    dropsInDays,
-    gearInWater,
-    nearestGear,
+    activeGear,
     type Drop,
     type DropAttempt,
     type DropEdit,
@@ -120,17 +118,12 @@
       ? null
       : rowStatus
   );
-  const nearest = $derived.by(() => {
-    if (!water.trip) return null;
-    const shown = new Set(
-      dropsInDays(water.trip, mapFilter.days, now).map(({ id }) => id)
-    );
-    return nearestGear(
-      gearInWater(water.trip, readiness.fix, now).filter(({ drop }) =>
-        shown.has(drop.id)
-      )
-    );
-  });
+  const gear = $derived(
+    water.trip
+      ? activeGear(water.trip, readiness.fix, now, mapFilter.days)
+      : null
+  );
+  const nearest = $derived(gear?.nearest ?? null);
   const panelShown = $derived(
     tab === 'map' ||
       (tab === 'gear' && (water.pending?.phase === 'acquiring' || savingShown))
@@ -143,10 +136,9 @@
   );
   const dockShown = $derived(rowShown || panelShown);
   const sheetDirection = $derived(
-    subject && water.trip
-      ? (gearInWater(water.trip, readiness.fix, now).find(
-          (row) => row.drop.id === subject.drop.id
-        )?.direction ?? null)
+    subject && gear
+      ? (gear.inWater.find((row) => row.drop.id === subject.drop.id)
+          ?.direction ?? null)
       : null
   );
 
@@ -348,9 +340,9 @@
       closeSheet();
       return;
     }
-    if (!water.trip) return;
     now = Date.now();
-    mapFilter = filterToShow(mapFilter, water.trip, target, now);
+    if (!gear) return;
+    mapFilter = filterToShow(mapFilter, gear.inDays, target);
     showOnMap = target.id;
     void switchTo('map');
     closeSheet();
@@ -450,7 +442,7 @@
         </section>
       {:else if water.load === 'ready'}
         <MapTab
-          trip={water.trip}
+          {gear}
           past={water.past}
           fix={readiness.fix}
           lastFix={readiness.lastFix}
@@ -458,7 +450,6 @@
           compass={$compass}
           compassShown={compassSupported()}
           oncompass={toggleCompass}
-          {now}
           bind:base
           bind:camera
           bind:filter={mapFilter}
@@ -487,10 +478,8 @@
         <LoadFailed text={TRIP_LOAD_FAILED} onretry={reload} />
       {:else if water.load === 'ready'}
         <GearList
-          trip={water.trip}
-          from={readiness.fix}
+          {gear}
           compass={$compass}
-          {now}
           onopen={opensFrom('list')}
           canEnd={water.pending === null}
           onend={() => {
@@ -681,7 +670,7 @@
             screen={tab}
             status={dockStatus}
             loaded={water.load === 'ready'}
-            trip={water.trip}
+            {gear}
             {nearest}
             compass={$compass}
             onopen={opensFrom('map')}

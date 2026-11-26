@@ -5,14 +5,11 @@
   import type { CompassState } from '#lib/features/compass/index.js';
   import type { Base, Camera } from '#lib/features/map/index.js';
   import {
-    collectedGear,
     compassPoint,
-    dropsInDays,
-    gearInWater,
-    isMultiDay,
-    pastDrops,
+    pastGear,
     roughness,
     tripDates,
+    type ActiveGear,
     type CollectedRow,
     type Fix,
     type GearRow,
@@ -29,7 +26,7 @@
   import MapFilterSheet from './MapFilterSheet.svelte';
 
   let {
-    trip,
+    gear,
     past,
     fix,
     lastFix,
@@ -37,7 +34,6 @@
     compass,
     compassShown,
     oncompass,
-    now,
     base = $bindable('chart'),
     camera = $bindable(null),
     filter = $bindable({ ...DEFAULT_MAP_FILTER }),
@@ -46,7 +42,7 @@
     onopen,
     newest
   }: {
-    trip: Trip | null;
+    gear: ActiveGear | null;
     past: readonly Trip[];
     fix: Fix | null;
     lastFix: Fix | null;
@@ -54,7 +50,6 @@
     compass: CompassState;
     compassShown: boolean;
     oncompass: () => void;
-    now: number;
     base?: Base;
     camera?: Camera | null;
     filter?: MapFilter;
@@ -75,15 +70,11 @@
     calibrating: 'Compass needs calibrating',
     usable: 'Compass on'
   };
-  const rows = $derived(trip ? gearInWater(trip, fix, now) : []);
+  const rows = $derived(gear?.inWater ?? []);
   const rowsById = $derived(new Map(rows.map((row) => [row.drop.id, row])));
-  const multiDay = $derived(trip !== null && isMultiDay(trip));
-  const inDays = $derived(
-    new Set(trip ? dropsInDays(trip, filter.days, now).map(({ id }) => id) : [])
-  );
-  const collected = $derived(
-    trip && filter.collected ? collectedGear(trip) : []
-  );
+  const multiDay = $derived(gear?.multiDay ?? false);
+  const inDays = $derived(gear?.inDays ?? new Set<string>());
+  const collected = $derived(gear && filter.collected ? gear.collected : []);
   const collectedById = $derived(
     new Map(collected.map((row) => [row.drop.id, row]))
   );
@@ -92,7 +83,7 @@
     filter.past
       ? past.flatMap((ended) => {
           const dates = tripDates(ended);
-          return pastDrops(ended, 'all').map((row): PastPin => ({
+          return pastGear(ended, 'all').rows.map((row): PastPin => ({
             ...row,
             dates
           }));
@@ -105,10 +96,10 @@
     earlier: 'earlier days only',
     all: 'all days'
   } as const;
-  const hides = $derived(filterHides(filter, trip));
+  const hides = $derived(filterHides(filter, gear));
   const filterSummary = $derived(
     [
-      trip && 'gear in the water',
+      gear && 'gear in the water',
       filter.collected && 'collected gear',
       past.length > 0 && filter.past && 'past trips',
       filter.timeInWater && 'time in the water',
@@ -285,7 +276,7 @@
   fitLabel={hides ? 'Fit shown gear' : 'Show all gear'}
 >
   {#snippet controls()}
-    {#if trip || past.length > 0}
+    {#if gear || past.length > 0}
       <button
         bind:this={filterButton}
         type="button"

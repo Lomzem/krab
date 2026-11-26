@@ -82,19 +82,15 @@ export {
 export { compassPoint } from './format';
 export { availability, type Availability } from './availability';
 export {
-  collectedGear,
+  activeGear,
   dayGroups,
   dayOf,
-  dropsInDays,
-  gearCounts,
-  gearInWater,
-  isMultiDay,
-  nearestGear,
-  pastDrops,
+  pastGear,
   pastTripSummaries,
   roughness,
   timeInWater,
   tripDates,
+  type ActiveGear,
   type CollectedRow,
   type Day,
   type DaySelection,
