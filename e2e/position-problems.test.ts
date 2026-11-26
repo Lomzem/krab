@@ -490,7 +490,7 @@ test('a touch on the nearest gear opens that gear even when a new fix makes othe
   await expect(sheet.getByRole('heading', { name: 'Pot 2' })).toBeVisible();
 });
 
-test('a drop with no fix within 5 seconds saves without a position by itself, and a later fix never moves it', async ({
+test('a drop with no fix within 5 seconds saves without a position by itself, a later fix never moves it, and a fix just inside 5 seconds after the tap places the drop', async ({
   page
 }) => {
   await holdFixes(page);
@@ -526,29 +526,20 @@ test('a drop with no fix within 5 seconds saves without a position by itself, an
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
   await expect(toastOf(page)).not.toContainText('no position');
 
+  await page.clock.runFor(5501);
+  await dropPot.click();
+  await expect(waiting).toBeFocused();
+  await page.clock.runFor(4999);
+  await deliverFix(page, MADE_UP_SEA, new Date('2031-03-04T06:00:15.500Z'));
+  await expect(toastOf(page)).toContainText('Pot 3 dropped');
+  await expect(toastOf(page)).not.toContainText('no position');
+
   await page.getByRole('button', { name: 'Gear', exact: true }).click();
   const row = (name: string) =>
     page.getByRole('main').getByRole('listitem').filter({ hasText: name });
   await expect(row('Pot 1')).toContainText('No position');
   await expect(row('Pot 2')).not.toContainText('No position');
-});
-
-test('a fix taken just inside 5 seconds after the tap places the drop', async ({
-  page
-}) => {
-  await holdFixes(page);
-  await page.clock.install({ time: START });
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Turn on location' }).click();
-  await expect(page.getByText('Finding position')).toBeVisible();
-  await page.clock.pauseAt(PAUSED);
-
-  await page.getByRole('button', { name: 'Drop pot' }).click();
-  await page.clock.runFor(4999);
-  await deliverFix(page, MADE_UP_SEA, new Date('2031-03-04T06:00:04.999Z'));
-
-  await expect(toastOf(page)).toContainText('Pot 1 dropped');
-  await expect(toastOf(page)).not.toContainText('no position');
+  await expect(row('Pot 3')).not.toContainText('No position');
 });
 
 test('once a fix arrives, Cancel and Save without position give way to saving feedback at once, until the drop is saved', async ({
