@@ -275,6 +275,13 @@ export const featureBoundaries: Rule.RuleModule = {
     };
 
     const checkPlacement = (program: ESTree.Program) => {
+      if (file === 'eslint.config.js') {
+        const cycle = Object.keys(features)
+          .map((start) => cycleThrough(features, start))
+          .find(Boolean);
+        if (cycle)
+          report(program, 'featureCycle', { cycle: cycle.join(' → ') });
+      }
       if (inRoutes) {
         if (!ROUTE_FILE.test(basename(file)))
           report(program, 'routeFile', { file });
@@ -290,8 +297,6 @@ export const featureBoundaries: Rule.RuleModule = {
         ownFeature.rest !== 'index.ts'
       )
         report(program, 'entrypointFile', { feature: ownFeature.name, file });
-      const cycle = ownFeature && cycleThrough(features, ownFeature.name);
-      if (cycle) report(program, 'featureCycle', { cycle: cycle.join(' → ') });
     };
 
     const checkPassThrough = (program: ESTree.Program) => {

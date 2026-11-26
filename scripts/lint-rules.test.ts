@@ -22,19 +22,18 @@ tester.run('feature-boundaries', featureBoundaries, {
       code: "export { b } from '#lib/features/b/index.js';\nexport const a = 1;\n",
       filename: at('src/lib/features/a/probe.ts'),
       options: [{ features: { a: ['b'], b: [] } }]
+    },
+    {
+      code: 'export const config = [];\n',
+      filename: at('eslint.config.js'),
+      options: [{ features: { a: ['b'], b: [] } }]
     }
   ],
   invalid: [
     {
-      code: "export { b } from '#lib/features/b/index.js';\nexport const a = 1;\n",
-      filename: at('src/lib/features/a/probe.ts'),
-      options: [{ features: { a: ['b'], b: ['a'] } }],
-      errors: [{ messageId: 'featureCycle' }]
-    },
-    {
-      code: 'export const heading = 1;\n',
-      filename: at('src/lib/features/compass/probe.ts'),
-      options: [{ features: { compass: ['map'], map: ['compass'] } }],
+      code: 'export const config = [];\n',
+      filename: at('eslint.config.js'),
+      options: [{ features: { a: [], compass: ['map'], map: ['compass'] } }],
       errors: [
         {
           messageId: 'featureCycle',
@@ -95,6 +94,12 @@ tester.run('ui-sdk-priority', uiSdkPriority, {
         "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nload.resolve('bits-ui');\n"
       ),
       errors: [{ messageId: 'bitsUi' }]
+    },
+    {
+      ...source(
+        "import * as modules from 'node:module';\nimport { createRequire as cr } from 'node:module';\ncr(import.meta.url).resolve('bits-ui');\nconst load = modules['createRequire'](import.meta.url);\nload.resolve('bits-ui');\n"
+      ),
+      errors: [{ messageId: 'bitsUi' }, { messageId: 'bitsUi' }]
     }
   ]
 });
@@ -112,6 +117,13 @@ tester.run('chrome-tokens', chromeTokens, {
       "export const id = 'text-depth';\nexport const when = new Date().toLocaleString('pt-BR');\nexport const marker = 'my-location';\nexport const cursor = 'px-move';\n"
     ),
     chrome("<p class={{ 'bg-card': true }}>Pot</p>\n", 'Probe.svelte'),
+    chrome(
+      "export const rowClass = () => {\n  const id = 'px-move';\n  return id;\n};\nconst tv = (config) => config;\nexport const chip = tv({ variants: { 'text-depth': { true: 'bg-card' } } });\n"
+    ),
+    chrome(
+      "<script lang=\"ts\">\n  let mode = $state('north');\n</script>\n\n<p class={mode === 'my-location' ? 'bg-card' : 'bg-muted'}>Pot</p>\n",
+      'Probe.svelte'
+    ),
     chrome(
       '<p class="probe">Pot</p>\n\n<style>\n  .probe {\n    @apply bg-card }\n</style>\n',
       'Probe.svelte'
@@ -138,6 +150,30 @@ tester.run('chrome-tokens', chromeTokens, {
         { messageId: 'palette' },
         { messageId: 'palette' }
       ]
+    },
+    {
+      ...chrome(
+        "const SHAPE = 'flex';\nexport const chip = `${SHAPE} bg-red-500`;\nexport const LINE_3 = 'text-red-600';\nexport const rowClass = { 'bg-red-500': true };\n"
+      ),
+      errors: [
+        { messageId: 'palette' },
+        { messageId: 'palette' },
+        { messageId: 'palette' }
+      ]
+    },
+    {
+      ...chrome(
+        "<p class={{ 'bg-(--color-probe-undeclared)': true }}>Pot</p>\n",
+        'Probe.svelte'
+      ),
+      errors: [{ messageId: 'token' }]
+    },
+    {
+      ...chrome(
+        "<script lang=\"ts\">\n  const PAD = { sm: 'p-1', lg: 'p-fluid' };\n</script>\n\n<p class={['flex', PAD.lg]}>Pot</p>\n",
+        'Probe.svelte'
+      ),
+      errors: [{ messageId: 'spacing' }]
     }
   ]
 });

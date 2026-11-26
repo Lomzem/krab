@@ -23,18 +23,40 @@ const specifierOf = (node: ESTree.Node | null | undefined) => {
   return null;
 };
 
-const isCreateRequire = (node: ESTree.Node | null | undefined) =>
-  node?.type === 'CallExpression' &&
-  (node.callee.type === 'MemberExpression'
-    ? node.callee.property.type === 'Identifier' &&
-      node.callee.property.name === 'createRequire'
-    : node.callee.type === 'Identifier' &&
-      node.callee.name === 'createRequire');
-
 const propertyName = (member: ESTree.MemberExpression) =>
   member.computed
     ? specifierOf(member.property)
     : (member.property as ESTree.Identifier).name;
+
+const variableOf = (name: string, scope: Scope.Scope | null) => {
+  for (let at = scope; at; at = at.upper) {
+    const variable = at.set.get(name);
+    if (variable) return variable;
+  }
+  return null;
+};
+
+const importsCreateRequire = (definition: Scope.Definition) =>
+  definition.type === 'ImportBinding' &&
+  definition.node.type === 'ImportSpecifier' &&
+  (definition.node.imported.type === 'Identifier'
+    ? definition.node.imported.name
+    : definition.node.imported.value) === 'createRequire';
+
+const isCreateRequire = (
+  node: ESTree.Node | null | undefined,
+  scope: Scope.Scope | null
+) => {
+  if (node?.type !== 'CallExpression') return false;
+  const callee = node.callee;
+  if (callee.type === 'MemberExpression')
+    return propertyName(callee) === 'createRequire';
+  if (callee.type !== 'Identifier') return false;
+  const variable = variableOf(callee.name, scope);
+  return variable
+    ? variable.defs.some(importsCreateRequire)
+    : callee.name === 'createRequire';
+};
 
 const isImportMeta = (node: ESTree.Node) =>
   node.type === 'MetaProperty' &&
@@ -42,18 +64,15 @@ const isImportMeta = (node: ESTree.Node) =>
   node.property.name === 'meta';
 
 const isRequire = (node: ESTree.Node, scope: Scope.Scope | null) => {
-  if (node.type !== 'Identifier') return isCreateRequire(node);
+  if (node.type !== 'Identifier') return isCreateRequire(node, scope);
   if (node.name === 'require') return true;
-  for (let at = scope; at; at = at.upper) {
-    const variable = at.set.get(node.name);
-    if (variable)
-      return variable.defs.some(
-        (definition) =>
-          definition.node.type === 'VariableDeclarator' &&
-          isCreateRequire(definition.node.init)
-      );
-  }
-  return false;
+  return (
+    variableOf(node.name, scope)?.defs.some(
+      (definition) =>
+        definition.node.type === 'VariableDeclarator' &&
+        isCreateRequire(definition.node.init, scope)
+    ) ?? false
+  );
 };
 
 const isLoader = (call: ESTree.CallExpression, scope: Scope.Scope | null) => {

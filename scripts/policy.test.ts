@@ -11,9 +11,10 @@ import {
 } from 'node:fs/promises';
 import { existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { stripVTControlCharacters } from 'node:util';
 
 const root = await mkdtemp(join(tmpdir(), 'krab-policy-'));
 const cleanup = () => {
@@ -1222,7 +1223,7 @@ const fixtures = cases.map((row, index) => {
   };
 });
 type Command = PolicyCase['command'];
-type Diagnostic = { file: string; text: string };
+type Diagnostic = { file: string; text: string; warning?: boolean };
 const diagnostics: Record<
   Command,
   (output: string, copy: string) => Diagnostic[]
@@ -1236,11 +1237,27 @@ const diagnostics: Record<
         file: block.slice(copy.length + 1).split('\n', 1)[0] ?? '',
         text: block
       })),
-  check: (output) =>
-    output.split('\n').flatMap((line) => {
-      const file = /^\d+ (?:ERROR|WARNING) "([^"]+)" /.exec(line)?.[1];
-      return file === undefined ? [] : [{ file, text: line }];
-    }),
+  check: (output, copy) =>
+    stripVTControlCharacters(output)
+      .split('\n')
+      .flatMap((line, at, lines) => {
+        const machine = /^\d+ (ERROR|WARNING) "([^"]+)" /.exec(line);
+        if (machine)
+          return [
+            { file: machine[2], text: line, warning: machine[1] === 'WARNING' }
+          ];
+        const human = /^(\/.+):\d+:\d+$/.exec(line)?.[1];
+        const severity = /^(Error|Warn): /.exec(lines[at + 1] ?? '')?.[1];
+        if (human === undefined || severity === undefined) return [];
+        const end = lines.indexOf('', at);
+        return [
+          {
+            file: relative(copy, human),
+            text: lines.slice(at, end === -1 ? undefined : end).join('\n'),
+            warning: severity === 'Warn'
+          }
+        ];
+      }),
   'format:check': (output) =>
     output.split('\n').flatMap((line) => {
       const file = /^(\S.*) \([\d.]+m?s\)$/.exec(line)?.[1];
@@ -1344,7 +1361,7 @@ const runPass = async (
         (diagnostic) =>
           diagnostic.file === input.file &&
           diagnostic.text.includes(input.row.diagnostic) &&
-          (!input.row.warningOnly || / WARNING /.test(diagnostic.text))
+          (!input.row.warningOnly || diagnostic.warning === true)
       ),
       `${input.row.name}: missing file-specific diagnostic: ${output}`
     );

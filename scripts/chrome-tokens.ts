@@ -196,8 +196,8 @@ const styleBlockProblems = (css: string, tokens: Tokens) => [
 ];
 
 type Context =
-  | { kind: 'class' }
-  | { kind: 'script'; bearing: boolean }
+  | { kind: 'class'; helper?: string }
+  | { kind: 'script'; bearing: boolean; holder?: Parented }
   | { kind: 'style' }
   | { kind: 'property'; property: string }
   | { kind: 'paint' };
@@ -246,31 +246,47 @@ const consumes = (node: Parented, from: Parented) => {
   );
 };
 
+const markupContextOf = (at: Parented): Context | null => {
+  if (at.type === 'SvelteStyleDirective') {
+    const directive = at as unknown as { key: { name: { name: string } } };
+    return { kind: 'property', property: directive.key.name.name };
+  }
+  const name = (at as unknown as { key: { name: string } }).key.name;
+  if (name === 'style') return { kind: 'style' };
+  if (PAINT_ATTRIBUTES.has(name)) return { kind: 'paint' };
+  return CLASS_ATTRIBUTE.test(name) ? { kind: 'class' } : null;
+};
+
+const MARKUP = new Set([
+  'SvelteStyleDirective',
+  'SvelteAttribute',
+  'SvelteStartTag'
+]);
+
 const contextOf = (node: Parented): Context | null => {
   let bearing = false;
   let consumed = false;
+  let holder: Parented | undefined;
+  let settled = false;
   for (let from = node, at = node.parent; at; from = at, at = at.parent) {
-    if (at.type === 'SvelteStyleDirective') {
-      const directive = at as unknown as { key: { name: { name: string } } };
-      return { kind: 'property', property: directive.key.name.name };
+    if (MARKUP.has(at.type)) {
+      if (consumed) return null;
+      return at.type === 'SvelteStartTag'
+        ? { kind: 'class' }
+        : markupContextOf(at);
     }
-    if (at.type === 'SvelteAttribute') {
-      const name = (at as unknown as { key: { name: string } }).key.name;
-      if (name === 'style') return { kind: 'style' };
-      if (PAINT_ATTRIBUTES.has(name)) return { kind: 'paint' };
-      return CLASS_ATTRIBUTE.test(name) ? { kind: 'class' } : null;
-    }
-    if (at.type === 'SvelteStartTag') return { kind: 'class' };
-    if (
-      !consumed &&
-      at.type === 'CallExpression' &&
-      CLASS_HELPERS.has(calleeName(at) ?? '')
-    )
-      return { kind: 'class' };
+    const helper = at.type === 'CallExpression' ? calleeName(at) : null;
+    if (!consumed && helper !== null && CLASS_HELPERS.has(helper))
+      return { kind: 'class', helper };
     consumed ||= consumes(at, from);
-    bearing ||= !consumed && CLASS_BINDING.test(bindingOf(at, from) ?? '');
+    if (consumed || settled) continue;
+    const binding = bindingOf(at, from);
+    if (binding === null) continue;
+    bearing ||= CLASS_BINDING.test(binding);
+    settled = at.type !== 'Property';
+    if (at.type === 'VariableDeclarator') holder = at;
   }
-  return { kind: 'script', bearing };
+  return { kind: 'script', bearing, holder };
 };
 
 const looksLikeClassList = (text: string) => {
@@ -299,13 +315,21 @@ const referenceProblems = (text: string, tokens: Tokens): Problem[] =>
 const problemsOf = (
   text: string,
   context: Context,
-  tokens: Tokens
+  tokens: Tokens,
+  whole = text
 ): Problem[] => [
-  ...contextProblems(text, context, tokens),
+  ...contextProblems(text, context, tokens, whole),
   ...referenceProblems(text, tokens)
 ];
 
-const contextProblems = (text: string, context: Context, tokens: Tokens) => {
+const SCRIPT_TOKEN_PROBLEMS = new Set(['palette', 'color']);
+
+const contextProblems = (
+  text: string,
+  context: Context,
+  tokens: Tokens,
+  whole: string
+) => {
   switch (context.kind) {
     case 'style':
       return styleProblems(text);
@@ -319,8 +343,14 @@ const contextProblems = (text: string, context: Context, tokens: Tokens) => {
     case 'script':
       if (WHOLE_COLOR.test(text.trim()))
         return [{ messageId: 'color', value: text.trim() }];
-      if (context.kind === 'script' && !context.bearing)
-        return looksLikeClassList(text) ? classListProblems(text, tokens) : [];
+      if (
+        context.kind === 'script' &&
+        !context.bearing &&
+        !looksLikeClassList(whole)
+      )
+        return classListProblems(text, tokens).filter((problem) =>
+          SCRIPT_TOKEN_PROBLEMS.has(problem.messageId)
+        );
       return classListProblems(text, tokens);
   }
 };
@@ -366,19 +396,57 @@ export const chromeTokens: Rule.RuleModule = {
           data: { ...data, value: problem.value }
         });
     };
-    const check = (node: ESTree.Node, text: string) => {
-      const at = contextOf(node);
-      if (at) report(node, problemsOf(text, at, tokens));
+    const feeds = new WeakMap<Parented, boolean>();
+    const feedsClass = (holder: Parented) => {
+      const known = feeds.get(holder);
+      if (known !== undefined) return known;
+      const variables = context.sourceCode.getDeclaredVariables(
+        holder as unknown as ESTree.Node
+      );
+      const result = variables.some((variable) =>
+        variable.references.some((reference) => {
+          let use = reference.identifier as unknown as Parented;
+          while (
+            use.parent?.type === 'MemberExpression' &&
+            (use.parent as Fields).object === use
+          )
+            use = use.parent;
+          return contextOf(use)?.kind === 'class';
+        })
+      );
+      feeds.set(holder, result);
+      return result;
     };
+    const contextAt = (node: ESTree.Node): Context | null => {
+      const at = contextOf(node);
+      if (at?.kind !== 'script' || at.bearing || !at.holder) return at;
+      return { kind: 'script', bearing: feedsClass(at.holder) };
+    };
+    const check = (node: ESTree.Node, text: string, whole = text) => {
+      const at = contextAt(node);
+      if (at) report(node, problemsOf(text, at, tokens, whole));
+    };
+    const isClassKey = (at: Context | null) =>
+      at?.kind === 'class'
+        ? at.helper !== 'tv' && at.helper !== 'cva'
+        : at?.kind === 'script' && at.bearing;
     return {
       Literal(node) {
         if (typeof node.value !== 'string') return;
         if (!isNameLiteral(node)) check(node, node.value);
-        else if (isObjectKey(node) && contextOf(node)?.kind === 'class')
-          report(node, classListProblems(node.value, tokens));
+        else if (isObjectKey(node) && isClassKey(contextAt(node)))
+          report(node, problemsOf(node.value, { kind: 'class' }, tokens));
       },
       TemplateElement(node) {
-        check(node, node.value.cooked ?? node.value.raw);
+        const template = (node as ESTree.TemplateElement & { parent: Fields })
+          .parent as unknown as ESTree.TemplateLiteral;
+        check(
+          node,
+          node.value.cooked ?? node.value.raw,
+          template.quasis
+            .map((quasi) => quasi.value.cooked ?? quasi.value.raw)
+            .join('_')
+        );
       },
       SvelteLiteral(node: ESTree.Node) {
         check(node, (node as unknown as AST.SvelteLiteral).value);
