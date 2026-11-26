@@ -26,6 +26,14 @@ function succeeds(cwd: string, command: string, args: string[]) {
 }
 async function repository(name: string) {
   const cwd = join(root, name);
+  succeeds(root, 'git', ['init', '-b', 'main', name]);
+  succeeds(cwd, 'git', ['config', 'user.name', 'Security scenario']);
+  succeeds(cwd, 'git', ['config', 'user.email', 'security@example.invalid']);
+  await symlink(join(source, '.tools'), join(cwd, '.tools'));
+  return cwd;
+}
+async function checkout(name: string) {
+  const cwd = join(root, name);
   await cp(source, cwd, {
     recursive: true,
     filter: (path) =>
@@ -39,13 +47,9 @@ async function repository(name: string) {
       ].some((part) => path.slice(source.length).split('/').includes(part))
   });
   await symlink(join(source, 'node_modules'), join(cwd, 'node_modules'));
-  await symlink(join(source, '.tools'), join(cwd, '.tools'));
-  succeeds(cwd, 'git', ['init', '-b', 'main']);
-  succeeds(cwd, 'git', ['config', 'user.name', 'Security scenario']);
-  succeeds(cwd, 'git', ['config', 'user.email', 'security@example.invalid']);
-  return cwd;
+  return repository(name);
 }
-const lifecycle = await repository('lifecycle');
+const lifecycle = await checkout('lifecycle');
 succeeds(lifecycle, 'bun', ['install', '--frozen-lockfile']);
 succeeds(lifecycle, 'git', ['add', '.']);
 succeeds(lifecycle, 'git', ['commit', '-m', 'Clean scaffold']);
@@ -146,6 +150,8 @@ console.log(
 );
 
 const history = await repository('history');
+for (const file of ['.gitignore', 'package.json', 'scripts/scan-secrets.ts'])
+  await cp(join(source, file), join(history, file));
 succeeds(history, 'git', ['add', '.']);
 succeeds(history, 'git', [
   'commit',
