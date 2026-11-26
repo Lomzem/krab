@@ -2,7 +2,7 @@ import type { Rule, Scope } from 'eslint';
 import type * as ESTree from 'estree';
 import { basename, relative } from 'node:path';
 import { getStaticYAMLValue, type AST } from 'yaml-eslint-parser';
-import { packageImportTargets } from './package-imports.ts';
+import { bareSpecifier, packageImportTargets } from './package-imports.ts';
 
 type Options = { bitsUi: string[] };
 
@@ -31,17 +31,21 @@ const isCreateRequire = (node: ESTree.Node | null | undefined) =>
     : node.callee.type === 'Identifier' &&
       node.callee.name === 'createRequire');
 
-const isLoader = (call: ESTree.CallExpression, scope: Scope.Scope | null) => {
-  const callee = call.callee;
-  if (callee.type === 'MemberExpression')
-    return (
-      callee.property.type === 'Identifier' &&
-      callee.property.name === 'resolve'
-    );
-  if (callee.type !== 'Identifier') return isCreateRequire(callee);
-  if (callee.name === 'require') return true;
+const propertyName = (member: ESTree.MemberExpression) =>
+  member.computed
+    ? specifierOf(member.property)
+    : (member.property as ESTree.Identifier).name;
+
+const isImportMeta = (node: ESTree.Node) =>
+  node.type === 'MetaProperty' &&
+  node.meta.name === 'import' &&
+  node.property.name === 'meta';
+
+const isRequire = (node: ESTree.Node, scope: Scope.Scope | null) => {
+  if (node.type !== 'Identifier') return isCreateRequire(node);
+  if (node.name === 'require') return true;
   for (let at = scope; at; at = at.upper) {
-    const variable = at.set.get(callee.name);
+    const variable = at.set.get(node.name);
     if (variable)
       return variable.defs.some(
         (definition) =>
@@ -50,6 +54,15 @@ const isLoader = (call: ESTree.CallExpression, scope: Scope.Scope | null) => {
       );
   }
   return false;
+};
+
+const isLoader = (call: ESTree.CallExpression, scope: Scope.Scope | null) => {
+  const callee = call.callee;
+  if (callee.type !== 'MemberExpression') return isRequire(callee, scope);
+  return (
+    propertyName(callee) === 'resolve' &&
+    (isImportMeta(callee.object) || isRequire(callee.object, scope))
+  );
 };
 
 const NPM_ALIAS = /^npm:((?:@[^/@]+\/)?[^@]+)/;
@@ -129,10 +142,8 @@ export const uiSdkPriority: Rule.RuleModule = {
     ) => {
       const specifier = specifierOf(source);
       if (specifier === null) return;
-      const loads = [
-        specifier,
-        ...packageImportTargets(specifier, context.filename)
-      ];
+      const bare = bareSpecifier(specifier);
+      const loads = [bare, ...packageImportTargets(bare, context.filename)];
       if (loads.some((load) => SHADCN.test(load)))
         context.report({
           node,

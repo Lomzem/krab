@@ -1249,6 +1249,7 @@ const diagnostics: Record<
 };
 const run = (copy: string, ...args: string[]) =>
   new Promise<{ status: number | null; output: string }>((resolve, reject) => {
+    if (stopping) return;
     const child = spawn('bun', ['run', ...args], { cwd: copy, detached: true });
     const group = child.pid;
     if (group !== undefined) running.add(group);

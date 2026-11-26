@@ -12,6 +12,7 @@ type Tokens = {
   declared: Set<string>;
 };
 type Parented = { type: string; parent?: Parented | null };
+type Fields = Parented & Record<string, unknown>;
 type Problem = { messageId: string; value: string };
 
 const NAMED_COLORS =
@@ -67,7 +68,9 @@ const PAINT_PROPERTIES = new Set([
 ]);
 const PAINT_ATTRIBUTES = new Set([...PAINT_PROPERTIES, 'color']);
 const CLASS_ATTRIBUTE = /^(?:class|className|\w*Class)$/;
-const APPLY = /@apply\s+([^;{}]+);/g;
+const CLASS_HELPERS = new Set(['cn', 'tv', 'clsx', 'cva', 'twMerge', 'twJoin']);
+const CLASS_BINDING = /class(?:name)?$/i;
+const APPLY = /@apply\s+([^;{}]+)(?:;|(?=\s*\}))/g;
 const LITERAL_KEYS = new Set([
   'Property',
   'PropertyDefinition',
@@ -194,12 +197,59 @@ const styleBlockProblems = (css: string, tokens: Tokens) => [
 
 type Context =
   | { kind: 'class' }
+  | { kind: 'script'; bearing: boolean }
   | { kind: 'style' }
   | { kind: 'property'; property: string }
   | { kind: 'paint' };
 
+const nameOf = (node: unknown) => {
+  const named = node as { name?: unknown; value?: unknown } | null;
+  const name = named?.name ?? named?.value;
+  return typeof name === 'string' ? name : null;
+};
+
+const calleeName = (call: Parented) => {
+  const callee = (call as Fields).callee as {
+    type: string;
+    property?: unknown;
+  };
+  return nameOf(callee.type === 'MemberExpression' ? callee.property : callee);
+};
+
+const bindingOf = (node: Parented, from: Parented) => {
+  const at = node as Fields;
+  switch (at.type) {
+    case 'VariableDeclarator':
+      return at.init === from ? nameOf(at.id) : null;
+    case 'Property':
+    case 'PropertyDefinition':
+      return at.value === from && !at.computed ? nameOf(at.key) : null;
+    case 'AssignmentExpression': {
+      const left = at.left as { type: string; property?: unknown };
+      if (at.right !== from) return null;
+      return nameOf(left.type === 'MemberExpression' ? left.property : left);
+    }
+    case 'FunctionDeclaration':
+      return nameOf(at.id);
+    default:
+      return null;
+  }
+};
+
+const consumes = (node: Parented, from: Parented) => {
+  const at = node as Fields;
+  return (
+    at.type === 'CallExpression' ||
+    at.type === 'MemberExpression' ||
+    (at.type === 'BinaryExpression' && at.operator !== '+') ||
+    (at.type === 'ConditionalExpression' && at.test === from)
+  );
+};
+
 const contextOf = (node: Parented): Context | null => {
-  for (let at = node.parent; at; at = at.parent) {
+  let bearing = false;
+  let consumed = false;
+  for (let from = node, at = node.parent; at; from = at, at = at.parent) {
     if (at.type === 'SvelteStyleDirective') {
       const directive = at as unknown as { key: { name: { name: string } } };
       return { kind: 'property', property: directive.key.name.name };
@@ -210,9 +260,27 @@ const contextOf = (node: Parented): Context | null => {
       if (PAINT_ATTRIBUTES.has(name)) return { kind: 'paint' };
       return CLASS_ATTRIBUTE.test(name) ? { kind: 'class' } : null;
     }
-    if (at.type === 'SvelteStartTag') break;
+    if (at.type === 'SvelteStartTag') return { kind: 'class' };
+    if (
+      !consumed &&
+      at.type === 'CallExpression' &&
+      CLASS_HELPERS.has(calleeName(at) ?? '')
+    )
+      return { kind: 'class' };
+    consumed ||= consumes(at, from);
+    bearing ||= !consumed && CLASS_BINDING.test(bindingOf(at, from) ?? '');
   }
-  return { kind: 'class' };
+  return { kind: 'script', bearing };
+};
+
+const looksLikeClassList = (text: string) => {
+  const list = text.split(/\s+/).filter(Boolean);
+  return list.length > 1 || list.some((token) => /[:[(]/.test(token));
+};
+
+const isObjectKey = (node: ESTree.Literal) => {
+  const parent = (node as ESTree.Literal & { parent: Fields }).parent;
+  return parent.type === 'Property' && parent.key === node && !parent.computed;
 };
 
 const isNameLiteral = (node: ESTree.Literal) => {
@@ -248,8 +316,11 @@ const contextProblems = (text: string, context: Context, tokens: Tokens) => {
         ? []
         : [{ messageId: 'paint', value: text.trim() }];
     case 'class':
+    case 'script':
       if (WHOLE_COLOR.test(text.trim()))
         return [{ messageId: 'color', value: text.trim() }];
+      if (context.kind === 'script' && !context.bearing)
+        return looksLikeClassList(text) ? classListProblems(text, tokens) : [];
       return classListProblems(text, tokens);
   }
 };
@@ -301,8 +372,10 @@ export const chromeTokens: Rule.RuleModule = {
     };
     return {
       Literal(node) {
-        if (typeof node.value === 'string' && !isNameLiteral(node))
-          check(node, node.value);
+        if (typeof node.value !== 'string') return;
+        if (!isNameLiteral(node)) check(node, node.value);
+        else if (isObjectKey(node) && contextOf(node)?.kind === 'class')
+          report(node, classListProblems(node.value, tokens));
       },
       TemplateElement(node) {
         check(node, node.value.cooked ?? node.value.raw);

@@ -43,10 +43,16 @@ const patternMatch = (imports: Record<string, Target>, specifier: string) =>
         prefix.length,
         specifier.length - suffix.length
       );
-      return [{ key, prefix, match }];
+      return [{ key, prefix, suffix, match }];
     })
-    .sort((a, b) => b.prefix.length - a.prefix.length)
+    .sort(
+      (a, b) =>
+        b.prefix.length - a.prefix.length || b.suffix.length - a.suffix.length
+    )
     .at(0);
+
+export const bareSpecifier = (specifier: string) =>
+  /^#?[^?#]*/.exec(specifier)?.[0] ?? '';
 
 export const packageImportTargets = (
   specifier: string,

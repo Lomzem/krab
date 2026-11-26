@@ -1,7 +1,7 @@
 import type { Rule } from 'eslint';
 import type * as ESTree from 'estree';
 import { basename, dirname, join, relative, resolve } from 'node:path';
-import { packageImportTargets } from './package-imports.ts';
+import { bareSpecifier, packageImportTargets } from './package-imports.ts';
 
 type Options = { features: Partial<Record<string, string[]>> };
 type Statement = { type: string; [key: string]: unknown };
@@ -48,7 +48,7 @@ const pathOf = (path: string, fromDir: string, cwd: string) => {
 };
 
 const targetsOf = (specifier: string, file: string, cwd: string) => {
-  const path = specifier.split('?', 1)[0] ?? '';
+  const path = bareSpecifier(specifier);
   const paths = path.startsWith('#')
     ? packageImportTargets(path, file)
     : [path];
@@ -60,18 +60,18 @@ const featureOf = (path: string) => {
   return name ? { name, rest } : null;
 };
 
-const reaches = (
+const cycleThrough = (
   features: Options['features'],
-  from: string,
-  to: string,
-  seen = new Set<string>()
-): boolean => {
-  if (from === to) return true;
-  if (seen.has(from)) return false;
-  seen.add(from);
-  return (features[from] ?? []).some((next) =>
-    reaches(features, next, to, seen)
-  );
+  start: string,
+  path: string[] = [start]
+): string[] | null => {
+  for (const next of features[path.at(-1) ?? start] ?? []) {
+    if (next === start) return [...path, next];
+    if (path.includes(next)) continue;
+    const cycle = cycleThrough(features, start, [...path, next]);
+    if (cycle) return cycle;
+  }
+  return null;
 };
 
 const literalPath = (node: ESTree.Node) => {
@@ -197,7 +197,7 @@ export const featureBoundaries: Rule.RuleModule = {
       featureImport:
         'Feature {{from}} may not import feature {{feature}}. Add {{feature}} to ALLOWED_FEATURE_IMPORTS.{{from}} in eslint.config.js, or move the shared code into src/lib/shared.',
       featureCycle:
-        'Feature {{from}} importing feature {{feature}} closes a cycle, because {{feature}} already reaches {{from}} in ALLOWED_FEATURE_IMPORTS. Move the shared code into src/lib/shared.'
+        'ALLOWED_FEATURE_IMPORTS in eslint.config.js has the cycle {{cycle}}. Remove one of its edges and move the shared code into src/lib/shared.'
     }
   },
   create: (context) => {
@@ -236,13 +236,16 @@ export const featureBoundaries: Rule.RuleModule = {
         !ENTRYPOINT.test(feature.rest)
       )
         report(node, 'entrypoint', { feature: feature.name, target });
-      if (feature && ownFeature && feature.name !== ownFeature.name) {
-        const edge = { from: ownFeature.name, feature: feature.name };
-        if (!features[edge.from]?.includes(edge.feature))
-          report(node, 'featureImport', edge);
-        else if (reaches(features, edge.feature, edge.from))
-          report(node, 'featureCycle', edge);
-      }
+      if (
+        feature &&
+        ownFeature &&
+        feature.name !== ownFeature.name &&
+        !features[ownFeature.name]?.includes(feature.name)
+      )
+        report(node, 'featureImport', {
+          from: ownFeature.name,
+          feature: feature.name
+        });
       if (
         inRoutes &&
         target.startsWith('src/') &&
@@ -287,6 +290,8 @@ export const featureBoundaries: Rule.RuleModule = {
         ownFeature.rest !== 'index.ts'
       )
         report(program, 'entrypointFile', { feature: ownFeature.name, file });
+      const cycle = ownFeature && cycleThrough(features, ownFeature.name);
+      if (cycle) report(program, 'featureCycle', { cycle: cycle.join(' → ') });
     };
 
     const checkPassThrough = (program: ESTree.Program) => {
