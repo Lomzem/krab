@@ -103,7 +103,12 @@ export {
 
 type NamedTrip = { trip: Trip; name: string };
 
+type Saved = NamedTrip & { catchRecorded: boolean };
+
 type Collection = NamedTrip & { changed: boolean };
+
+type Uncollection = NamedTrip &
+  ({ changed: false } | { changed: true; catchCleared: boolean });
 
 type DeletedDrop = {
   trip: Trip | null;
@@ -120,7 +125,7 @@ export type TripBook = {
     edit: DropEdit,
     kind: Kind | null
   ) => Effect.Effect<
-    NamedTrip,
+    Saved,
     | DropNotFound
     | InvalidDepth
     | InvalidCatch
@@ -133,7 +138,7 @@ export type TripBook = {
   ) => Effect.Effect<Collection, DropNotFound | StorageFailed>;
   undoCollect: (
     dropId: string
-  ) => Effect.Effect<Collection, DropNotFound | DroppedAgain | StorageFailed>;
+  ) => Effect.Effect<Uncollection, DropNotFound | DroppedAgain | StorageFailed>;
   deleteDrop: (
     dropId: string
   ) => Effect.Effect<DeletedDrop, DropNotFound | StorageFailed>;
@@ -195,7 +200,7 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
     }),
   saveDrop: (dropId, edit, kind) =>
     storage.readModifyWrite<
-      NamedTrip,
+      Saved,
       DropNotFound | InvalidDepth | InvalidCatch | NotCollected | KindLocked
     >((trips) => {
       const found = findDrop(trips, dropId);
@@ -210,7 +215,11 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
       return Result.map(edited, (next) => ({
         put: [next.trip],
         remove: [],
-        result: { trip: next.trip, name: gearName(next.gear) }
+        result: {
+          trip: next.trip,
+          name: gearName(next.gear),
+          catchRecorded: edit.catch !== null
+        }
       }));
     }),
   collect: (dropId) =>
@@ -225,12 +234,30 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
       });
     }),
   undoCollect: (dropId) =>
-    storage.readModifyWrite<Collection, DropNotFound | DroppedAgain>(
+    storage.readModifyWrite<Uncollection, DropNotFound | DroppedAgain>(
       (trips) => {
         const found = activeDrop(trips, dropId);
         if (!found) return Result.fail(new DropNotFound({ dropId }));
-        return Result.map(uncollectDrop(found.trip, found.drop), (changed) =>
-          collection(found, changed)
+        const name = gearName(found.gear);
+        return Result.map(
+          uncollectDrop(found.trip, found.drop),
+          (changed): Change<Uncollection> =>
+            changed
+              ? {
+                  put: [changed],
+                  remove: [],
+                  result: {
+                    trip: changed,
+                    name,
+                    changed: true,
+                    catchCleared: found.drop.catch !== null
+                  }
+                }
+              : {
+                  put: [],
+                  remove: [],
+                  result: { trip: found.trip, name, changed: false }
+                }
         );
       }
     ),

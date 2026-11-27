@@ -1196,6 +1196,59 @@ it('collects at the tap time once, and undo collect puts it back with no catch',
   ).toEqual(['Pot 1', 'Net 1']);
 });
 
+it('reports from each committed write whether a Save recorded a catch and whether Undo collect cleared one, even when a Save commits just before', async () => {
+  const { open } = withoutLocation();
+  const book = await open();
+  const pot = await place(book, 'pot');
+  const net = await place(book, 'net');
+  const details = { label: '', bait: '', depthFt: null, notes: '' };
+  await run(book.collect(pot.drop.id));
+  await run(book.collect(net.drop.id));
+
+  const counted = await run(
+    book.saveDrop(
+      pot.drop.id,
+      { details, catch: { kept: 0, released: 0 } },
+      null
+    )
+  );
+  const skipped = await run(
+    book.saveDrop(net.drop.id, { details, catch: null }, null)
+  );
+  const plainUndo = await run(book.undoCollect(net.drop.id));
+  const inWaterSave = await run(
+    book.saveDrop(net.drop.id, { details, catch: null }, null)
+  );
+  const unchangedUndo = await run(book.undoCollect(net.drop.id));
+  await run(book.collect(net.drop.id));
+  const [racingSave, racingUndo] = await Promise.all([
+    run(
+      book.saveDrop(
+        net.drop.id,
+        { details, catch: { kept: 2, released: 1 } },
+        null
+      )
+    ),
+    run(book.undoCollect(net.drop.id))
+  ]);
+  const clearedUndo = await run(book.undoCollect(pot.drop.id));
+
+  expect(
+    [counted, skipped, inWaterSave, racingSave].map(
+      (saved) => saved.catchRecorded
+    )
+  ).toEqual([true, false, false, true]);
+  expect(plainUndo).toMatchObject({ changed: true, catchCleared: false });
+  expect(unchangedUndo.changed).toBe(false);
+  expect(unchangedUndo).not.toHaveProperty('catchCleared');
+  expect(racingUndo).toMatchObject({ changed: true, catchCleared: true });
+  expect(clearedUndo).toMatchObject({ changed: true, catchCleared: true });
+  expect((await run(activeIn(book)))?.drops).toMatchObject([
+    { collectedAt: null, catch: null },
+    { collectedAt: null, catch: null }
+  ]);
+});
+
 it('records nothing caught as 0 and 0, apart from not recorded, and only whole counts from 0 up', async () => {
   const { open } = withoutLocation();
   const book = await open();

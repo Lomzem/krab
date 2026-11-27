@@ -314,8 +314,7 @@ export class OnWater {
       this.#saving = this.#saving.filter((_, index) => index !== at);
     });
     if (Result.isFailure(saved)) return PROBLEMS[saved.failure._tag];
-    if (findDrop([saved.success.trip], dropId)?.drop.catch)
-      this.#retireCollectUndo(dropId);
+    if (saved.success.catchRecorded) this.#retireCollectUndo(dropId);
     return null;
   }
 
@@ -336,7 +335,6 @@ export class OnWater {
 
   async undoCollect(dropId: string, name: string) {
     if (this.undoCollectBlocked(dropId)) return false;
-    const recorded = this.trip && findDrop([this.trip], dropId)?.drop.catch;
     const undone = await resultOf(this.#book.undoCollect(dropId));
     if (Result.isFailure(undone)) {
       this.#say(
@@ -350,7 +348,7 @@ export class OnWater {
     }
     if (undone.success.changed) {
       this.#say(
-        recorded
+        undone.success.catchCleared
           ? `${name} back in, catch cleared`
           : `${name} back in the water`
       );
