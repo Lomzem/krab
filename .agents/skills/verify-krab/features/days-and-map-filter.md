@@ -27,7 +27,7 @@ Drop gear late in the evening, then drop again after midnight. The Gear tab show
 
 Run `bun scripts/verify-krab/run.ts` through the parent skill's bounded lifecycle. [days-and-filter.ts](../../../../scripts/verify-krab/days-and-filter.ts) owns the exact actions, assertions and evidence filenames.
 
-Covers drops either side of local midnight, day grouping, Today/All, collected visibility, Show on map restoring a hidden target, time-label visibility and default restoration after reload. Persisted reads establish that days are derived rather than stored; request evidence checks position privacy.
+Covers drops either side of local midnight, day grouping, Today/All, collected visibility, Show on map restoring a hidden target, time-label visibility and default restoration after reload. The recipe keeps `indexeddb-before.json`, `indexeddb-after.json` and `requests.json` as retained observations for a reviewer to read; it asserts nothing on them. They let a reviewer read the saved drops and the request URLs, but they prove neither that days are derived nor that requests carry no position. The request contract is asserted in [chart-map.test.ts](../../../../e2e/chart-map.test.ts): "the Map tab shows gear and my position from the phone and asks NOAA only for fixed-grid tiles…" and "on the Street map, panning, every map control, Show on map and reload send no position to OpenFreeMap".
 
 ## Gotchas
 

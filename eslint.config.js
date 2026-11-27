@@ -58,6 +58,8 @@ const USE_FIXTURE_TEST =
 const USE_RECIPE_TEST =
   "Import test from './recipe', whose auto fixtures run doctor and answer NOAA and OpenFreeMap.";
 
+const PLAYWRIGHT_TEST = '@?playwright.test';
+
 const testOnlyFrom = (allowed, otherTests, message) => ({
   'no-restricted-imports': [
     'error',
@@ -152,14 +154,14 @@ export default defineConfig([
   },
   {
     files: ['e2e/**/*.test.ts'],
-    rules: testOnlyFrom('\\./fixtures', '@playwright.test', USE_FIXTURE_TEST)
+    rules: testOnlyFrom('\\./fixtures', PLAYWRIGHT_TEST, USE_FIXTURE_TEST)
   },
   {
     files: ['scripts/verify-krab/**/*.ts'],
     ignores: ['scripts/verify-krab/recipe.ts', '**/*.test.ts'],
     rules: testOnlyFrom(
       '\\./recipe',
-      '@?playwright.test|(?:\\.\\.?.)+e2e.fixtures(?:\\.ts)?',
+      `${PLAYWRIGHT_TEST}|(?:\\.\\.?.)+e2e.fixtures(?:\\.ts)?`,
       USE_RECIPE_TEST
     )
   },

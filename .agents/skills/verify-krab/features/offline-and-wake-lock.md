@@ -31,7 +31,7 @@ Coverage includes offline Map/Gear restoration, waiting updates and next-launch 
 ## Gotchas
 
 - Linux WebKit is not iOS Safari. Home Screen launch, actual screen-on behaviour and iOS update timing need the [device checklist](device-checks.md). Headless WebKit always refuses the real wake lock, so the supported path runs only against the e2e fake; a physical iPhone still has to confirm the screen stays on.
-- In container WebKit, `page.goto` hung on port 4190, while ports 4174–4179 worked. The update spec's static hosts use 4178 and 4179. Keep new hosts in that range.
+- In container WebKit, `page.goto` hung on port 4190, while ports 4174–4179 worked. In `e2e/offline-and-update.test.ts`, the successful update journey ("a new build waits while Krab is open…") uses 4175, the redirected update uses 4179, and 4178 serves only the malformed-path test. Keep new hosts in that range.
 - Close every page before expecting the new build. Reload alone keeps the waiting worker waiting, which is the intended behaviour.
 - The visually hidden Net radio didn't respond to `check()` in time before the toast expired; the wake lock recipe drops a second pot instead.
 - The kill switch in the root `README.md` has no browser recipe; it was checked by hand once. `src/service-worker/worker.test.ts` runs its activation.

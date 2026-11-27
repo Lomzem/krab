@@ -71,7 +71,8 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   await expect(page.getByRole('main')).toContainText('1 in the water');
   await endButton.scrollIntoViewIfNeeded();
   await expect(endButton).toBeInViewport();
-  keep('indexeddb-before.json', await readTrips(page));
+  const running = await readTrips(page);
+  keep('indexeddb-before.json', running);
   log('Gear ends with End trip under the running trip');
   await capture('01-trip-running');
 
@@ -83,9 +84,9 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   await ask.getByRole('button', { name: 'Keep trip going' }).click();
   await expect(ask).toBeHidden();
   await expect(endButton).toBeFocused();
-  expect((await readTrips(page))[0]?.endedAt).toBeNull();
+  expect(await readTrips(page)).toStrictEqual(running);
   log(
-    'End trip opens End trip? naming the drop still in; Keep trip going closes it, refocuses End trip, stored endedAt stays null'
+    'End trip opens End trip? naming the drop still in; Keep trip going closes it, refocuses End trip, and the stored trip equals indexeddb-before.json'
   );
 
   await endButton.click();
@@ -282,7 +283,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   await capture('06-delete-confirm');
   await ask.getByRole('button', { name: 'Keep trip' }).click();
   await expect(deleteTrip).toBeFocused();
-  expect(await readTrips(page)).toHaveLength(1);
+  expect(await readTrips(page)).toStrictEqual(before);
   await deleteTrip.click();
   await ask.getByRole('button', { name: 'Delete trip' }).click();
   await expect(ask).toBeHidden();
@@ -295,7 +296,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   expect(after).toEqual([]);
   keep('indexeddb-after.json', after);
   log(
-    'Delete trip asks first; Keep trip refocuses the button and stores nothing; confirming deletes it, toast Trip deleted, empty list with its heading focused, store empty'
+    'Delete trip asks first; Keep trip refocuses the button and leaves the stored trip equal to its pre-delete read; confirming deletes it, toast Trip deleted, empty list with its heading focused, store empty'
   );
   await capture('07-deleted');
 });

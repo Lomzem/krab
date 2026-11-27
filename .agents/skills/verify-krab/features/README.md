@@ -22,7 +22,7 @@ Use accessible roles and names. Pair every action with its observable outcome an
 - [Compass](compass.md): chip hidden without an iPhone compass, and with a denying stub its 44 px target, denied path and no re-ask, driven by `compass.ts`; working-compass checks are manual on an iPhone.
 - [Ending a trip](ending-trip.md): End trip with its confirmation, the stored end and the Past trips layer on the Map, driven by `end-and-past-trips.ts`.
 - [Past trips](past-trips.md): list, trip detail with its map and gear sheets, reload and Delete trip, driven by `end-and-past-trips.ts`.
-- Screen tabs: Map, Gear and Past trips are manual tabs; arrow keys move focus and Enter or Space opens a tab. Proven by "the screen tabs take one Tab stop…" in `e2e/chart-map.test.ts`. Each tab keeps its scroll position, proven by "the Gear list keeps where I scrolled it…" in `e2e/undo.test.ts`.
+- Screen tabs: Map, Gear and Past trips are manual tabs; arrow keys move focus and Enter or Space opens a tab. Proven by "the screen tabs take one Tab stop…" in `e2e/chart-map.test.ts`. The Gear list keeps its scroll position while Map and Past trips are visited, by tap or by keyboard, proven by "the Gear list keeps where I scrolled it…" in `e2e/undo.test.ts`; that test does not check scroll on the other tabs.
 - Dock messages: the Messages toast takes F6 and its Undo, Retry and Dismiss buttons as its only Tab stops, and is inert while a sheet or confirmation is open. Proven by "the Undo toast is out of reach behind a gear sheet…" in `e2e/undo.test.ts`.
 - [Offline and wake lock](offline-and-wake-lock.md): offline open, next-launch update and optional wake lock driven by the e2e recipes; physical-device coverage follows the [device checklist](device-checks.md).
 

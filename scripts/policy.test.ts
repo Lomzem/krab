@@ -226,6 +226,25 @@ const cases: PolicyCase[] = [
     risk: 'A default import takes the Playwright test without the NOAA and OpenFreeMap fixture, or expect from Playwright is refused'
   },
   {
+    name: 'default unscoped Playwright import versus the providers fixture',
+    file: 'e2e/probe.test.ts',
+    valid: 'import { expect } from "playwright/test"; export { expect };',
+    invalid:
+      'import playwright from "playwright/test"; export const drive = playwright;',
+    command: 'lint',
+    diagnostic: "Import test from './fixtures'",
+    risk: 'A default import of the unscoped playwright/test entry skips the NOAA and OpenFreeMap fixture, or expect from it is refused'
+  },
+  {
+    name: 'dynamic unscoped Playwright import versus the providers fixture',
+    file: 'e2e/probe.test.ts',
+    valid: 'export const load = () => import("@playwright/test/reporter");',
+    invalid: 'export const load = () => import("playwright/test");',
+    command: 'lint',
+    diagnostic: "Import test from './fixtures'",
+    risk: 'A dynamic import of the unscoped playwright/test entry skips the NOAA and OpenFreeMap fixture, or a neighbouring Playwright module is refused'
+  },
+  {
     name: 'throw syntax in verify-krab recipes',
     file: 'scripts/verify-krab/probe.ts',
     valid:
