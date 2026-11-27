@@ -197,6 +197,15 @@ const cases: PolicyCase[] = [
     risk: 'A dynamic import takes the e2e test without the doctor receipt, or other dynamic imports are refused'
   },
   {
+    name: 'dynamic e2e fixture import with a .js extension versus the recipe doctor fixture',
+    file: 'scripts/verify-krab/probe.ts',
+    valid: 'export const load = () => import("../../e2e/gear-on-map.js");',
+    invalid: 'export const load = () => import("../../e2e/fixtures.js");',
+    command: 'lint',
+    diagnostic: "Import test from './recipe'",
+    risk: 'A dynamic import spelled with .js takes the e2e test without the doctor receipt, or other e2e helpers are refused'
+  },
+  {
     name: 'default Playwright import versus the recipe doctor fixture',
     file: 'scripts/verify-krab/probe.ts',
     valid: 'import { expect } from "@playwright/test"; export { expect };',

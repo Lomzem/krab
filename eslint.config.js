@@ -161,7 +161,7 @@ export default defineConfig([
     ignores: ['scripts/verify-krab/recipe.ts', '**/*.test.ts'],
     rules: testOnlyFrom(
       '\\./recipe',
-      `${PLAYWRIGHT_TEST}|(?:\\.\\.?.)+e2e.fixtures(?:\\.ts)?`,
+      `${PLAYWRIGHT_TEST}|(?:\\.\\.?.)+e2e.fixtures(?:\\.[jt]s)?`,
       USE_RECIPE_TEST
     )
   },
