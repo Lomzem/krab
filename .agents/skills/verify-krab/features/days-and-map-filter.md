@@ -1,6 +1,6 @@
 # Days and the Map filter
 
-An overnight trip stays one trip. Each drop belongs to the phone's local calendar date when it was placed, and days are numbered from the trip's start, so a drop at 00:10 after a drop at 23:40 starts Day 2. The Map filter narrows only the map: Collected gear, Time in the water and, on multi-day trips, Days on this trip.
+An overnight trip stays one trip. Each drop belongs to the phone's local calendar date when it was placed, and days are numbered from the trip's start, so a drop at 00:10 after a drop at 23:40 starts Day 2. The Map filter narrows the map, and its day choice also narrows the nearest-gear card: Collected gear, Past trips, Time in the water and, on multi-day trips, Days on this trip.
 
 ## Sub-features
 
@@ -8,30 +8,30 @@ An overnight trip stays one trip. Each drop belongs to the phone's local calenda
 - On multi-day trips:
   - the Gear list groups gear in the water under "Day 1", "Day 2" headings (regions with those names), keeping distance order within a day;
   - the Collected section groups collected rows under "Day 1", "Day 2" headings (regions "Collected Day 1", "Collected Day 2"), keeping collection order within a day;
-  - one day indicator, a day marker shape followed by visible "Day N" text, labels the day headings, the gear sheet heading and every pin; each pin's name includes the day, for example "Pot 1, Day 1, …" or "Pot 1, Day 1, collected, …".
+  - one day indicator, a day marker shape followed by visible "Day N" text, labels the day headings, the gear sheet heading and every pin; each pin's name includes the day, for example "Pot 1, Day 1, …" or "Pot 1, Day 1, collected, …". A group that mixes days names its days, for example "Pot 1 +1 more here on Day 1 and Day 2".
 - Day marker shapes cycle circle, square, diamond, hexagon as outlines; the text carries the number. Colour never carries the day.
 - One-day trips look as before: no day text, no grouping, no Days section.
-- The Filter button sits at the top left of the map during a trip, and also when past trips exist without a running trip, and opens the "Map filter" sheet. Its accessible name is exactly "Filter, showing …" with the current choices, for example "Filter, showing gear in the water, collected gear, time in the water". Each checkbox and radio is named only by its own text (for example "Collected gear"), not by the sample marker artwork beside it.
-  - "Gear in the water always shows." On a multi-day trip it reads "Gear in the water always shows for the days you pick."
-  - "Also show": the checkboxes Collected gear and Time in the water, both on by default. Collected gear draws collected drops that have a position as dashed, muted pins under gear in the water. Time in the water hides only the labels under pins.
+- The Filter button sits in the top-right map capsule during a trip, and also when past trips exist without a running trip, and opens the "Map filter" sheet, a UI SDK `Dialog` presented as a sheet. Its accessible name is exactly "Filter, showing …" with the current choices, for example "Filter, showing gear in the water, collected gear, time in the water". Each checkbox and radio is named only by its own text (for example "Collected gear"), not by the sample marker artwork beside it.
+  - "Also show": the checkboxes Collected gear and Time in the water, both on by default, and Past trips, off by default and offered only when past trips exist. Collected gear draws collected drops that have a position as dashed, muted pins under gear in the water. Time in the water hides only the labels under pins.
   - "Days on this trip" (multi-day trips only): the radios Today, Earlier days and All, default All. On a one-day trip the map always shows all days.
   - Done closes the sheet. Every choice is a 44 px target.
-- The filter lives in memory for this session's Map tab. It is not saved, reload restores the defaults, and the nearest-gear card and the Gear list ignore it.
+- The filter lives in memory for this session's Map tab. It is not saved and reload restores the defaults. The nearest-gear card follows its day choice; the Gear list keeps all days.
+- An open Gear here chooser keeps its gear when midnight passes with Today chosen. On Close, focus falls back to the map canvas, as "with Today chosen, an open Gear here chooser…" in `e2e/days-and-filter.test.ts` proves.
 - Show on map from a Gear list sheet turns Collected gear back on for a collected target, resets days to All when the target is outside the chosen days, then centres and focuses the target pin.
 
 ## How to get to it (user POV)
 
-Drop gear late in the evening, then drop again after midnight. The Gear tab shows Day 1 and Day 2. On the Map tab, tap Filter at the top left. Choose Today to see only today's gear, or untick Collected gear to hide collected pins. From the Gear list, open a collected pot and tap Show on map: the map shows it again whatever the filter said.
+Drop gear late in the evening, then drop again after midnight. The Gear tab shows Day 1 and Day 2. On the Map tab, tap Filter in the top-right capsule. Choose Today to see only today's gear, or untick Collected gear to hide collected pins. From the Gear list, open a collected pot and tap Show on map: the map shows it again whatever the filter said.
 
 ## Driving it with Playwright
 
 Run `bun scripts/verify-krab/run.ts` through the parent skill's bounded lifecycle. [days-and-filter.ts](../../../../scripts/verify-krab/days-and-filter.ts) owns the exact actions, assertions and evidence filenames.
 
-Covers drops either side of local midnight, day grouping, Today/All, collected visibility, Show on map restoring a hidden target, time-label visibility and default restoration after reload. Persisted reads establish that days are derived rather than stored; request evidence checks position privacy.
+Covers drops either side of local midnight, day grouping, Today/All, collected visibility, Show on map restoring a hidden target, time-label visibility and default restoration after reload. The recipe keeps `indexeddb-before.json`, `indexeddb-after.json` and `requests.json` as retained observations for a reviewer to read; it asserts nothing on them. They let a reviewer read the saved drops and the request URLs, but they prove neither that days are derived nor that requests carry no position. The request contract is asserted in [chart-map.test.ts](../../../../e2e/chart-map.test.ts): "the Map tab shows gear and my position from the phone and asks NOAA only for fixed-grid tiles…" and "on the Street map, panning, every map control, Show on map and reload send no position to OpenFreeMap".
 
 ## Gotchas
 
-- With `page.clock` installed, WebKit's emulated geolocation still stamps fixes with real time, so a fix looks stale after a clock jump and a drop waits for a position. Deliver fixes with `deliverFix` from `e2e/held-geolocation.ts`: without a time it stamps the page's `Date.now()`, and an explicit `Date` stamps exactly that. It is a plain module, separate from the e2e `providers` fixture, so live verify still reaches the real map providers.
+- With `page.clock` installed, WebKit's emulated geolocation still stamps fixes with real time, so a fix looks stale after a clock jump and a drop waits for a position. Deliver fixes with `deliverFix` from `e2e/held-geolocation.ts`: without a time it stamps the page's `Date.now()`, and an explicit `Date` stamps exactly that. After `holdFixes`, the held fix renews every 4 seconds of page time, inside the 5 second freshness limit, so a clock jump that expires a toast keeps the position current; call `letFixAge` before a jump only when the drive checks a stale fix. It is a plain module, separate from the e2e `providers` fixture, so live verify still reaches the real map providers.
 - On a multi-day trip, match the Collected region with `exact: true`; a plain name match also finds its "Collected Day N" regions.
 - Prove a filter toggle where nothing else hides the target: Collected gear over All days, and Time in the water on a visible label. The app re-reads the clock every 15 s, so `setFixedTime` leaves an old label; pause, then run the clock to a known time.
 - Day boundaries follow the browser's time zone. Always set `timezoneId`; the container's default is UTC.

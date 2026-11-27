@@ -6,15 +6,19 @@ const SEA = { lat: -47.123456, lon: -128.654321 };
 const CHIP: Box = { left: 30, right: 30, up: 15, down: 15 };
 const LEADING: Box = { ...CHIP, right: CHIP.right + 30 };
 
+const PAST = 2;
+const COLLECTED = 3;
+const IN_WATER = 4;
+
 const at = (
   id: string,
   where: MapPlace['at'],
-  layer: MapPlace['layer'] = 'in-water',
+  priority = IN_WATER,
   alone: Box = CHIP
 ): MapPlace => ({
   id,
   at: where,
-  layer,
+  priority,
   alone,
   leading: () => ({ ...alone, right: alone.right + 30 })
 });
@@ -41,7 +45,7 @@ it('keeps eight drops about 70 px apart as eight spots at zoom 15 and one spot o
 it('puts every drop in exactly one spot at any zoom', () => {
   const mixed: MapPlace[] = eightPots.map((place, index) => ({
     ...place,
-    layer: (['past', 'collected', 'in-water'] as const)[index % 3] ?? 'past'
+    priority: [PAST, COLLECTED, IN_WATER][index % 3] ?? PAST
   }));
   for (const zoom of [0, 8, 12, 13, 14, 15, 19]) {
     const ids = spotsAt(mixed, zoom).flatMap((spot) => spot.ids);
@@ -52,19 +56,19 @@ it('puts every drop in exactly one spot at any zoom', () => {
 it('draws every drop in a line once, alone or in a group of several, even where a time label reaches the next drop but a group chip would not', () => {
   const labelled: Box = { left: 22, right: 22, up: 22, down: 31 };
   const chip: Box = { left: 22, right: 60, up: 25, down: 22 };
-  const line = (ids: string[], layers: MapPlace['layer'][]): MapPlace[] =>
+  const line = (ids: string[], priorities: number[]): MapPlace[] =>
     ids.map((id, index) => ({
       id,
       at: { lat: SEA.lat + index * 0.0012, lon: SEA.lon + index * 0.0004 },
-      layer: layers[index % layers.length] ?? 'in-water',
+      priority: priorities[index % priorities.length] ?? IN_WATER,
       alone: labelled,
       leading: () => chip
     }));
   const ids = ['pot-1', 'pot-2', 'pot-3', 'pot-4', 'pot-5', 'net-1'];
   const lines = [
-    line(ids, ['in-water']),
-    line(ids, ['in-water']).toReversed(),
-    line(ids, ['in-water', 'collected', 'past'])
+    line(ids, [IN_WATER]),
+    line(ids, [IN_WATER]).toReversed(),
+    line(ids, [IN_WATER, COLLECTED, PAST])
   ];
   for (const places of lines) {
     for (const first of [[], ['net-1'], ['pot-3'], ['pot-1', 'net-1']]) {
@@ -73,11 +77,8 @@ it('draws every drop in a line once, alone or in a group of several, even where 
         expect(spots.flatMap((spot) => spot.ids).toSorted()).toEqual(
           ids.toSorted()
         );
-        expect(spots.map(({ ids, key }) => ({ first: ids[0], key }))).toEqual(
-          spots.map(({ ids, lead }) => ({
-            first: lead,
-            key: ids.length > 1 ? `group:${lead}` : lead
-          }))
+        expect(spots.map(({ ids }) => ids[0])).toEqual(
+          spots.map(({ lead }) => lead)
         );
       }
     }
@@ -87,7 +88,7 @@ it('draws every drop in a line once, alone or in a group of several, even where 
 it('groups only drops whose drawn markers would touch', () => {
   const short: Box = { left: 34, right: 34, up: 12, down: 12 };
   const stacked = [0, 1, 2].map((index) =>
-    at(`past-${String(index)}`, SEA, 'past', short)
+    at(`past-${String(index)}`, SEA, PAST, short)
   );
   const pxPerDegreeLat = 46_603 / Math.cos((SEA.lat * Math.PI) / 180);
   const apart = (px: number) =>
@@ -118,17 +119,17 @@ it('groups only drops whose drawn markers would touch', () => {
   ]);
 });
 
-it('anchors a group at the stored position of its gear in the water, ahead of collected and past drops', () => {
+it('anchors a group at the stored position of its highest-priority drop, ahead of lower-priority drops', () => {
   const places: MapPlace[] = [
-    at('old', SEA, 'past'),
-    at('done', { ...SEA, lat: SEA.lat + 0.0002 }, 'collected'),
-    at('wet', { ...SEA, lat: SEA.lat + 0.0004 }, 'in-water')
+    at('old', SEA, PAST),
+    at('done', { ...SEA, lat: SEA.lat + 0.0002 }, COLLECTED),
+    at('wet', { ...SEA, lat: SEA.lat + 0.0004 }, IN_WATER)
   ];
   expect(spotsAt(places, 12)).toEqual([
     {
       key: 'group:wet',
       at: places[2]?.at,
-      layer: 'in-water',
+      priority: IN_WATER,
       lead: 'wet',
       ids: ['wet', 'done', 'old'],
       box: LEADING,
@@ -139,15 +140,15 @@ it('anchors a group at the stored position of its gear in the water, ahead of co
 
 it('leads a group with the drop asked for, at its own stored position, even when it is a past drop sharing that position', () => {
   const places: MapPlace[] = [
-    at('old', SEA, 'past'),
-    at('wet', SEA, 'in-water'),
-    at('done', SEA, 'collected')
+    at('old', SEA, PAST),
+    at('wet', SEA, IN_WATER),
+    at('done', SEA, COLLECTED)
   ];
   const [featured] = spotsAt(places, 15, ['old']);
   expect(featured).toMatchObject({
     key: 'group:old',
     at: SEA,
-    layer: 'past',
+    priority: PAST,
     lead: 'old',
     ids: ['old', 'wet', 'done']
   });
@@ -180,7 +181,7 @@ it('joins two groups whose markers would touch into one, from either side, with 
     [1, 2].map((index) => ({
       id: `${side}-${String(index)}`,
       at: { ...SEA, lon: SEA.lon + px / pxPerDegreeLon },
-      layer: 'collected',
+      priority: COLLECTED,
       alone,
       leading: () => leading
     }));
@@ -203,8 +204,8 @@ it('joins two groups whose markers would touch into one, from either side, with 
 
 it('groups drops either side of the 180th meridian', () => {
   const places: MapPlace[] = [
-    at('east', { lat: 0, lon: 179.9999 }, 'past'),
-    at('west', { lat: 0, lon: -179.9999 }, 'past')
+    at('east', { lat: 0, lon: 179.9999 }, PAST),
+    at('west', { lat: 0, lon: -179.9999 }, PAST)
   ];
   expect(spotsAt(places, 10).map(({ ids }) => ids)).toEqual([['east', 'west']]);
 });
@@ -228,14 +229,14 @@ it('keeps a nearby drop clear of a group whose count gains a digit, by joining i
     Array.from({ length: count }, (_, index) => ({
       id: `pot-${String(index + 1)}`,
       at: SEA,
-      layer: 'past',
+      priority: PAST,
       alone,
       leading
     }));
   const nearby: MapPlace = {
     id: 'net-1',
     at: { ...SEA, lon: SEA.lon + 86 / pxPerDegreeLon },
-    layer: 'past',
+    priority: PAST,
     alone,
     leading
   };

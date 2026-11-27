@@ -1,4 +1,4 @@
-import { expect, test, toastOf } from './fixtures';
+import { expect, tapsDuring, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
 
@@ -26,7 +26,7 @@ test('a pot dropped with a granted fix is listed under Gear and survives a reloa
     .getByRole('main')
     .getByRole('listitem')
     .filter({ hasText: 'Pot 1' });
-  const gearTab = page.getByRole('button', { name: 'Gear', exact: true });
+  const gearTab = page.getByRole('tab', { name: 'Gear', exact: true });
   const turnOnLocation = page.getByRole('button', { name: 'Turn on location' });
 
   await page.goto('/');
@@ -35,8 +35,11 @@ test('a pot dropped with a granted fix is listed under Gear and survives a reloa
 
   await turnOnLocation.click();
   await expect(page.getByText('Finding position')).toBeHidden();
-  await page.getByRole('button', { name: 'Drop pot' }).click();
-  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  const dropTaps = await tapsDuring(page, async () => {
+    await page.getByRole('button', { name: 'Drop pot' }).tap();
+    await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  });
+  expect(dropTaps, 'taps to drop with a fresh fix').toBe(1);
   await expectAccessibleInBothThemes(page);
 
   await gearTab.click();

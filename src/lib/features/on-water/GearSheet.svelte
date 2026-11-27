@@ -1,16 +1,18 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
   import { tick, untrack, type Snippet } from 'svelte';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import type { Drop, DropEdit, Kind } from '#lib/features/trip/index.js';
+  import { canUndoCollect, type Drop } from '#lib/features/trip/index.js';
   import {
     ACTION_BUTTON,
-    DESTRUCTIVE_BUTTON,
+    DESTRUCTIVE_TEXT_BUTTON,
     PRIMARY_BUTTON,
     QUIET_BUTTON
   } from './controls';
-  import type { SheetOperation, SheetSubject } from './gear-sheet';
+  import type { GearSheetSession, Loss } from './gear-sheet.svelte';
+  import Confirm from './Confirm.svelte';
   import DayMarker from './DayMarker.svelte';
   import GearDetailsForm from './GearDetailsForm.svelte';
   import GearIcon from './GearIcon.svelte';
@@ -25,24 +27,15 @@
     storage: "Couldn't save"
   };
 
-  const TITLE_ID = 'gear-sheet-title';
   const FORM_ID = 'gear-sheet-form';
-  const UNSAVED_ID = 'gear-sheet-unsaved';
-  const CATCH_LOSS_ID = 'gear-sheet-catch-loss';
 
-  type Loss = 'draft' | 'catch';
-  const ASKS: Record<
-    Loss,
-    { id: string; text: string; keep: string; go: string }
-  > = {
+  const ASKS: Record<Loss, { text: string; keep: string; go: string }> = {
     draft: {
-      id: UNSAVED_ID,
       text: 'Unsaved changes',
       keep: 'Keep editing',
       go: 'Discard changes'
     },
     catch: {
-      id: CATCH_LOSS_ID,
       text: 'Clears the catch',
       keep: 'Keep catch',
       go: 'Undo collect'
@@ -50,121 +43,63 @@
   };
 
   let {
-    subject,
+    session,
     now,
-    operation,
-    onclose,
-    onsave,
-    oncollect,
-    ondropagain,
     denied = false,
     returnFocus,
     notice,
-    actions,
-    direction,
-    endAction
+    direction
   }: {
-    subject: SheetSubject | null;
+    session: GearSheetSession;
     now: number;
-    operation: SheetOperation | null;
-    onclose: () => void;
-    onsave: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
-    oncollect?: (dropId: string) => void;
-    ondropagain?: (dropId: string, edit: DropEdit, kind: Kind | null) => void;
     denied?: boolean;
-    returnFocus: () => HTMLElement | null | undefined;
+    returnFocus: (() => HTMLElement | null | undefined) | 'none';
     notice: Notice | null;
-    actions?: Snippet<[Drop, (exit: () => void) => void]>;
     direction?: Snippet<[Drop]>;
-    endAction?: Snippet<
-      [Drop, (exit: () => void) => void, (exit: () => void) => void]
-    >;
   } = $props();
 
+  const subject = $derived(session.subject);
+  const open = $derived(session.open);
+  const busy = $derived(session.busy);
+  const asking = $derived(session.asking);
+  const shown = $derived(asking && ASKS[asking]);
+
   const failure = $derived.by(() => {
-    const problem = operation?.problem ?? null;
+    const problem = session.problem;
     if (problem === null || problem === 'depth') return null;
     if (problem === 'catch' && subject?.drop.collectedAt !== null) return null;
     return PROBLEMS[problem];
   });
 
-  const open = $derived(subject !== null);
-  const busy = $derived(operation?.pending ?? false);
-  let dirty = $state<boolean>(false);
-  let asking = $state<{ exit: () => void; loss: Loss } | null>(null);
-  let resets = $state(0);
-  let waiting: (() => void) | null = null;
-  let saving = $state<boolean>(false);
   let editingFocus: Element | null = null;
-  let askGroup = $state<HTMLDivElement>();
-  let keepButton = $state<HTMLButtonElement>();
-  let sheet = $state<{ absorbPress: () => void }>();
 
-  const ask = (exit: () => void, loss: Loss = 'draft') => {
+  const askShown = () => {
     const active = document.activeElement;
-    if (active && !askGroup?.contains(active)) editingFocus = active;
-    asking = { exit, loss };
-    void tick().then(() => keepButton?.focus());
+    if (active?.closest('[role="dialog"]')) editingFocus = active;
   };
 
-  const keepEditing = () => {
-    asking = null;
-    void tick().then(() => {
-      if (editingFocus instanceof HTMLElement && editingFocus.isConnected) {
-        editingFocus.focus({ preventScroll: true });
-      }
-    });
-  };
+  const editing = () =>
+    editingFocus instanceof HTMLElement && editingFocus.isConnected
+      ? editingFocus
+      : null;
 
-  const discard = () => {
-    const shown = asking;
-    asking = null;
-    if (shown?.loss === 'draft') resets += 1;
-    shown?.exit();
-  };
-
-  const confirmCatchLoss = (exit: () => void) => {
-    if (busy) return;
-    sheet?.absorbPress();
-    ask(exit, 'catch');
-  };
-
-  const storing =
-    (send: (dropId: string, edit: DropEdit, kind: Kind | null) => void) =>
-    (dropId: string, edit: DropEdit, kind: Kind | null) => {
-      if (!busy) saving = true;
-      send(dropId, edit, kind);
-    };
-
-  const leave = (exit: () => void) => {
-    if (asking) keepEditing();
-    else if (!dirty || (busy && saving)) exit();
-    else if (busy) waiting = exit;
-    else ask(exit);
-  };
-
-  const shownId = $derived(subject?.drop.id ?? null);
-  let askedId: string | null = null;
-
-  $effect(() => {
-    if (shownId === askedId) return;
-    askedId = shownId;
-    untrack(() => {
-      asking = null;
-      waiting = null;
-    });
+  $effect.pre(() => {
+    if (asking !== null) untrack(askShown);
   });
 
-  $effect(() => {
-    if (!busy) saving = false;
-  });
+  const dismiss = () => {
+    session.dismiss();
+  };
 
-  $effect(() => {
-    if (busy || !waiting) return;
-    const exit = waiting;
-    waiting = null;
-    if (untrack(() => open)) leave(exit);
-  });
+  let discarding = $state(false);
+
+  const discard = async () => {
+    if (discarding) return;
+    discarding = true;
+    await tick();
+    discarding = false;
+    session.discard();
+  };
 
   let entered = false;
   let returning = false;
@@ -195,123 +130,105 @@
       if (!entered) return;
       entered = false;
       if (!open) return;
-      if (asking || dirty) enter();
-      leave(onclose);
+      if (session.dismiss() !== 'left') enter();
     });
   });
 
   const collectLeads = $derived(
-    oncollect !== undefined &&
-      subject !== null &&
+    subject !== null &&
       subject.drop.collectedAt === null &&
       subject.trip.endedAt === null
   );
 </script>
 
 <Sheet
-  bind:this={sheet}
   {open}
-  titleId={TITLE_ID}
-  onclose={() => {
-    leave(onclose);
-  }}
+  onclose={dismiss}
   onbackdrop={() => {
-    if (!dirty && !asking) onclose();
+    session.backdrop();
   }}
   {returnFocus}
   {notice}
-  bodyInert={asking !== null}
 >
-  {#snippet heading()}
+  {#snippet title()}
     {#if subject}
-      <h2
-        id={TITLE_ID}
-        class="flex items-center gap-2 text-title font-semibold"
-      >
-        <GearIcon kind={subject.gear.kind} size={24} />
-        {subject.name}
-      </h2>
-      {#if subject.drop.label}
-        <p
-          class="mt-1 line-clamp-2 text-base leading-snug [overflow-wrap:anywhere]"
-        >
-          {subject.drop.label}
-        </p>
-      {/if}
-      {#if subject.day}
-        <p class="mt-1 text-sm font-medium text-muted-foreground">
-          <DayMarker day={subject.day} />
-        </p>
-      {/if}
+      <GearIcon kind={subject.gear.kind} size={24} />
+      {subject.name}
     {/if}
   {/snippet}
 
-  {#if subject}
-    {#key `${subject.drop.id}/${String(resets)}`}
+  {#snippet subtitle()}
+    {#if subject?.drop.label}
+      <p
+        class="mt-1 line-clamp-2 text-base leading-snug [overflow-wrap:anywhere]"
+      >
+        {subject.drop.label}
+      </p>
+    {/if}
+    {#if subject?.day}
+      <p class="mt-1 text-sm font-medium text-muted-foreground">
+        <DayMarker day={subject.day} />
+      </p>
+    {/if}
+  {/snippet}
+
+  {#if subject && session.draft}
+    {#key session.draft}
       <GearDetailsForm
-        ondirty={(next: boolean) => {
-          dirty = next;
-        }}
-        inert={asking !== null}
-        {subject}
+        {session}
+        draft={session.draft}
         formId={FORM_ID}
         {now}
-        {operation}
-        onsave={storing(onsave)}
-        {oncollect}
-        ondropagain={ondropagain && storing(ondropagain)}
         {denied}
         {direction}
-      >
-        {@render actions?.(subject.drop, leave)}
-      </GearDetailsForm>
+      />
     {/key}
   {/if}
 
+  <Confirm
+    open={shown !== null && !discarding}
+    title={shown?.text ?? ''}
+    keep={shown?.keep ?? ''}
+    go={shown?.go ?? ''}
+    onkeep={() => {
+      session.keepEditing();
+    }}
+    ongo={() => void discard()}
+    returnFocus={open ? editing : 'none'}
+  />
+
   {#snippet footer()}
-    {#if asking}
-      {@const shown = ASKS[asking.loss]}
-      <div
-        bind:this={askGroup}
-        role="group"
-        aria-labelledby={shown.id}
-        class="flex basis-full flex-wrap gap-2"
+    {#if failure}
+      <p
+        role="alert"
+        class="mb-1 basis-full border-l-3 border-destructive pl-3 text-base"
       >
-        <p id={shown.id} class="basis-full text-base font-medium">
-          {shown.text}
-        </p>
-        <button
-          bind:this={keepButton}
-          type="button"
-          class="flex-1 basis-36 {QUIET_BUTTON}"
-          onclick={keepEditing}>{shown.keep}</button
-        >
-        <button
-          type="button"
-          class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
-          onclick={discard}>{shown.go}</button
-        >
-      </div>
+        {failure}
+      </p>
     {/if}
-    <div class={asking ? 'hidden' : 'contents'}>
-      {#if failure}
-        <p
-          role="alert"
-          class="mb-1 basis-full border-l-3 border-destructive pl-3 text-base"
-        >
-          {failure}
-        </p>
-      {/if}
-      <button
-        type="submit"
-        form={FORM_ID}
-        aria-disabled={busy}
-        class="flex-[1_1_7rem] {collectLeads ? PRIMARY_BUTTON : ACTION_BUTTON}"
-        >Save</button
+    <Button
+      type="submit"
+      form={FORM_ID}
+      aria-disabled={busy || session.saving}
+      class="flex-[1_1_7rem] {collectLeads ? PRIMARY_BUTTON : ACTION_BUTTON}"
+      >Save</Button
+    >
+    {#if subject && canUndoCollect(subject.trip, subject.drop)}
+      <Button
+        class="grow {QUIET_BUTTON}"
+        aria-disabled={busy || session.saving}
+        onclick={() => {
+          session.undoCollect();
+        }}>Undo collect</Button
       >
-      {#if subject}
-        {@render endAction?.(subject.drop, leave, confirmCatchLoss)}
-      {/if}
-    </div>
+    {:else if subject}
+      <Button
+        class="grow {DESTRUCTIVE_TEXT_BUTTON}"
+        aria-disabled={busy}
+        onclick={() => {
+          session.deleteDrop();
+        }}>Delete drop</Button
+      >
+    {/if}
   {/snippet}
 </Sheet>

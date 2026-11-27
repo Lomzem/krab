@@ -5,7 +5,8 @@ import {
   shortDateRange,
   shortTime
 } from './format';
-import { bearingDeg, distanceFt, metresToFeet, type LatLon } from './geo';
+import type { LatLon } from '#lib/shared/lat-lon.js';
+import { bearingDeg, distanceFt, metresToFeet } from './geo';
 import { gearName } from './rules';
 import type { Catch, Drop, Gear, Position, Trip } from './types';
 
@@ -47,23 +48,23 @@ const localDate = (at: number) => {
 const dayNumber = (trip: Trip, at: number) =>
   (localDate(at) - localDate(trip.startedAt)) / CALENDAR_DAY_MS + 1;
 
-export const tripDays = (trip: Trip) =>
+const tripDays = (trip: Trip) =>
   [...new Set(trip.drops.map((drop) => dayNumber(trip, drop.placedAt)))].sort(
     (a, b) => a - b
   );
 
-export const isMultiDay = (trip: Trip) => tripDays(trip).length > 1;
+const isMultiDay = (trip: Trip) => tripDays(trip).length > 1;
 
-const dayNamer = (trip: Trip) => {
-  const multiDay = isMultiDay(trip);
-  return (drop: Drop): Day | null => {
+const dayNamer =
+  (trip: Trip, multiDay: boolean) =>
+  (drop: Drop): Day | null => {
     if (!multiDay) return null;
     const number = dayNumber(trip, drop.placedAt);
     return { number, text: `Day ${String(number)}` };
   };
-};
 
-export const dayOf = (trip: Trip, drop: Drop) => dayNamer(trip)(drop);
+export const dayOf = (trip: Trip, drop: Drop): Day | null =>
+  dayNamer(trip, isMultiDay(trip))(drop);
 
 export const dayGroups = <Row extends { day: Day | null }>(
   rows: readonly Row[]
@@ -78,18 +79,35 @@ export const dayGroups = <Row extends { day: Day | null }>(
   return [...groups.values()].sort((a, b) => a.day.number - b.day.number);
 };
 
-export const dropsInDays = (
-  trip: Trip,
+const dayFilter = (
   selection: DaySelection,
+  multiDay: boolean,
   now: number
-) => {
-  if (selection === 'all' || !isMultiDay(trip)) return trip.drops;
+): ((drop: Drop) => boolean) => {
+  if (selection === 'all' || !multiDay) return () => true;
   const today = localDate(now);
-  return trip.drops.filter((drop) =>
+  return (drop: Drop) =>
     selection === 'today'
       ? localDate(drop.placedAt) === today
-      : localDate(drop.placedAt) < today
-  );
+      : localDate(drop.placedAt) < today;
+};
+
+type Projected = { drop: Drop; gear: Gear; name: string; day: Day | null };
+
+const projection = (trip: Trip) => {
+  const gearById = new Map<string, Gear>();
+  for (const gear of trip.gear) {
+    if (!gearById.has(gear.id)) gearById.set(gear.id, gear);
+  }
+  const multiDay = isMultiDay(trip);
+  const dayFor = dayNamer(trip, multiDay);
+  const rows = trip.drops.flatMap((drop): Projected[] => {
+    const gear = gearById.get(drop.gearId);
+    return gear
+      ? [{ drop, gear, name: gearName(gear), day: dayFor(drop) }]
+      : [];
+  });
+  return { rows, multiDay };
 };
 
 export type GearRow = {
@@ -144,42 +162,23 @@ const byDistance = (a: GearRow, b: GearRow) =>
 
 const isInWater = (drop: Drop) => drop.collectedAt === null;
 
-export const gearInWater = (trip: Trip, from: LatLon | null, at: number) => {
-  const dayFor = dayNamer(trip);
-  return trip.drops
-    .filter(isInWater)
-    .flatMap((drop): GearRow[] => {
-      const gear = trip.gear.find((candidate) => candidate.id === drop.gearId);
-      if (!gear) return [];
-      return [
-        {
-          drop,
-          gear,
-          name: gearName(gear),
-          direction: directionTo(from, drop),
-          rough: roughness(drop.position),
-          timeInWater: timeInWater(drop, at),
-          day: dayFor(drop)
-        }
-      ];
-    })
-    .sort(byDistance);
-};
-
-export const gearCounts = (trip: Trip) => {
+const gearCounts = (trip: Trip) => {
   const inWater = trip.drops.filter(isInWater).length;
   const collected = trip.drops.length - inWater;
   return {
-    inWater:
-      inWater === 0
-        ? 'Nothing in the water'
-        : `${String(inWater)} in the water`,
-    collected:
-      collected === 0 ? 'Nothing collected' : `${String(collected)} collected`
+    collectedCount: collected,
+    counts: {
+      inWater:
+        inWater === 0
+          ? 'Nothing in the water'
+          : `${String(inWater)} in the water`,
+      collected:
+        collected === 0 ? 'Nothing collected' : `${String(collected)} collected`
+    }
   };
 };
 
-export const catchText = (recorded: Catch | null) => {
+const catchText = (recorded: Catch | null) => {
   if (!recorded) return 'Catch not recorded';
   const { kept, released } = recorded;
   if (kept === 0 && released === 0) return 'Nothing caught';
@@ -195,28 +194,67 @@ export type CollectedRow = {
   day: Day | null;
 };
 
-export const collectedGear = (trip: Trip) => {
-  const dayFor = dayNamer(trip);
-  return trip.drops
-    .flatMap((drop): CollectedRow[] => {
-      const gear = trip.gear.find((item) => item.id === drop.gearId);
-      if (drop.collectedAt === null || !gear) return [];
-      return [
-        {
-          drop,
-          gear,
-          name: gearName(gear),
-          collectedAt: drop.collectedAt,
-          catchText: catchText(drop.catch),
-          day: dayFor(drop)
-        }
-      ];
-    })
-    .sort((a, b) => b.collectedAt - a.collectedAt);
+export type ActiveGear = {
+  inWater: GearRow[];
+  collected: CollectedRow[];
+  inDays: ReadonlySet<string>;
+  nearest: GearRow | null;
+  counts: { inWater: string; collected: string };
+  collectedCount: number;
+  multiDay: boolean;
 };
 
-export const nearestGear = (rows: readonly GearRow[]): GearRow | null =>
-  rows.find((row) => row.direction !== null) ?? null;
+export const activeGear = (
+  trip: Trip,
+  from: LatLon | null,
+  at: number,
+  days: DaySelection
+): ActiveGear => {
+  const { rows, multiDay } = projection(trip);
+  const inWater = rows
+    .flatMap(({ drop, ...row }): GearRow[] =>
+      isInWater(drop)
+        ? [
+            {
+              ...row,
+              drop,
+              direction: directionTo(from, drop),
+              rough: roughness(drop.position),
+              timeInWater: timeInWater(drop, at)
+            }
+          ]
+        : []
+    )
+    .sort(byDistance);
+  const collected = rows
+    .flatMap(({ drop, ...row }): CollectedRow[] =>
+      drop.collectedAt === null
+        ? []
+        : [
+            {
+              ...row,
+              drop,
+              collectedAt: drop.collectedAt,
+              catchText: catchText(drop.catch)
+            }
+          ]
+    )
+    .sort((a, b) => b.collectedAt - a.collectedAt);
+  const inDays = new Set(
+    trip.drops.filter(dayFilter(days, multiDay, at)).map(({ id }) => id)
+  );
+  return {
+    inWater,
+    collected,
+    inDays,
+    nearest:
+      inWater.find(
+        (row) => row.direction !== null && inDays.has(row.drop.id)
+      ) ?? null,
+    ...gearCounts(trip),
+    multiDay
+  };
+};
 
 const latestDrop = (trip: Trip) =>
   Math.max(trip.startedAt, ...trip.drops.map((drop) => drop.placedAt));
@@ -224,7 +262,7 @@ const latestDrop = (trip: Trip) =>
 const earliestDrop = (trip: Trip) =>
   Math.min(latestDrop(trip), ...trip.drops.map((drop) => drop.placedAt));
 
-export const tripSpan = (trip: Trip) => ({
+const tripSpan = (trip: Trip) => ({
   first: earliestDrop(trip),
   last: latestDrop(trip)
 });
@@ -260,7 +298,7 @@ const dropCount = (trip: Trip) => {
   return `${String(drops)} ${drops === 1 ? 'drop' : 'drops'}`;
 };
 
-export const pastTripCounts = (trip: Trip) => {
+const pastTripCounts = (trip: Trip) => {
   const uncollected = trip.drops.filter(isInWater).length;
   const total = dropCount(trip);
   return uncollected === 0
@@ -317,22 +355,21 @@ const DAY_OF_PAST: Record<PastDaySelection, DaySelection> = {
   all: 'all'
 };
 
-export const pastDrops = (trip: Trip, selection: PastDaySelection) => {
-  const dayFor = dayNamer(trip);
-  return dropsInDays(trip, DAY_OF_PAST[selection], latestDrop(trip)).flatMap(
-    (drop): PastDropRow[] => {
-      const gear = trip.gear.find((item) => item.id === drop.gearId);
-      if (!gear) return [];
-      return [
-        {
-          drop,
-          gear,
-          name: gearName(gear),
-          status:
-            drop.collectedAt === null ? 'Uncollected' : catchText(drop.catch),
-          day: dayFor(drop)
-        }
-      ];
-    }
-  );
+type PastGear = { rows: PastDropRow[]; multiDay: boolean };
+
+export const pastGear = (trip: Trip, selection: PastDaySelection): PastGear => {
+  const { rows, multiDay } = projection(trip);
+  const shown = dayFilter(DAY_OF_PAST[selection], multiDay, latestDrop(trip));
+  return {
+    rows: rows
+      .filter(({ drop }) => shown(drop))
+      .map((row) => ({
+        ...row,
+        status:
+          row.drop.collectedAt === null
+            ? 'Uncollected'
+            : catchText(row.drop.catch)
+      })),
+    multiDay
+  };
 };

@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { expect, test } from './recipe';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
@@ -14,8 +13,6 @@ test('without an iPhone compass the map shows no Compass chip', async ({
   const { log, capture, keep } = recorder(page, info, 'compass', 'Map');
   const requested: string[] = [];
   context.on('request', (request) => requested.push(request.url()));
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await page.goto('/');
@@ -38,7 +35,7 @@ test('without an iPhone compass the map shows no Compass chip', async ({
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const toggle = map.getByRole('button', { name: 'Compass', exact: true });
   await expect(
-    map.getByRole('button', { name: 'Chart map', exact: true })
+    map.getByRole('radio', { name: 'Chart map', exact: true })
   ).toBeVisible();
   await expect(toggle).toHaveCount(0);
   log('no iPhone compass here, so the capsule has no Compass chip');

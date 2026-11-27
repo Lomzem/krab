@@ -140,10 +140,10 @@ test('a phone that keeps the screen on holds one lock during a trip, takes it ag
   await setHidden(page, false);
   await expect.poll(() => locksHeld(page)).toEqual({ held: 1, most: 1 });
 
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await page
-    .getByRole('dialog')
+    .getByRole('alertdialog')
     .getByRole('button', { name: 'End trip' })
     .click();
   await expect(toastOf(page)).toContainText('Trip ended');

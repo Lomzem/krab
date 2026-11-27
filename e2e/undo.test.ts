@@ -71,7 +71,7 @@ const expectExpiresAfter = async (page: Page, remaining: number) => {
 test('an unheld Undo toast lasts 8 seconds and Undo within it removes only that drop', async ({
   page
 }) => {
-  const gearTab = page.getByRole('button', { name: 'Gear', exact: true });
+  const gearTab = page.getByRole('tab', { name: 'Gear', exact: true });
   const gearRow = (name: string) =>
     page.getByRole('main').getByRole('listitem').filter({ hasText: name });
 
@@ -92,6 +92,57 @@ test('an unheld Undo toast lasts 8 seconds and Undo within it removes only that 
   await gearTab.click();
   await expect(gearRow('Pot 1')).toBeVisible();
   await expect(gearRow('Pot 2')).toHaveCount(0);
+});
+
+type CountedWrites = { readwrites?: number };
+
+const countReadwrites = (page: Page) =>
+  page.evaluate(() => {
+    type Begin = (this: IDBDatabase, ...args: unknown[]) => IDBTransaction;
+    const counted = window as CountedWrites;
+    counted.readwrites = 0;
+    const database = IDBDatabase.prototype;
+    const begin = Reflect.get(database, 'transaction') as Begin;
+    const countedBegin: Begin = function (...args) {
+      if (args[1] === 'readwrite')
+        counted.readwrites = (counted.readwrites ?? 0) + 1;
+      return Reflect.apply(begin, this, args);
+    };
+    Reflect.set(database, 'transaction', countedBegin);
+  });
+
+const readwrites = (page: Page) =>
+  page.evaluate(() => (window as CountedWrites).readwrites);
+
+test('two taps on Undo while its write waits on storage submit one Undo', async ({
+  page
+}) => {
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await holdStorage(page);
+  await countReadwrites(page);
+
+  const box = await undoOf(page).boundingBox();
+  expect(box, 'Undo has a tappable area').not.toBeNull();
+  const x = (box?.x ?? 0) + (box?.width ?? 0) / 2;
+  const y = (box?.y ?? 0) + (box?.height ?? 0) / 2;
+  await page.touchscreen.tap(x, y);
+  await expect(undoOf(page)).toHaveAttribute('aria-busy', 'true');
+  await expect(undoOf(page)).toHaveAttribute('aria-disabled', 'true');
+  await page.touchscreen.tap(x, y);
+  await expect
+    .poll(() => readwrites(page), {
+      message: 'The Undo write never reached storage.'
+    })
+    .toBe(1);
+
+  await releaseStorage(page);
+  await expect(toastOf(page)).toContainText('Pot 1 removed');
+  expect(await storedDrops(page)).toBe(0);
+  expect(
+    await readwrites(page),
+    'A second tap on a pending Undo submitted it again.'
+  ).toBe(1);
 });
 
 test('focus inside the Undo toast holds it past 8 seconds and keeps the remaining time', async ({
@@ -135,6 +186,64 @@ test('a touch held on the Undo toast holds it past 8 seconds and keeps the remai
   await expectExpiresAfter(page, 6000);
 });
 
+type Shown = { hidden?: boolean };
+
+const overrideVisibility = () => {
+  const shown = window as Shown;
+  shown.hidden = false;
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => (shown.hidden ? 'hidden' : 'visible')
+  });
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    get: () => shown.hidden
+  });
+};
+
+const setHidden = (page: Page, hidden: boolean) =>
+  page.evaluate((next) => {
+    (window as Shown).hidden = next;
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+
+test('a focused Undo toast stays held while Krab is hidden, even after focus leaves, and keeps the remaining time when shown', async ({
+  page
+}) => {
+  await page.addInitScript(overrideVisibility);
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.clock.runFor(3000);
+
+  await undoOf(page).focus();
+  await setHidden(page, true);
+  await undoOf(page).blur();
+  await page.clock.runFor(20_000);
+  await expect(
+    undoOf(page),
+    'Undo expired while Krab was hidden.'
+  ).toBeEnabled();
+
+  await setHidden(page, false);
+  await expectExpiresAfter(page, 5000);
+});
+
+test('a tap on the Undo toast text does not hold it, so Undo still ends at 8 seconds', async ({
+  page
+}) => {
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.clock.runFor(2000);
+
+  const box = await toastOf(page).getByText('Pot 1 dropped').boundingBox();
+  expect(box, 'toast text has a tappable area').not.toBeNull();
+  await page.touchscreen.tap(
+    (box?.x ?? 0) + (box?.width ?? 0) / 2,
+    (box?.y ?? 0) + (box?.height ?? 0) / 2
+  );
+  await expectExpiresAfter(page, 6000);
+});
+
 test('a touch held on the Undo toast also holds the notice that replaces it, and a notice after Undo from the keyboard starts unheld', async ({
   page
 }) => {
@@ -171,6 +280,164 @@ test('a touch held on the Undo toast also holds the notice that replaces it, and
     'A hold from the removed Undo button outlived it.'
   ).toBeHidden();
 });
+
+test('two touches hold the Undo toast until the last one lifts, and it then keeps the remaining time', async ({
+  page
+}) => {
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.clock.runFor(2000);
+
+  const first = await touchesAt(toastOf(page));
+  const [one] = first.changedTouches;
+  const two = { ...one, identifier: 1 };
+  await toastOf(page).dispatchEvent('touchstart', first);
+  await toastOf(page).dispatchEvent('touchstart', {
+    touches: [one, two],
+    targetTouches: [one, two],
+    changedTouches: [two]
+  });
+  await toastOf(page).dispatchEvent('touchend', {
+    touches: [two],
+    targetTouches: [two],
+    changedTouches: [one]
+  });
+  await page.clock.runFor(20_000);
+  await expect(
+    undoOf(page),
+    'Lifting one of two fingers released the hold.'
+  ).toBeEnabled();
+
+  await toastOf(page).dispatchEvent('touchcancel', {
+    touches: [],
+    targetTouches: [],
+    changedTouches: [two]
+  });
+  await expectExpiresAfter(page, 6000);
+});
+
+function visibleTextWith(text: string) {
+  return [...document.querySelectorAll('body *')]
+    .filter(
+      (element) =>
+        element.childElementCount === 0 &&
+        !element.closest('[data-ui-sdk-announcer]') &&
+        element.textContent.includes(text) &&
+        element.checkVisibility({ opacityProperty: true })
+    )
+    .map((element) => element.outerHTML);
+}
+
+test('an expiring toast leaves the dock at once under full motion', async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.clock.runFor(7999);
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+
+  await page.clock.runFor(1);
+  const shownAtExpiry = await page.evaluate(visibleTextWith, 'Pot 1 dropped');
+  expect(
+    shownAtExpiry,
+    'An expired toast leaves at once; no fading copy stays in the dock.'
+  ).toEqual([]);
+});
+
+test('the Undo toast is out of reach behind a gear sheet, and outside one its buttons are the only Tab stops', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const focusInToast = () =>
+    toastOf(page).evaluate((toast) => toast.contains(document.activeElement));
+
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+
+  await page.keyboard.press('F6');
+  await expect(toastOf(page)).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(undoOf(page)).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  expect(
+    await focusInToast(),
+    'The toast item is a Tab stop; only its buttons should be.'
+  ).toBe(false);
+
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+  await inWaterRow(page, 'Pot 1').click();
+  await expect(sheet).toBeVisible();
+  const label = sheet.getByLabel('Label');
+  await label.focus();
+  await page.keyboard.press('F6');
+  await expect(
+    label,
+    'F6 left the open sheet for the hidden toast.'
+  ).toBeFocused();
+  await page.keyboard.press('Tab');
+  expect(await focusInToast()).toBe(false);
+  await page.keyboard.press('Enter');
+  await page.clock.runFor(0);
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  expect(await storedDrops(page)).toBe(1);
+});
+
+const toastBehindSheet = (page: Page) =>
+  page
+    .getByRole('region', { name: 'Messages', includeHidden: true })
+    .getByRole('listitem', { includeHidden: true });
+
+const holds: Record<string, (page: Page) => Promise<void>> = {
+  focus: (page) => undoOf(page).focus(),
+  pointer: async (page) => {
+    const box = await toastOf(page).boundingBox();
+    expect(box, 'toast has a pointer area').not.toBeNull();
+    await page.mouse.move(
+      (box?.x ?? 0) + (box?.width ?? 0) / 2,
+      (box?.y ?? 0) + (box?.height ?? 0) / 2
+    );
+  },
+  touch: async (page) => {
+    await toastOf(page).dispatchEvent(
+      'touchstart',
+      await touchesAt(toastOf(page))
+    );
+  }
+};
+
+for (const [hold, start] of Object.entries(holds)) {
+  test(`a ${hold} hold on the Undo toast ends when a gear sheet covers it, so the toast expires behind the sheet and stays gone after it closes`, async ({
+    page
+  }) => {
+    await openWithPausedClock(page);
+    await dropPot(page, 'Pot 1');
+    await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+    await page.mouse.move(0, 0);
+    await page.clock.runFor(2000);
+
+    await start(page);
+    await page.clock.runFor(20_000);
+    await expect(
+      undoOf(page),
+      `Undo expired during a ${hold} hold.`
+    ).toBeEnabled();
+
+    await inWaterRow(page, 'Pot 1').dispatchEvent('click');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.clock.runFor(5999);
+    await expect(toastBehindSheet(page)).toHaveCount(1);
+    await page.clock.runFor(1);
+    await expect(
+      toastBehindSheet(page),
+      `The ${hold} hold outlived the gear sheet that covered the toast.`
+    ).toHaveCount(0);
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(toastOf(page)).toHaveCount(0);
+  });
+}
 
 const inWaterRow = (page: Page, name: string) =>
   page
@@ -245,7 +512,10 @@ const closeSheet = async (page: Page, how: 'Escape' | 'Discard' | 'Save') => {
     await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   } else await page.keyboard.press('Escape');
   if (how === 'Discard') {
-    await sheet.getByRole('button', { name: 'Discard changes' }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Discard changes' })
+      .click();
   }
   await expect(sheet).toBeHidden();
   await page.mouse.move(0, 0);
@@ -257,7 +527,7 @@ test('a Collect toast lasts 8 seconds and Undo within it puts only that gear bac
   await openWithPausedClock(page);
   await dropPot(page, 'Pot 1');
   await dropPot(page, 'Pot 2');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await collectInSheet(page, 'Pot 1');
   await closeSheet(page, 'Escape');
@@ -272,6 +542,25 @@ test('a Collect toast lasts 8 seconds and Undo within it puts only that gear bac
   await expect(inWaterRow(page, 'Pot 1')).toHaveCount(0);
 });
 
+test('Undo collect names the gear by its saved kind', async ({ page }) => {
+  const sheet = page.getByRole('dialog');
+
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+
+  await collectInSheet(page, 'Pot 1');
+  await sheet
+    .getByRole('radiogroup', { name: 'Gear' })
+    .getByText('Net', { exact: true })
+    .click();
+  await closeSheet(page, 'Save');
+  await expect(toastOf(page)).toContainText('Pot 1 collected');
+  await undoOf(page).click();
+  await expect(toastOf(page)).toContainText('Net 1 back in the water');
+  await expect(inWaterRow(page, 'Net 1')).toBeVisible();
+});
+
 test("saving a recorded catch retires that gear's Collect Undo so it cannot clear the catch, while a save without a catch and another gear's Collect toast keep their Undo and time", async ({
   page
 }) => {
@@ -282,7 +571,7 @@ test("saving a recorded catch retires that gear's Collect Undo so it cannot clea
   for (const name of ['Pot 1', 'Pot 2', 'Pot 3', 'Pot 4']) {
     await dropPot(page, name);
   }
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await collectInSheet(page, 'Pot 1');
   await page.clock.runFor(2000);
@@ -332,8 +621,8 @@ test("saving a recorded catch retires that gear's Collect Undo so it cannot clea
   ).toBeHidden();
   await collectedRow(page, 'Pot 4').click();
   await sheet.getByRole('button', { name: 'Undo collect' }).click();
-  await sheet
-    .getByRole('group', { name: 'Clears the catch' })
+  await page
+    .getByRole('alertdialog', { name: 'Clears the catch' })
     .getByRole('button', { name: 'Undo collect' })
     .click();
   await expect(toastOf(page)).toContainText('Pot 4 back in, catch cleared');
@@ -347,7 +636,7 @@ test("saving a recorded catch retires that gear's Collect Undo so it cannot clea
   ];
   expect(await storedCollections(page)).toEqual(expected);
   await page.reload();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect(collectedRow(page, 'Pot 2')).toContainText('4 kept, 2 released');
   await expect(collectedRow(page, 'Pot 1')).toContainText('Catch not recorded');
   expect(await storedCollections(page)).toEqual(expected);
@@ -361,7 +650,7 @@ test("a Collect Undo cannot clear a catch whose Save is still storing, even from
   await openWithPausedClock(page);
   await dropPot(page, 'Pot 1');
   await dropPot(page, 'Pot 2');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await collectInSheet(page, 'Pot 1');
   await sheet.getByRole('textbox', { name: 'Kept' }).fill('4');
@@ -428,7 +717,7 @@ test('a catch Save that fails to store keeps its Collect Undo for the remaining 
   await injectStorageFaults(page);
   await openWithPausedClock(page);
   await dropPot(page, 'Pot 1');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await collectInSheet(page, 'Pot 1');
   await sheet.getByRole('textbox', { name: 'Kept' }).fill('4');
@@ -480,7 +769,7 @@ test('a catch Save that stops on an unexpected storage error leaves its Collect 
   await injectStorageFaults(page);
   await openWithPausedClock(page);
   await dropPot(page, 'Pot 1');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await collectInSheet(page, 'Pot 1');
   await sheet.getByRole('textbox', { name: 'Kept' }).fill('4');
@@ -511,7 +800,7 @@ test('a catch Save that stops on an unexpected storage error says so in the shee
   await injectStorageFaults(page);
   await openWithPausedClock(page);
   await dropPot(page, 'Pot 1');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
 
   await collectInSheet(page, 'Pot 1');
   await sheet.getByRole('textbox', { name: 'Kept' }).fill('4');
@@ -563,7 +852,7 @@ test('a catch Save that stops on an unexpected storage error says so in the shee
     { collected: true, catch: { kept: 4, released: 2 } }
   ]);
   await page.reload();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await collectedRow(page, 'Pot 1').click();
   await expect(sheet.getByRole('textbox', { name: 'Kept' })).toHaveValue('4');
   await expect(sheet.getByRole('textbox', { name: 'Released' })).toHaveValue(
@@ -579,7 +868,7 @@ test('a toast never hides the end of the Gear list: its last row scrolls clear w
   for (let number = 1; number <= 10; number += 1) {
     await dropPot(page, `Pot ${String(number)}`);
   }
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const list = page.getByRole('main');
   const lastRow = list.getByRole('button').last();
   const edgesOf = async (target: Locator) => {
@@ -609,6 +898,43 @@ test('a toast never hides the end of the Gear list: its last row scrolls clear w
   await lastRow.click({ timeout: 5000 });
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(toastOf(page)).toContainText('Pot 10 dropped');
+});
+
+test('the Gear list keeps where I scrolled it while I visit Map and Past trips, by tap or by keyboard', async ({
+  page
+}) => {
+  await openWithPausedClock(page);
+  for (let number = 1; number <= 10; number += 1) {
+    await dropPot(page, `Pot ${String(number)}`);
+  }
+  const screenTab = (name: string) =>
+    page.getByRole('tab', { name, exact: true });
+  const main = page.getByRole('main');
+  const scrolled = () => main.evaluate((element) => element.scrollTop);
+  await screenTab('Gear').click();
+  await main.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  const bottom = await scrolled();
+  expect(bottom).toBeGreaterThan(0);
+
+  await screenTab('Map').click();
+  await expect(page.getByRole('tabpanel', { name: 'Map' })).toBeVisible();
+  expect(await scrolled()).toBe(0);
+  await screenTab('Gear').click();
+  await expect(page.getByRole('tabpanel', { name: 'Gear' })).toBeVisible();
+  expect(await scrolled()).toBe(bottom);
+
+  await screenTab('Gear').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('tabpanel', { name: 'Past trips' })
+  ).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('tabpanel', { name: 'Gear' })).toBeVisible();
+  expect(await scrolled()).toBe(bottom);
 });
 
 const openNewerStorageVersion = (page: Page) =>
@@ -676,7 +1002,7 @@ test('a failed save offers Retry and Dismiss until one is chosen, and Retry save
     .toBe(1);
 
   await page.reload();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const rows = page.getByRole('main').getByRole('listitem');
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText('Pot 1');
@@ -761,7 +1087,7 @@ test("a failed drop's Retry comes back after a later drop's toast ends, and Retr
   await page.clock.runFor(2000);
   await deliverFix(page, SECOND_FIX, new Date(PAUSED.getTime() + 2000));
   await page
-    .getByRole('group', { name: 'Gear to drop' })
+    .getByRole('radiogroup', { name: 'Gear to drop' })
     .getByText('Net', { exact: true })
     .click();
   await page.getByRole('button', { name: 'Drop net' }).click();
@@ -825,7 +1151,7 @@ test('two failed drops share one Retry that saves the oldest, then offers the ot
   expect(await storedDrops(page)).toBe(1);
 });
 
-test("ending the trip retires a failed drop's Retry so it never saves into the next trip", async ({
+test("ending the trip retires a failed drop's Retry so it never saves into the next trip, and the Trip ended notice expires after exactly 4 seconds", async ({
   page
 }) => {
   const failedSave = toastOf(page).filter({
@@ -839,24 +1165,31 @@ test("ending the trip retires a failed drop's Retry so it never saves into the n
     toastOf(page).filter({ hasText: 'Pot 1 dropped' })
   );
   await page.clock.runFor(8000);
-  await deliverFix(page, SECOND_FIX, new Date(PAUSED.getTime() + 8000));
 
   await failStorage(page, 'writes');
   await dropPot.click();
   await shownOnceStored(page, failedSave);
   await failStorage(page, null);
 
-  const sheet = page.getByRole('dialog');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const confirmation = page.getByRole('alertdialog', { name: 'End trip?' });
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await holdStorage(page);
-  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await confirmation.getByRole('button', { name: 'End trip' }).click();
+  await expect(
+    confirmation.getByRole('button', { name: 'Keep trip going' })
+  ).toHaveAttribute('aria-disabled', 'true');
   await page.keyboard.press('Escape');
-  await expect(sheet).toBeHidden();
+  await expect(confirmation).toBeVisible();
   await expect(failedSave).toBeHidden();
   await releaseStorage(page);
-  await shownOnceStored(page, toastOf(page).filter({ hasText: 'Trip ended' }));
-  await page.clock.runFor(4000);
+  await expect(confirmation).toBeHidden();
+  const tripEndedNotice = toastOf(page).filter({ hasText: 'Trip ended' });
+  await shownOnceStored(page, tripEndedNotice);
+  await page.clock.runFor(3999);
+  await expect(tripEndedNotice).toBeVisible();
+  await page.clock.runFor(1);
+  await expect(toastOf(page)).toHaveCount(0);
   await expect(failedSave).toBeHidden();
   expect(await storedPlacements(page)).toEqual([
     { kind: 'pot', placedAt: PAUSED.getTime(), lat: FIRST_FIX.latitude }
@@ -877,18 +1210,18 @@ test("End trip waits while a failed drop's Retry is saving, so the retried drop 
     toastOf(page).filter({ hasText: 'Pot 1 dropped' })
   );
   await page.clock.runFor(8000);
-  await deliverFix(page, SECOND_FIX, new Date(PAUSED.getTime() + 8000));
 
   await failStorage(page, 'writes');
   await dropPot.click();
   await shownOnceStored(page, failedSave);
   await failStorage(page, null);
 
-  const sheet = page.getByRole('dialog');
-  const confirmEnd = sheet.getByRole('button', { name: 'End trip' });
+  const confirmEnd = page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'End trip' });
   await holdStorage(page);
   await failedSave.getByRole('button', { name: 'Retry' }).click();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await confirmEnd.click();
   await releaseStorage(page);

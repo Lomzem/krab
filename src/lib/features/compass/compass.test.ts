@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import type { LatLon } from '#lib/features/trip/index.js';
+import type { LatLon } from '#lib/shared/lat-lon.js';
 import { Compass } from './compass';
 import { arrowDeg } from './heading';
 import type {

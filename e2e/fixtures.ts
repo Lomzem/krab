@@ -1,11 +1,12 @@
 import {
+  expect,
   test as base,
   type BrowserContext,
   type Page,
   type Route
 } from '@playwright/test';
 
-export { expect } from '@playwright/test';
+export { expect };
 
 const NOAA = 'https://gis.charttools.noaa.gov/**';
 const OPEN_FREE_MAP = 'https://tiles.openfreemap.org/**';
@@ -101,7 +102,7 @@ export const test = base.extend<{ providers: Providers }>({
 });
 
 export const toastOf = (page: Page) =>
-  page.getByRole('status', { name: 'Messages' }).getByRole('group');
+  page.getByRole('region', { name: 'Messages' }).getByRole('listitem');
 
 type HeldStorage = { releaseStorage?: boolean };
 
@@ -183,16 +184,6 @@ const storedTrips = (page: Page) =>
 export const storedDrops = async (page: Page) =>
   (await storedTrips(page)).reduce((sum, trip) => sum + trip.drops.length, 0);
 
-const dropNames = (trip: StoredTrip) =>
-  trip.drops.map((drop) => {
-    const gear = trip.gear.find(({ id }) => id === drop.gearId);
-    const kind = gear?.kind === 'net' ? 'Net' : 'Pot';
-    return [drop.id, `${kind} ${String(gear?.number)}`] as const;
-  });
-
-export const storedDropNames = async (page: Page) =>
-  Object.fromEntries((await storedTrips(page)).flatMap(dropNames));
-
 export const storedCollections = async (page: Page) =>
   (await storedTrips(page)).flatMap((trip) =>
     trip.drops.map((drop) => ({
@@ -217,3 +208,44 @@ export const storedBaits = async (page: Page) =>
   (await storedTrips(page))
     .toSorted((a, b) => a.startedAt - b.startedAt)
     .flatMap((trip) => trip.drops.map((drop) => drop.bait));
+
+type TapCounter = { krabTaps?: { count: number; stop: () => void } };
+
+export const tapsDuring = async (page: Page, steps: () => Promise<void>) => {
+  await page.evaluate(() => {
+    const counter = { count: 0, stop: () => undefined };
+    const press = (event: PointerEvent) => {
+      if (event.isTrusted && event.isPrimary && event.button === 0)
+        counter.count += 1;
+    };
+    const typing = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+        target.matches(
+          'textarea, input:not([type=checkbox], [type=radio], [type=button], [type=submit], [type=reset])'
+        ));
+    const activate = (event: KeyboardEvent) => {
+      if (
+        event.isTrusted &&
+        !event.repeat &&
+        (event.key === 'Enter' || (event.key === ' ' && !typing(event.target)))
+      )
+        counter.count += 1;
+    };
+    addEventListener('pointerdown', press, { capture: true });
+    addEventListener('keydown', activate, { capture: true });
+    counter.stop = () => {
+      removeEventListener('pointerdown', press, { capture: true });
+      removeEventListener('keydown', activate, { capture: true });
+    };
+    (window as TapCounter).krabTaps = counter;
+  });
+  await steps();
+  const taps = await page.evaluate(() => {
+    const counter = (window as TapCounter).krabTaps;
+    counter?.stop();
+    return counter?.count ?? null;
+  });
+  expect(taps, 'the tap counter survives the steps').not.toBeNull();
+  return taps ?? 0;
+};

@@ -1,7 +1,7 @@
 import {
   readSetting as read,
   writeSetting as write
-} from '#lib/local-setting.js';
+} from '#lib/shared/local-setting.js';
 import type { Kind } from '#lib/features/trip/index.js';
 
 const KIND_KEY = 'krab.drop-kind';

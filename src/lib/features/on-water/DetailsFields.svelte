@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { Input } from '@ui-sdk/svelte/input';
+  import { Textarea } from '@ui-sdk/svelte/textarea';
   import BaitField from './BaitField.svelte';
   import type { BaitChoice, BaitSearch } from './bait-options';
-  import { FOCUS } from './controls';
+  import { FOCUS } from '#lib/shared/control-states.js';
   import {
     depthAccepted,
     emptyDraft,
@@ -14,12 +16,14 @@
     draft = $bindable(emptyDraft()),
     baitSearch = $bindable({ query: '', refused: false }),
     baits,
-    idPrefix
+    idPrefix,
+    onescape
   }: {
     draft?: DetailsDraft;
     baitSearch?: BaitSearch;
     baits: readonly BaitChoice[];
     idPrefix: string;
+    onescape: () => void;
   } = $props();
 
   const depthError = $derived(
@@ -36,7 +40,7 @@
       >Depth<span class="sr-only"> (ft)</span></label
     >
     <div class="flex items-center gap-2">
-      <input
+      <Input
         id="{idPrefix}-depth"
         class="{field} max-w-36 tabular-nums"
         bind:value={draft.depth}
@@ -59,7 +63,7 @@
   </div>
   <div class="grid gap-2">
     <label class={label} for="{idPrefix}-label">Label</label>
-    <input
+    <Input
       id="{idPrefix}-label"
       class={field}
       bind:value={draft.label}
@@ -72,13 +76,15 @@
     bind:search={baitSearch}
     choices={baits}
     {idPrefix}
+    {onescape}
   />
   <div class="grid gap-2">
     <label class={label} for="{idPrefix}-notes">Notes</label>
-    <textarea
+    <Textarea
       id="{idPrefix}-notes"
       class="{field} min-h-24 py-3"
       bind:value={draft.notes}
-      rows="3"></textarea>
+      rows={3}
+    />
   </div>
 </div>

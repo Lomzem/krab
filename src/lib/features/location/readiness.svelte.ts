@@ -1,5 +1,5 @@
 import { availability } from '#lib/features/trip/index.js';
-import { watchVisibility } from '#lib/page-visibility.js';
+import { watchVisibility } from '#lib/shared/page-visibility.js';
 import type { PositionWatch } from './position-watch.svelte';
 
 const LONGEST_TIMER_MS = 2 ** 31 - 1;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FOCUS } from './controls';
+  import { FOCUS } from '#lib/shared/control-states.js';
   let heading = $state<HTMLHeadingElement>();
 
   $effect(() => {

@@ -20,7 +20,7 @@ const EMPTY_GEAR = 'Nothing in the water';
 test.use({ timezoneId: 'America/New_York' });
 
 const tab = (page: Page, name: string) =>
-  page.getByRole('button', { name, exact: true });
+  page.getByRole('tab', { name, exact: true });
 
 const inWaterRow = (page: Page, name: string) =>
   page
@@ -43,11 +43,11 @@ const startWithLocation = async (page: Page) => {
 };
 
 const endTheTrip = async (page: Page) => {
-  const sheet = page.getByRole('dialog');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  const confirmation = page.getByRole('alertdialog', { name: 'End trip?' });
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
-  await sheet.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet).toBeHidden();
+  await confirmation.getByRole('button', { name: 'End trip' }).click();
+  await expect(confirmation).toBeHidden();
 };
 
 test('a trip whose stored records fail to read shows that it could not load, not an empty trip, and Retry loads the running trip and past trips', async ({

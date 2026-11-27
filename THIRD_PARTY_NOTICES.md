@@ -1,4 +1,6 @@
-# Atkinson Hyperlegible Next attribution
+# Third-party notices
+
+## Atkinson Hyperlegible Next
 
 Krab self-hosts the Atkinson Hyperlegible Next typeface (latin subset, weights 400, 500 and 600) from the [`@fontsource/atkinson-hyperlegible-next` 5.3.0](https://www.npmjs.com/package/@fontsource/atkinson-hyperlegible-next/v/5.3.0) package. Vite emits the font files into the build. Atkinson Hyperlegible Next was commissioned by the [Braille Institute](https://www.brailleinstitute.org/freefont/) and is published at [googlefonts/atkinson-hyperlegible-next](https://github.com/googlefonts/atkinson-hyperlegible-next).
 

@@ -39,7 +39,7 @@ const dropPot = async (page: Page) => {
 };
 
 const expectStoredPot = async (page: Page) => {
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect(
     page.getByRole('main').getByRole('listitem').filter({ hasText: 'Pot 1' })
   ).toBeVisible();
@@ -123,7 +123,7 @@ test('after one online load Krab opens offline and shows the stored trip on the 
   await goOffline(context, site);
   const offline = await launch(context, site);
 
-  await offline.getByRole('button', { name: 'Map', exact: true }).click();
+  await offline.getByRole('tab', { name: 'Map', exact: true }).click();
   const map = offline.getByRole('region', { name: 'Map', exact: true });
   await expect(map.getByRole('region', { name: 'Map view' })).toBeVisible();
   await expect(map.getByRole('button', { name: /^Pot 1,/ })).toBeVisible();

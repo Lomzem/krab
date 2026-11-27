@@ -1,4 +1,4 @@
-import { watchVisibility } from '#lib/page-visibility.js';
+import { watchVisibility } from '#lib/shared/page-visibility.js';
 
 const holdScreenAwake = () => {
   let wanted = true;

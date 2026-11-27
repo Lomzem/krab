@@ -1,4 +1,4 @@
-import { readSetting, writeSetting } from '#lib/local-setting.js';
+import { readSetting, writeSetting } from '#lib/shared/local-setting.js';
 import type { CompassChoice } from './types';
 
 const COMPASS_KEY = 'krab.compass';

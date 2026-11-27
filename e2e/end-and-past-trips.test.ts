@@ -3,7 +3,7 @@ import { expect, holdStorage, releaseStorage, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
 import { chooseDays } from './day-choices';
-import { deliverFix, holdFixes } from './held-geolocation';
+import { deliverFix, holdFixes, letFixAge } from './held-geolocation';
 import { failStorage, injectStorageFaults } from './storage-faults';
 
 const MORNING = new Date('2031-06-10T07:30:00-04:00');
@@ -14,11 +14,11 @@ const TWO_DAYS = 'Tuesday, June 10 to Wednesday, June 11, 2031';
 test.use({ timezoneId: 'America/New_York' });
 
 const tab = (page: Page, name: string) =>
-  page.getByRole('button', { name, exact: true });
+  page.getByRole('tab', { name, exact: true });
 
 const dropOf = async (page: Page, kind: 'Pot' | 'Net', name: string) => {
   await page
-    .getByRole('group', { name: 'Gear to drop' })
+    .getByRole('radiogroup', { name: 'Gear to drop' })
     .getByText(kind, { exact: true })
     .click();
   await page
@@ -38,13 +38,13 @@ const dropPotAt = async (page: Page, north: number, name: string) => {
 };
 
 const endTheTrip = async (page: Page, outcome: string) => {
-  const sheet = page.getByRole('dialog');
+  const ask = page.getByRole('alertdialog');
   await tab(page, 'Gear').click();
   await page.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
-  await expect(sheet).toContainText(outcome);
-  await sheet.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet).toBeHidden();
+  await expect(ask.getByRole('heading', { name: 'End trip?' })).toBeVisible();
+  await expect(ask).toContainText(outcome);
+  await ask.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip ended');
 };
 
@@ -70,10 +70,11 @@ const startMixedTrip = async (page: Page, afterAllow?: () => Promise<void>) => {
   await tab(page, 'Map').click();
 };
 
-test('ending a mixed trip preserves collected and uncollected gear on the main map past layer and restores group focus', async ({
+test('ending a mixed trip preserves collected and uncollected gear on the main map past layer and restores group focus, while its End trip ask ignores a tap outside and keeps the trip on Escape', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
+  const ask = page.getByRole('alertdialog');
   const mapArea = page.getByRole('region', { name: 'Map', exact: true });
 
   await startMixedTrip(page);
@@ -82,17 +83,23 @@ test('ending a mixed trip preserves collected and uncollected gear on the main m
     name: 'End trip'
   });
   await endButton.click();
-  await expect(sheet).toHaveAccessibleDescription(
+  await expect(ask).toHaveAccessibleDescription(
     '1 still in the water Kept in Past trips'
   );
   await expect(
-    sheet.getByRole('button', { name: 'Keep trip going' })
+    ask.getByRole('button', { name: 'Keep trip going' })
   ).toBeFocused();
   await expect(
-    sheet.getByRole('button', { name: /^(Keep trip going|End trip)$/ })
+    ask.getByRole('button', { name: /^(Keep trip going|End trip)$/ })
   ).toHaveText(['Keep trip going', 'End trip']);
-  await sheet.getByRole('button', { name: 'Keep trip going' }).click();
-  await expect(sheet).toBeHidden();
+  await page.mouse.click(8, 8);
+  await expect(ask).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(ask).toBeHidden();
+  await expect(endButton).toBeFocused();
+  await endButton.click();
+  await ask.getByRole('button', { name: 'Keep trip going' }).click();
+  await expect(ask).toBeHidden();
   await expect(endButton).toBeFocused();
 
   await endTheTrip(page, '1 still in the water');
@@ -167,6 +174,7 @@ test('a past trip lists its collected and uncollected gear, saves an edited catc
   const main = page.getByRole('main');
   await holdFixes(page);
   await startMixedTrip(page, () => deliverFix(page, MADE_UP_SEA));
+  await letFixAge(page);
   await page.clock.fastForward('00:06');
   await page.getByRole('button', { name: 'Drop net' }).click();
   await page.getByRole('button', { name: 'Save without position' }).click();
@@ -272,13 +280,14 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   page
 }) => {
   const sheet = page.getByRole('dialog');
+  const ask = page.getByRole('alertdialog');
   const main = page.getByRole('main');
   const listHeading = main.getByRole('heading', {
     level: 1,
     name: 'Past trips'
   });
   const detail = page.getByRole('region', { name: TWO_DAYS });
-  const days = detail.getByRole('group', { name: 'Days on this trip' });
+  const days = detail.getByRole('radiogroup', { name: 'Days on this trip' });
   const named = (name: string) =>
     detail.getByRole('button', { name, exact: true });
   const pot1 = [named('Pot 1 Uncollected'), named('Pot 1, Day 1, Uncollected')];
@@ -349,36 +358,35 @@ test('a past trip over two days opens on All, and Last day and Earlier days narr
   const deleteTrip = main.getByRole('button', { name: 'Delete trip' });
   await deleteTrip.click();
   await expect(
-    sheet.getByRole('heading', { name: 'Delete trip?' })
+    ask.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
-  await expect(sheet).toHaveAccessibleDescription(
+  await expect(ask).toHaveAccessibleDescription(
     `${TRIP_DATE}, 1 drop Can't be undone`
   );
-  await expect(sheet.getByRole('button', { name: 'Keep trip' })).toBeFocused();
+  await expect(ask.getByRole('button', { name: 'Keep trip' })).toBeFocused();
   await expect(
-    sheet.getByRole('button', { name: /^(Keep trip|Delete trip)$/ })
+    ask.getByRole('button', { name: /^(Keep trip|Delete trip)$/ })
   ).toHaveText(['Keep trip', 'Delete trip']);
-  await sheet.getByRole('button', { name: 'Keep trip' }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'Keep trip' }).click();
+  await expect(ask).toBeHidden();
   await expect(deleteTrip).toBeFocused();
 
   await deleteTrip.click();
   await holdStorage(page);
-  await sheet.getByRole('button', { name: 'Delete trip' }).click();
+  await ask.getByRole('button', { name: 'Delete trip' }).click();
   for (const leave of [
-    () =>
-      sheet.getByRole('button', { name: 'Keep trip' }).click({ force: true }),
+    () => ask.getByRole('button', { name: 'Keep trip' }).click({ force: true }),
     () => page.keyboard.press('Escape')
   ]) {
     await leave();
     await expect(
-      sheet.getByRole('heading', { name: 'Delete trip?' })
+      ask.getByRole('heading', { name: 'Delete trip?' })
     ).toBeVisible();
   }
   await expect(toastOf(page)).not.toContainText('Trip deleted');
 
   await releaseStorage(page);
-  await expect(sheet).toBeHidden();
+  await expect(ask).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip deleted');
   await expect(main).toContainText('No past trips');
   await expect(listHeading).toBeFocused();
@@ -436,17 +444,18 @@ test('ending a trip with gear in the water says it is kept in Past trips and Vie
   page
 }) => {
   const sheet = page.getByRole('dialog');
+  const ask = page.getByRole('alertdialog');
   const main = page.getByRole('main');
   const viewEnded = main.getByRole('button', { name: 'View ended trip' });
 
   await startMixedTrip(page);
   await tab(page, 'Gear').click();
   await main.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet).toHaveAccessibleDescription(
+  await expect(ask).toHaveAccessibleDescription(
     '1 still in the water Kept in Past trips'
   );
-  await sheet.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeHidden();
   await expect(main).toContainText('Nothing in the water');
   await expect(viewEnded).toBeVisible();
   await expectAccessibleInBothThemes(page);
@@ -461,8 +470,8 @@ test('ending a trip with gear in the water says it is kept in Past trips and Vie
   ).toBeVisible();
 
   await detail.getByRole('button', { name: 'Delete trip' }).click();
-  await sheet.getByRole('button', { name: 'Delete trip' }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'Delete trip' }).click();
+  await expect(ask).toBeHidden();
   await tab(page, 'Gear').click();
   await expect(viewEnded).toHaveCount(0);
 
@@ -474,9 +483,9 @@ test('ending a trip with gear in the water says it is kept in Past trips and Vie
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await main.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet).toHaveAccessibleDescription('Kept in Past trips');
-  await sheet.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet).toBeHidden();
+  await expect(ask).toHaveAccessibleDescription('Kept in Past trips');
+  await ask.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeHidden();
   await expect(viewEnded).toBeVisible();
 
   await tab(page, 'Map').click();
@@ -489,7 +498,7 @@ test('ending a trip with gear in the water says it is kept in Past trips and Vie
 test('two past trips on the same day show their start times, and Delete trip names the trip it removes', async ({
   page
 }) => {
-  const sheet = page.getByRole('dialog');
+  const ask = page.getByRole('alertdialog');
   const main = page.getByRole('main');
   await page.clock.install({ time: MORNING });
   await page.goto('/');
@@ -531,16 +540,16 @@ test('two past trips on the same day show their start times, and Delete trip nam
   ).toContainText('Jun 10, 2031 · 7:30 AM');
   await morningDetail.getByRole('button', { name: 'Delete trip' }).click();
   await expect(
-    sheet.getByRole('heading', { name: 'Delete trip?' })
+    ask.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
-  await expect(sheet).toContainText('Jun 10, 2031 · 7:30 AM · 2 drops');
-  await expect(sheet).toContainText("Can't be undone");
-  await expect(sheet).toHaveAccessibleDescription(
+  await expect(ask).toContainText('Jun 10, 2031 · 7:30 AM · 2 drops');
+  await expect(ask).toContainText("Can't be undone");
+  await expect(ask).toHaveAccessibleDescription(
     `${TRIP_DATE}, 7:30 AM, 2 drops Can't be undone`
   );
-  await expect(sheet.getByRole('button', { name: 'Keep trip' })).toBeFocused();
-  await sheet.getByRole('button', { name: 'Delete trip' }).click();
-  await expect(sheet).toBeHidden();
+  await expect(ask.getByRole('button', { name: 'Keep trip' })).toBeFocused();
+  await ask.getByRole('button', { name: 'Delete trip' }).click();
+  await expect(ask).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip deleted');
 
   const remaining = main.getByRole('button', {
@@ -552,11 +561,43 @@ test('two past trips on the same day show their start times, and Delete trip nam
   await remaining.click();
   const remainingDetail = page.getByRole('region', { name: TRIP_DATE });
   await remainingDetail.getByRole('button', { name: 'Delete trip' }).click();
-  await expect(sheet).toContainText('Jun 10, 2031 · 1 drop');
-  await expect(sheet).not.toContainText('1:15 PM');
-  await expect(sheet).toHaveAccessibleDescription(
+  await expect(ask).toContainText('Jun 10, 2031 · 1 drop');
+  await expect(ask).not.toContainText('1:15 PM');
+  await expect(ask).toHaveAccessibleDescription(
     `${TRIP_DATE}, 1 drop Can't be undone`
   );
-  await sheet.getByRole('button', { name: 'Keep trip' }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'Keep trip' }).click();
+  await expect(ask).toBeHidden();
+});
+
+test('on a 640 by 320 screen with doubled text, the End trip ask fits the screen and scrolls to its title and both actions', async ({
+  page
+}) => {
+  const ask = page.getByRole('alertdialog');
+
+  await page.setViewportSize({ width: 640, height: 320 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await dropOf(page, 'Pot', 'Pot 1');
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '200%';
+  });
+  await tab(page, 'Gear').click();
+  await page.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeVisible();
+
+  const box = await ask.boundingBox();
+  expect(box && box.y >= 0 && box.y + box.height <= 320).toBe(true);
+  for (const part of [
+    ask.getByRole('heading', { name: 'End trip?' }),
+    ask.getByRole('button', { name: 'Keep trip going' }),
+    ask.getByRole('button', { name: 'End trip' })
+  ]) {
+    await part.scrollIntoViewIfNeeded();
+    await expect(part).toBeInViewport({ ratio: 1 });
+  }
+  await ask.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeHidden();
+  await expect(toastOf(page)).toContainText('Trip ended');
 });

@@ -1,3 +1,5 @@
+@layer ui-sdk;
+
 @import 'tailwindcss';
 
 @custom-variant compact (@media (max-height: 26rem));
@@ -28,6 +30,7 @@
   --color-ring: var(--ring);
   --color-destructive: var(--destructive);
   --color-mark: var(--mark);
+  --color-scrim: var(--scrim);
   --color-warning: var(--warning);
   --color-position: var(--position);
   --color-ring-map: var(--ring-map);
@@ -84,6 +87,7 @@
   --ring: #1d4ed8;
   --destructive: #b3261e;
   --mark: #a3256f;
+  --scrim: #000000;
   --warning: #805300;
   --position: #1d4ed8;
   --ring-map: #0b3a8f;
@@ -95,9 +99,6 @@
   --map-alert: #b3261e;
   --map-selected: #a3256f;
   --motion-receipt-in: 180ms;
-  --motion-receipt-out: 140ms;
-  --motion-sheet-in: 220ms;
-  --motion-sheet-out: 160ms;
   --motion-press: 90ms;
 }
 
@@ -129,10 +130,15 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-receipt-in: 0ms;
-    --motion-receipt-out: 0ms;
-    --motion-sheet-in: 0ms;
-    --motion-sheet-out: 0ms;
     --motion-press: 0ms;
+  }
+
+  [data-slot='dialog-content'][data-presentation='sheet'] {
+    opacity: 1 !important;
+  }
+
+  [data-slot='dialog-content'][data-presentation='sheet'][data-driver='scroll-snap'] {
+    translate: none !important;
   }
 }
 
@@ -141,8 +147,6 @@ body {
   color: var(--foreground);
 }
 
-@keyframes receipt-out {
-  to {
-    opacity: 0;
-  }
+[data-slot='dialog-viewport']:has(> [data-ending-style]) {
+  display: none !important;
 }

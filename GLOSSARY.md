@@ -9,7 +9,7 @@ A physical crab pot or net used to catch crabs.
 _Avoid_: Pod
 
 **Drop**:
-A placement of gear at a particular location and time. Placing the same gear again creates a new drop.
+A placement of gear at a particular time, with or without a recorded location. Placing the same gear again creates a new drop.
 _Avoid_: Pin
 
 **Trip**:
@@ -28,7 +28,7 @@ A trip that has ended.
 _Avoid_: Archived trip, history
 
 **Active drop**:
-A drop whose gear is still in the water.
+A drop on an active trip whose gear is still in the water.
 _Avoid_: Open drop, live pin
 
 **Uncollected drop**:

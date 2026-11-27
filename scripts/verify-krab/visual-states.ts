@@ -2,10 +2,10 @@
 import { strict as assert } from 'node:assert';
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator } from '@playwright/test';
-import { test, expect, toastOf } from '../../e2e/fixtures';
+import { toastOf } from '../../e2e/fixtures';
+import { testWithFixtureProviders as test, expect } from './recipe';
 import { holdFixes, deliverFix } from '../../e2e/held-geolocation';
 import { MADE_UP_SEA } from '../../playwright.config';
-import { doctor } from './doctor';
 import { readTrips, recorder } from './evidence';
 
 const EVENING = new Date('2031-06-10T23:40:00-04:00');
@@ -35,7 +35,8 @@ test('visual inventory through a dense overnight trip', async ({
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(page, info, 'visual-inventory', 'UI');
-  keep('doctor.json', doctor());
+  // Playwright's clock moves performance.now ahead of the animation timeline, so a sheet spring timed from it can stall.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await holdFixes(page);
   await page.clock.install({ time: EVENING });
   await page.clock.pauseAt(EVENING);
@@ -47,16 +48,17 @@ test('visual inventory through a dense overnight trip', async ({
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeVisible();
   await capture('02-finding-position');
-  const tab = (name: string) => page.getByRole('button', { name, exact: true });
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
   const sheet = page.getByRole('dialog');
   const checkFocus = async (name: string) => {
     const observations = [];
     for (const key of ['Tab', 'Shift+Tab']) {
       for (let step = 0; step < 16; step += 1) {
         await page.keyboard.press(key);
-        const inside = await sheet.evaluate((element) =>
-          element.contains(document.activeElement)
-        );
+        const inside = await page
+          .getByRole('dialog')
+          .or(page.getByRole('alertdialog'))
+          .evaluate((element) => element.contains(document.activeElement));
         observations.push({ key, step, inside });
         keep(`focus-${name}.json`, observations);
         expect(inside).toBe(true);
@@ -74,7 +76,7 @@ test('visual inventory through a dense overnight trip', async ({
   await capture('04-empty-past-trips');
   await tab('Map').click();
   await capture('05-empty-map');
-  await tab('Drop pot').click();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
   await expect(
     page.getByRole('heading', { name: 'Finding drop position' })
   ).toBeVisible();
@@ -94,7 +96,7 @@ test('visual inventory through a dense overnight trip', async ({
       longitude: MADE_UP_SEA.longitude
     });
     await expect(page.getByText('Finding position')).toBeHidden();
-    await tab('Drop pot').click();
+    await page.getByRole('button', { name: 'Drop pot' }).click();
     await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
     if (number === 1) await capture('06-drop-toast');
   }
@@ -210,7 +212,7 @@ test('visual inventory through a dense overnight trip', async ({
   const map = page.getByRole('region', { name: 'Map', exact: true });
   await map.getByRole('button', { name: /^Filter/ }).click();
   await expect(
-    sheet.getByRole('group', { name: 'Days on this trip' })
+    sheet.getByRole('radiogroup', { name: 'Days on this trip' })
   ).toBeVisible();
   await capture('13-map-filter');
   await checkFocus('filter');
@@ -220,11 +222,12 @@ test('visual inventory through a dense overnight trip', async ({
     .getByRole('main')
     .getByRole('button', { name: 'End trip' })
     .click();
-  await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
+  const ask = page.getByRole('alertdialog');
+  await expect(ask.getByRole('heading', { name: 'End trip?' })).toBeVisible();
   await capture('14-end-confirmation');
   await checkFocus('end');
-  await sheet.getByRole('button', { name: 'End trip', exact: true }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'End trip', exact: true }).click();
+  await expect(ask).toBeHidden();
   await page.clock.runFor(8001);
   await tab('Past trips').click();
   const past = page.getByRole('main').getByRole('listitem').getByRole('button');
@@ -237,11 +240,11 @@ test('visual inventory through a dense overnight trip', async ({
   await capture('16-past-trip-detail');
   await page.getByRole('button', { name: 'Delete trip', exact: true }).click();
   await expect(
-    sheet.getByRole('heading', { name: 'Delete trip?' })
+    ask.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
   await capture('17-delete-confirmation');
   await checkFocus('delete');
-  await sheet.getByRole('button', { name: 'Keep trip' }).click();
+  await ask.getByRole('button', { name: 'Keep trip' }).click();
   keep('indexeddb-after.json', await readTrips(page));
   log(
     'Map filter, end confirmation, past-trip list and detail, delete confirmation; keep trip'
@@ -258,8 +261,8 @@ test('visual inventory with location denied', async ({
     'visual-inventory',
     'Denied'
   );
-  keep('doctor.json', doctor());
   await context.clearPermissions();
+  await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(
@@ -271,7 +274,7 @@ test('visual inventory with location denied', async ({
     .click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
   await capture('02-no-position-toast');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect(page.getByRole('main')).toContainText('No position');
   await capture('03-no-position-gear');
   await page.getByRole('button', { name: 'Show steps' }).click();
@@ -283,7 +286,8 @@ test('visual inventory with location denied', async ({
   await steps.getByRole('button', { name: 'Close' }).click();
   await expect(steps).toBeHidden();
   await page.mouse.move(0, 0);
-  await expect(toastOf(page)).toBeHidden({ timeout: 12000 });
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   const row = page
     .getByRole('main')
     .getByRole('button')
@@ -321,7 +325,8 @@ test('visual inventory for bait picker', async ({ page }, info) => {
     'visual-inventory',
     'Bait'
   );
-  keep('doctor.json', doctor());
+  // Playwright's clock moves performance.now ahead of the animation timeline, so a sheet spring timed from it can stall.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await holdFixes(page);
   await page.clock.install({ time: EVENING });
   await page.clock.pauseAt(EVENING);
@@ -337,7 +342,7 @@ test('visual inventory for bait picker', async ({ page }, info) => {
     await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
     await expect(toastOf(page)).toContainText(`Pot ${String(number)} dropped`);
   }
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const sheet = page.getByRole('dialog');
   const gearRow = (name: string) =>
     page
@@ -387,7 +392,10 @@ test('visual inventory for bait picker', async ({ page }, info) => {
   await search.scrollIntoViewIfNeeded();
   await capture('05-bait-unmatched-query');
   await page.keyboard.press('Escape');
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
   await expect(sheet).toBeHidden();
   keep('indexeddb-after.json', await readTrips(page));
   log(

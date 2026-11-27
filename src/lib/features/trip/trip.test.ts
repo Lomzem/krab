@@ -2,36 +2,23 @@ import { Effect } from 'effect';
 import { IDBDatabase, IDBFactory, IDBTransaction } from 'fake-indexeddb';
 import { afterEach, assert, expect, expectTypeOf, it, vi } from 'vitest';
 import {
+  activeGear,
   canDropAgain,
   canUndoCollect,
-  collectedGear,
   dayGroups,
   dayOf,
-  dropsInDays,
-  gearCounts,
   gearName,
-  gearInWater,
-  isMultiDay,
-  nearestGear,
-  pastDrops,
-  pastTripCounts,
+  pastGear,
   pastTripSummaries,
-  shortDateRange,
-  tripDates,
-  tripSpan,
   tripBook,
-  tripDays,
   type DaySelection,
   type Deletion,
   type PastDaySelection,
   type Drop,
   type DropEdit,
   type Fix,
-  type NoPosition,
-  type Position,
   type Trip,
-  type TripBook,
-  type TripDeps
+  type TripBook
 } from './index';
 
 const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
@@ -45,7 +32,9 @@ const SEA = { lat: 0, lon: -140 };
 
 type Timer = { at: number; wake: () => void };
 
-const harness = (stored: TripDeps['stored'] = () => undefined) => {
+const harness = (
+  stored: Parameters<typeof tripBook>[0]['stored'] = () => undefined
+) => {
   const state: { now: number; fix: Fix | null; denied: boolean } = {
     now: T0,
     fix: { ...SEA, accuracyM: 5, at: T0 },
@@ -420,7 +409,7 @@ it('flags a fix worse than 50 m as rough, in feet, on the drop and its gear row'
   const exact = await place(book, 'pot');
   state.fix = { ...SEA, accuracyM: 51, at: T0 };
   const rough = await place(book, 'net');
-  const rows = gearInWater(rough.trip, SEA, T0);
+  const rows = activeGear(rough.trip, SEA, T0, 'all').inWater;
 
   expect(exact.rough).toBeNull();
   expect(rough.rough).toEqual({ short: '170 ft', spoken: '170 feet' });
@@ -492,6 +481,8 @@ type DropFields = Pick<
 >;
 
 it('types a drop location as a position or a reason, never both or neither', () => {
+  type Position = NonNullable<Drop['position']>;
+  type NoPosition = NonNullable<Drop['noPosition']>;
   type Placed<L> = DropFields & { collectedAt: null; catch: null } & L;
 
   expectTypeOf<
@@ -738,7 +729,7 @@ it('sorts by great-circle distance with bearing, compass point and distance text
   await dropAt(book, state, 'net', { north: -0.0004, east: -0.001 });
   const last = await dropAt(book, state, 'net', null);
 
-  const rows = gearInWater(last.trip, SEA, state.now);
+  const rows = activeGear(last.trip, SEA, state.now, 'all').inWater;
 
   expect(
     rows.map((row) => [
@@ -771,7 +762,7 @@ it('marks gear under 0.5 ft away as at gear with no bearing', async () => {
   await dropAt(book, state, 'pot', { north: 0.000001, east: 0 });
   const last = await dropAt(book, state, 'net', { north: 0.000002, east: 0 });
 
-  const rows = gearInWater(last.trip, SEA, state.now);
+  const rows = activeGear(last.trip, SEA, state.now, 'all').inWater;
 
   expect(rows[0]?.direction).toMatchObject({ atGear: true, bearingDeg: null });
   expect(rows[1]?.direction).toMatchObject({ atGear: true, bearingDeg: null });
@@ -801,12 +792,12 @@ it('finds the nearest gear in the water with a position, skipping a closer colle
   };
   const { trip } = await dropAgain(book, pulled.drop.id);
 
-  const nearest = nearestGear(gearInWater(trip, SEA, state.now));
+  const nearest = activeGear(trip, SEA, state.now, 'all').nearest;
 
   expect(nearest?.name).toBe('Net 2');
   expect(nearest?.direction?.feet).toBeCloseTo(109.44, 1);
   expect(nearest?.direction?.bearingDeg).toBeCloseTo(90, 3);
-  expect(nearestGear(gearInWater(trip, null, state.now))).toBeNull();
+  expect(activeGear(trip, null, state.now, 'all').nearest).toBeNull();
 });
 
 it('has no nearest gear when no gear in the water has a position', async () => {
@@ -814,7 +805,7 @@ it('has no nearest gear when no gear in the water has a position', async () => {
   const book = await open();
   const last = await dropAt(book, state, 'pot', null);
 
-  expect(nearestGear(gearInWater(last.trip, SEA, state.now))).toBeNull();
+  expect(activeGear(last.trip, SEA, state.now, 'all').nearest).toBeNull();
 });
 
 it('formats time in the water as minutes, hours and days', async () => {
@@ -828,7 +819,7 @@ it('formats time in the water as minutes, hours and days', async () => {
   state.now = query - 45 * 60_000 - 30_000;
   const last = await place(book, 'pot');
 
-  const rows = gearInWater(last.trip, null, query);
+  const rows = activeGear(last.trip, null, query, 'all').inWater;
 
   expect(
     rows.map((row) => [row.name, row.timeInWater.short, row.timeInWater.spoken])
@@ -1192,13 +1183,70 @@ it('collects at the tap time once, and undo collect puts it back with no catch',
   ]);
   expect(again.trip.drops[0]?.collectedAt).toBe(T0 + 90 * 60_000);
   expect(
-    gearInWater(again.trip, null, state.now).map((row) => row.name)
+    activeGear(again.trip, null, state.now, 'all').inWater.map(
+      (row) => row.name
+    )
   ).toEqual(['Net 1']);
   expect([undone.changed, undoneAgain.changed]).toEqual([true, false]);
   expect(stored).toMatchObject({ collectedAt: null, catch: null });
   expect(
-    gearInWater(undone.trip, null, state.now).map((row) => row.name)
+    activeGear(undone.trip, null, state.now, 'all').inWater.map(
+      (row) => row.name
+    )
   ).toEqual(['Pot 1', 'Net 1']);
+});
+
+it('reports from each committed write whether a Save recorded a catch and whether Undo collect cleared one, even when a Save commits just before', async () => {
+  const { open } = withoutLocation();
+  const book = await open();
+  const pot = await place(book, 'pot');
+  const net = await place(book, 'net');
+  const details = { label: '', bait: '', depthFt: null, notes: '' };
+  await run(book.collect(pot.drop.id));
+  await run(book.collect(net.drop.id));
+
+  const counted = await run(
+    book.saveDrop(
+      pot.drop.id,
+      { details, catch: { kept: 0, released: 0 } },
+      null
+    )
+  );
+  const skipped = await run(
+    book.saveDrop(net.drop.id, { details, catch: null }, null)
+  );
+  const plainUndo = await run(book.undoCollect(net.drop.id));
+  const inWaterSave = await run(
+    book.saveDrop(net.drop.id, { details, catch: null }, null)
+  );
+  const unchangedUndo = await run(book.undoCollect(net.drop.id));
+  await run(book.collect(net.drop.id));
+  const [racingSave, racingUndo] = await Promise.all([
+    run(
+      book.saveDrop(
+        net.drop.id,
+        { details, catch: { kept: 2, released: 1 } },
+        null
+      )
+    ),
+    run(book.undoCollect(net.drop.id))
+  ]);
+  const clearedUndo = await run(book.undoCollect(pot.drop.id));
+
+  expect(
+    [counted, skipped, inWaterSave, racingSave].map(
+      (saved) => saved.catchRecorded
+    )
+  ).toEqual([true, false, false, true]);
+  expect(plainUndo).toMatchObject({ changed: true, catchCleared: false });
+  expect(unchangedUndo.changed).toBe(false);
+  expect(unchangedUndo).not.toHaveProperty('catchCleared');
+  expect(racingUndo).toMatchObject({ changed: true, catchCleared: true });
+  expect(clearedUndo).toMatchObject({ changed: true, catchCleared: true });
+  expect((await run(activeIn(book)))?.drops).toMatchObject([
+    { collectedAt: null, catch: null },
+    { collectedAt: null, catch: null }
+  ]);
 });
 
 it('records nothing caught as 0 and 0, apart from not recorded, and only whole counts from 0 up', async () => {
@@ -1397,7 +1445,7 @@ it('counts gear in the water and collected drops from the records, newest collec
   const deleted = await place(book, 'pot');
   await run(book.collect(deleted.drop.id));
   await run(book.deleteDrop(deleted.drop.id));
-  const single = gearCounts(net2.trip);
+  const single = activeGear(net2.trip, null, T0, 'all').counts;
   advance(60_000);
   await run(book.collect(pot2.drop.id));
   await run(
@@ -1430,12 +1478,15 @@ it('counts gear in the water and collected drops from the records, newest collec
     inWater: '4 in the water',
     collected: 'Nothing collected'
   });
-  expect(gearCounts(last.trip)).toEqual({
+  expect(activeGear(last.trip, null, T0, 'all').counts).toEqual({
     inWater: '2 in the water',
     collected: '3 collected'
   });
   expect(
-    collectedGear(last.trip).map((row) => [row.name, row.catchText])
+    activeGear(last.trip, null, T0, 'all').collected.map((row) => [
+      row.name,
+      row.catchText
+    ])
   ).toEqual([
     ['Net 2', 'Catch not recorded'],
     ['Net 1', '4 kept, 1 released'],
@@ -1467,10 +1518,9 @@ it('gives a drop the local calendar date it was placed, so a drop just after loc
   const afterMidnight = await placeAt(book, state, '2026-06-02T00:30:00-04:00');
   const { trip } = afterMidnight;
 
-  expect(isMultiDay(oneDay)).toBe(false);
+  expect(activeGear(oneDay, null, T0, 'all').multiDay).toBe(false);
   expect(dayOf(oneDay, lateEvening.drop)).toBeNull();
-  expect(tripDays(trip)).toEqual([1, 2]);
-  expect(isMultiDay(trip)).toBe(true);
+  expect(activeGear(trip, null, T0, 'all').multiDay).toBe(true);
   expect(dayOf(trip, lateEvening.drop)).toEqual({ number: 1, text: 'Day 1' });
   expect(dayOf(trip, afterMidnight.drop)).toEqual({
     number: 2,
@@ -1516,14 +1566,14 @@ it('numbers days from the date the trip started, keeping a gap day and a deleted
   const withoutFirst = deleted.trip;
   const undoneTo = await run(book.undoDrop(dayFour.drop.id));
 
-  expect(tripDays(gap)).toEqual([1, 3]);
+  expect(dayOf(gap, first.drop)?.text).toBe('Day 1');
   expect(dayOf(gap, dayThree.drop)?.text).toBe('Day 3');
   assert(withoutFirst);
-  expect(tripDays(withoutFirst)).toEqual([3, 4]);
+  expect(dayOf(withoutFirst, dayThree.drop)?.text).toBe('Day 3');
   expect(dayOf(withoutFirst, dayFour.drop)?.text).toBe('Day 4');
   assert(undoneTo);
-  expect(tripDays(undoneTo)).toEqual([3]);
-  expect(isMultiDay(undoneTo)).toBe(false);
+  expect(activeGear(undoneTo, null, T0, 'all').multiDay).toBe(false);
+  expect(dayOf(undoneTo, dayThree.drop)).toBeNull();
 });
 
 it('gear rows and collected rows carry the day of their drop on a multi-day trip', async () => {
@@ -1537,14 +1587,20 @@ it('gear rows and collected rows carry the day of their drop on a multi-day trip
   const at = state.now;
 
   expect(
-    gearInWater(trip, null, at).map((row) => [row.name, row.day?.text])
+    activeGear(trip, null, at, 'all').inWater.map((row) => [
+      row.name,
+      row.day?.text
+    ])
   ).toEqual([
     ['Pot 2', 'Day 2'],
     ['Pot 3', 'Day 2']
   ]);
-  expect(collectedGear(trip).map((row) => [row.name, row.day?.text])).toEqual([
-    ['Pot 1', 'Day 1']
-  ]);
+  expect(
+    activeGear(trip, null, T0, 'all').collected.map((row) => [
+      row.name,
+      row.day?.text
+    ])
+  ).toEqual([['Pot 1', 'Day 1']]);
 });
 
 it('groups rows by day, oldest day first, keeping the order they came in within a day', async () => {
@@ -1566,10 +1622,9 @@ it('groups rows by day, oldest day first, keeping the order they came in within 
     rows.map(({ name }) => name);
 
   expect(
-    dayGroups(collectedGear(trip)).map(({ day, rows }) => [
-      day.text,
-      names(rows)
-    ])
+    dayGroups(activeGear(trip, null, T0, 'all').collected).map(
+      ({ day, rows }) => [day.text, names(rows)]
+    )
   ).toEqual([
     ['Day 1', ['Pot 2', 'Pot 1']],
     ['Day 2', ['Pot 3']]
@@ -1603,9 +1658,13 @@ it.each<{ selection: DaySelection; now: string; names: string[] }>([
     await placeAt(book, state, '2026-09-04T23:59:00-04:00');
     const { trip } = await placeAt(book, state, '2026-09-05T00:00:00-04:00');
 
-    const selected = dropsInDays(trip, selection, Date.parse(now));
+    const { inDays } = activeGear(trip, null, Date.parse(now), selection);
 
-    expect(selected.map((drop) => nameOf(trip, drop))).toEqual(names);
+    expect(
+      trip.drops
+        .filter((drop) => inDays.has(drop.id))
+        .map((drop) => nameOf(trip, drop))
+    ).toEqual(names);
   }
 );
 
@@ -1616,8 +1675,8 @@ it('selects every drop of a one-day trip whatever day is chosen, even when that 
   const { trip } = await placeAt(book, state, '2026-09-04T11:00:00-04:00');
   const nextMorning = Date.parse('2026-09-05T07:00:00-04:00');
 
-  expect(dropsInDays(trip, 'today', nextMorning)).toHaveLength(2);
-  expect(dropsInDays(trip, 'earlier', nextMorning)).toHaveLength(2);
+  expect(activeGear(trip, null, nextMorning, 'today').inDays.size).toBe(2);
+  expect(activeGear(trip, null, nextMorning, 'earlier').inDays.size).toBe(2);
 });
 
 const flip = <A, E>(effect: Effect.Effect<A, E>) =>
@@ -1646,7 +1705,9 @@ it('ends the trip once, keeping its gear in the water as uncollected drops, and 
   expect(stillRunning?.endedAt).toBeNull();
   expect(ended.endedAt).toBe(T0 + 2 * 3_600_000);
   expect(again).toEqual(ended);
-  expect(pastTripCounts(ended)).toBe('3 drops, 2 uncollected');
+  expect(pastTripSummaries([ended]).map(({ counts }) => counts)).toEqual([
+    '3 drops, 2 uncollected'
+  ]);
   expect(afterEnd).toBeNull();
   expect(await run(pastIn(book))).toEqual([ended]);
   expect([nextNet.name, nextPot.name]).toEqual(['Net 1', 'Pot 1']);
@@ -1820,19 +1881,19 @@ it('lists past trips newest first, with their dates and counts in prose', async 
 
   const listed = await run(pastIn(book));
 
-  expect(listed.map((trip) => [tripDates(trip), pastTripCounts(trip)])).toEqual(
+  expect(
+    pastTripSummaries(listed).map(({ dates, counts }) => [dates, counts])
+  ).toEqual([
     [
-      [
-        'Thursday, December 31, 2026 to Friday, January 1, 2027',
-        '2 drops, 2 uncollected'
-      ],
-      [
-        'Thursday, September 10 to Friday, September 11, 2026',
-        '2 drops, 1 uncollected'
-      ],
-      ['Friday, September 4, 2026', '1 drop']
-    ]
-  );
+      'Thursday, December 31, 2026 to Friday, January 1, 2027',
+      '2 drops, 2 uncollected'
+    ],
+    [
+      'Thursday, September 10 to Friday, September 11, 2026',
+      '2 drops, 1 uncollected'
+    ],
+    ['Friday, September 4, 2026', '1 drop']
+  ]);
 });
 
 const statusOf = (row: { name: string; status: string }) => [
@@ -1841,7 +1902,7 @@ const statusOf = (row: { name: string; status: string }) => [
 ];
 
 const statusByDay = (trip: Trip) =>
-  dayGroups(pastDrops(trip, 'all')).map(({ day, rows }) => [
+  dayGroups(pastGear(trip, 'all').rows).map(({ day, rows }) => [
     day.text,
     rows.map(statusOf)
   ]);
@@ -1870,7 +1931,7 @@ it.each<{ selection: PastDaySelection; names: string[] }>([
     await run(book.collect(net.drop.id));
     const ended = await run(book.endTrip(net.trip.id));
 
-    const rows = pastDrops(ended, selection);
+    const rows = pastGear(ended, selection).rows;
 
     expect(rows.map((row) => row.name)).toEqual(names);
     expect(statusByDay(ended)).toEqual([
@@ -1897,9 +1958,12 @@ it('dates a stored past trip with no drops by the day it started', async () => {
     gear: [],
     drops: []
   };
-  expect(tripDates(empty)).toBe('Monday, June 9, 2031');
-  const { first, last } = tripSpan(empty);
-  expect(shortDateRange(first, last)).toBe('Jun 9, 2031');
+  expect(
+    pastTripSummaries([empty]).map(({ dates, shortDates }) => ({
+      dates,
+      shortDates
+    }))
+  ).toEqual([{ dates: 'Monday, June 9, 2031', shortDates: 'Jun 9, 2031' }]);
 });
 
 it('dates and groups a past trip in the phone’s current time zone after the zone changes', async () => {
@@ -1908,11 +1972,12 @@ it('dates and groups a past trip in the phone’s current time zone after the zo
   await placeAt(book, state, '2031-06-11T01:00:00-04:00');
   const last = await placeAt(book, state, '2031-06-11T08:00:00-04:00');
   const ended = await run(book.endTrip(last.trip.id));
-  expect(tripDates(ended)).toBe('Wednesday, June 11, 2031');
+  const datesOf = () => pastTripSummaries([ended]).map(({ dates }) => dates);
+  expect(datesOf()).toEqual(['Wednesday, June 11, 2031']);
 
   vi.stubEnv('TZ', 'America/Los_Angeles');
 
-  expect(tripDates(ended)).toBe('Tuesday, June 10 to Wednesday, June 11, 2031');
+  expect(datesOf()).toEqual(['Tuesday, June 10 to Wednesday, June 11, 2031']);
   expect(statusByDay(ended)).toEqual([
     ['Day 1', [['Pot 1', 'Uncollected']]],
     ['Day 2', [['Pot 2', 'Uncollected']]]

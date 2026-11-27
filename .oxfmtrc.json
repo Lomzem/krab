@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "singleQuote": true,
+  "trailingComma": "none",
+  "svelte": true,
+  "sortPackageJson": false,
+  "sortTailwindcss": {
+    "stylesheet": "./src/app.css",
+    "functions": ["cn", "tv"]
+  }
+}

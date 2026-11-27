@@ -47,16 +47,12 @@ export type {
   Clock,
   Deletion,
   Drop,
-  DropDetails,
   DropEdit,
   Fix,
   Gear,
   Kind,
-  NoPosition,
-  Position,
   PositionSource,
   Trip,
-  TripDeps,
   Trips
 } from './types';
 export {
@@ -70,9 +66,7 @@ export {
   InvalidDepth,
   KindLocked,
   NotCollected,
-  StorageFailed,
-  TripNotEnded,
-  TripNotFound
+  StorageFailed
 };
 export type { DropAttempt, DropPhase, PlacedDrop };
 export {
@@ -83,29 +77,20 @@ export {
   gearName,
   KIND_NAMES,
   KINDS,
-  type DropTarget,
-  type FoundDrop
+  type DropTarget
 } from './rules';
-export { compassPoint, shortDateRange, shortTime } from './format';
+export { compassPoint } from './format';
 export { availability, type Availability } from './availability';
 export {
-  catchText,
-  collectedGear,
+  activeGear,
   dayGroups,
   dayOf,
-  dropsInDays,
-  gearCounts,
-  gearInWater,
-  isMultiDay,
-  nearestGear,
-  pastDrops,
-  pastTripCounts,
+  pastGear,
   pastTripSummaries,
   roughness,
   timeInWater,
   tripDates,
-  tripDays,
-  tripSpan,
+  type ActiveGear,
   type CollectedRow,
   type Day,
   type DaySelection,
@@ -113,16 +98,19 @@ export {
   type GearRow,
   type PastDaySelection,
   type PastDropRow,
-  type PastTripSummary,
-  type SpokenText
+  type PastTripSummary
 } from './queries';
-export type { LatLon } from './geo';
 
-export type NamedTrip = { trip: Trip; name: string };
+type NamedTrip = { trip: Trip; name: string };
 
-export type Collection = NamedTrip & { changed: boolean };
+type Saved = NamedTrip & { catchRecorded: boolean };
 
-export type DeletedDrop = {
+type Collection = NamedTrip & { changed: boolean };
+
+type Uncollection = NamedTrip &
+  ({ changed: false } | { changed: true; catchCleared: boolean });
+
+type DeletedDrop = {
   trip: Trip | null;
   name: string;
   deletion: Deletion;
@@ -137,7 +125,7 @@ export type TripBook = {
     edit: DropEdit,
     kind: Kind | null
   ) => Effect.Effect<
-    NamedTrip,
+    Saved,
     | DropNotFound
     | InvalidDepth
     | InvalidCatch
@@ -150,7 +138,7 @@ export type TripBook = {
   ) => Effect.Effect<Collection, DropNotFound | StorageFailed>;
   undoCollect: (
     dropId: string
-  ) => Effect.Effect<Collection, DropNotFound | DroppedAgain | StorageFailed>;
+  ) => Effect.Effect<Uncollection, DropNotFound | DroppedAgain | StorageFailed>;
   deleteDrop: (
     dropId: string
   ) => Effect.Effect<DeletedDrop, DropNotFound | StorageFailed>;
@@ -212,7 +200,7 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
     }),
   saveDrop: (dropId, edit, kind) =>
     storage.readModifyWrite<
-      NamedTrip,
+      Saved,
       DropNotFound | InvalidDepth | InvalidCatch | NotCollected | KindLocked
     >((trips) => {
       const found = findDrop(trips, dropId);
@@ -227,7 +215,11 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
       return Result.map(edited, (next) => ({
         put: [next.trip],
         remove: [],
-        result: { trip: next.trip, name: gearName(next.gear) }
+        result: {
+          trip: next.trip,
+          name: gearName(next.gear),
+          catchRecorded: edit.catch !== null
+        }
       }));
     }),
   collect: (dropId) =>
@@ -242,12 +234,30 @@ const bookFor = (deps: TripDeps, storage: TripStorage): TripBook => ({
       });
     }),
   undoCollect: (dropId) =>
-    storage.readModifyWrite<Collection, DropNotFound | DroppedAgain>(
+    storage.readModifyWrite<Uncollection, DropNotFound | DroppedAgain>(
       (trips) => {
         const found = activeDrop(trips, dropId);
         if (!found) return Result.fail(new DropNotFound({ dropId }));
-        return Result.map(uncollectDrop(found.trip, found.drop), (changed) =>
-          collection(found, changed)
+        const name = gearName(found.gear);
+        return Result.map(
+          uncollectDrop(found.trip, found.drop),
+          (changed): Change<Uncollection> =>
+            changed
+              ? {
+                  put: [changed],
+                  remove: [],
+                  result: {
+                    trip: changed,
+                    name,
+                    changed: true,
+                    catchCleared: found.drop.catch !== null
+                  }
+                }
+              : {
+                  put: [],
+                  remove: [],
+                  result: { trip: found.trip, name, changed: false }
+                }
         );
       }
     ),

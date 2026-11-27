@@ -17,7 +17,8 @@ export default defineConfig({
       use: {
         ...devices['iPhone 17'],
         geolocation: { ...MADE_UP_SEA, accuracy: 8 },
-        permissions: ['geolocation']
+        permissions: ['geolocation'],
+        contextOptions: { reducedMotion: 'reduce' }
       }
     }
   ],

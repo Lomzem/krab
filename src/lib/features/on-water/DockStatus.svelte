@@ -1,21 +1,21 @@
 <script lang="ts">
+  import { Button } from '@ui-sdk/svelte/button';
   import { arrowDeg, BearingArrow } from '#lib/features/compass/index.js';
   import type { CompassState } from '#lib/features/compass/index.js';
   import {
-    gearCounts,
     roughness,
+    type ActiveGear,
     type Availability,
-    type GearRow,
-    type Trip
+    type GearRow
   } from '#lib/features/trip/index.js';
-  import { FOCUS, FOCUS_INSET, PRESS } from './controls';
+  import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import GearIcon from './GearIcon.svelte';
 
   let {
     screen,
     status,
     loaded = true,
-    trip,
+    gear,
     nearest,
     compass,
     onopen,
@@ -24,7 +24,7 @@
     screen: 'map' | 'gear';
     status: Availability | null;
     loaded?: boolean;
-    trip: Trip | null;
+    gear: ActiveGear | null;
     nearest: GearRow | null;
     compass: CompassState;
     onopen: (dropId: string, opener: HTMLElement) => void;
@@ -35,7 +35,7 @@
   const LINE_2 = 'flex items-center gap-1.5 text-sm text-muted-foreground';
   const count = $derived.by(() => {
     if (!loaded) return null;
-    return trip ? gearCounts(trip).inWater : 'Nothing in the water';
+    return gear?.counts.inWater ?? 'Nothing in the water';
   });
   const rough = $derived(status?.kind === 'ready' && roughness(status.fix));
   const direction = $derived(
@@ -65,13 +65,13 @@
     <h2 id="location-off-title" class="min-w-0 flex-1 {LINE_1}">
       Location is off
     </h2>
-    <button
-      type="button"
+    <Button
       class="min-h-11 flex-none touch-manipulation rounded-control px-3 text-base font-semibold text-action underline underline-offset-4 {FOCUS} {PRESS} active:bg-muted"
       aria-haspopup="dialog"
       onclick={(event) => {
-        onsteps(event.currentTarget);
-      }}>Show steps</button
+        if (event.currentTarget instanceof HTMLElement)
+          onsteps(event.currentTarget);
+      }}>Show steps</Button
     >
   </section>
 {:else if screen === 'gear'}
@@ -100,10 +100,8 @@
     </span>
   </p>
 {:else if nearest && direction}
-  <button
-    type="button"
+  <Button
     class="flex min-h-14 w-full touch-manipulation items-center gap-3 py-1 pr-3 pl-4 text-left {FOCUS_INSET} {PRESS} active:bg-muted"
-    data-drop={nearest.drop.id}
     onpointerdown={() => {
       pressedDropId = nearest.drop.id;
     }}
@@ -114,7 +112,8 @@
       const target =
         event.detail > 0 && pressedDropId ? pressedDropId : nearest.drop.id;
       pressedDropId = null;
-      onopen(target, event.currentTarget);
+      if (event.currentTarget instanceof HTMLElement)
+        onopen(target, event.currentTarget);
     }}
   >
     <span class="flex-none text-foreground"
@@ -150,7 +149,7 @@
         </span>
       </span>
     {/if}
-  </button>
+  </Button>
 {:else}
   <p class="flex min-h-14 w-full flex-col justify-center px-4 py-1">
     {#if count}

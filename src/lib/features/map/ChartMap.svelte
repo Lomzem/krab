@@ -1,10 +1,6 @@
 <script lang="ts">
-  import Icon from '#lib/icon/Icon.svelte';
-  import {
-    FOCUS,
-    FOCUS_INSET,
-    PRESS
-  } from '#lib/features/on-water/controls.js';
+  import Icon from '#lib/shared/Icon.svelte';
+  import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import {
     Map as MapLibre,
     Marker,
@@ -16,8 +12,20 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { Effect } from 'effect';
   import { onMount, tick, untrack, type Snippet } from 'svelte';
+  import type { Attachment } from 'svelte/attachments';
   import { SvelteMap } from 'svelte/reactivity';
-  import type { LatLon } from '#lib/features/trip/index.js';
+  import { Button } from '@ui-sdk/svelte/button';
+  import {
+    Popover,
+    PopoverContent,
+    PopoverTitle,
+    PopoverTrigger
+  } from '@ui-sdk/svelte/popover';
+  import {
+    SegmentedControl,
+    SegmentedControlItem
+  } from '@ui-sdk/svelte/segmented-control';
+  import type { LatLon } from '#lib/shared/lat-lon.js';
   import { accuracyArea } from './accuracy';
   import {
     ACCURACY_SOURCE,
@@ -38,11 +46,6 @@
   const MY_EXTENT = { left: 30, right: 30, up: 30, down: 30 };
   const OVERVIEW_MAX_ZOOM = 17;
   const ME_ORDER = 1;
-  const LAYER_ORDER: Record<MapPlace['layer'], number> = {
-    past: 2,
-    collected: 3,
-    'in-water': 4
-  };
   const MIN_ZOOM = 0;
   const MIN_FIT_SPAN = 48;
   const CLEAR_GAP = 8;
@@ -65,9 +68,12 @@
     headingDeg = null,
     show,
     onshown,
-    pin,
-    group,
+    label,
+    face,
+    beside,
+    onactivate,
     controls,
+    status = null,
     keepClear = null,
     fitLabel = 'Show all gear'
   }: {
@@ -79,11 +85,12 @@
     headingDeg?: number | null;
     show: string | null;
     onshown: () => void;
-    pin: Snippet<[id: string, selected: boolean]>;
-    group: Snippet<
-      [lead: string, ids: string[], apart: boolean, selected: boolean]
-    >;
+    label: (spot: Spot) => string;
+    face: Snippet<[spot: Spot, selected: boolean]>;
+    beside?: Snippet<[spot: Spot]>;
+    onactivate: (spot: Spot) => void;
     controls?: Snippet;
+    status?: string | null;
     keepClear?: string | null;
     fitLabel?: string;
   } = $props();
@@ -104,6 +111,9 @@
   let framePending = false;
   let capsule = $state<HTMLDivElement>();
   let notice = $state<HTMLDivElement>();
+  let statusNote = $state<HTMLParagraphElement>();
+  const statusCover = $derived(status ? statusNote : undefined);
+  let baseAxis = $state<'horizontal' | 'vertical'>('vertical');
   const noticeText = $derived.by(() => {
     if (loadingStyle) return 'Loading map';
     return availability === 'available' ? null : OUTAGE_NOTICE[availability];
@@ -114,8 +124,6 @@
       (availability === 'unexplained' || availability === 'not-answering')
   );
   let chip = $state<HTMLButtonElement>();
-  let creditsPanel = $state<HTMLDivElement>();
-  let creditsOpen = $state(false);
   let rendered = $state<Base | null>(null);
   const credit = $derived(CREDITS[rendered ?? base]);
   let selected = $state<string | null>(null);
@@ -123,6 +131,7 @@
     selected !== null && ids.includes(selected);
   let latest: Accuracy = accuracyArea(null, 0, false);
   const markers = new SvelteMap<string, Marker>();
+  const triggers = new SvelteMap<string, HTMLButtonElement>();
 
   const accuracy = $derived(
     me?.current
@@ -194,7 +203,11 @@
     const area = container?.getBoundingClientRect();
     if (!area) return 0;
     const credits = chip?.getBoundingClientRect();
-    const controls = capsule?.getBoundingClientRect();
+    const controlsLeft = Math.min(
+      ...[capsule, statusCover].flatMap((cover) =>
+        cover ? [cover.getBoundingClientRect().left] : []
+      )
+    );
     const told = notice?.getBoundingClientRect();
     const [up, down] = squeeze(
       { cover: told ? told.bottom - area.top + CLEAR_GAP : 0, reach: reach.up },
@@ -207,7 +220,9 @@
     const [left, right] = squeeze(
       { cover: 0, reach: reach.side },
       {
-        cover: controls ? area.right - controls.left + CLEAR_GAP : 0,
+        cover: Number.isFinite(controlsLeft)
+          ? area.right - controlsLeft + CLEAR_GAP
+          : 0,
         reach: reach.side
       },
       area.width
@@ -271,7 +286,7 @@
   type Rect = { left: number; right: number; top: number; bottom: number };
 
   const coversIn = (area: DOMRect, without?: HTMLElement): Rect[] =>
-    [chip, capsule, notice].flatMap((element) => {
+    [chip, capsule, notice, statusCover].flatMap((element) => {
       const box =
         element === without ? undefined : element?.getBoundingClientRect();
       return box
@@ -372,7 +387,7 @@
     return best.hidden < still ? best : { dx: 0, dy: 0, hidden: still };
   };
 
-  const clearOf = (cover: HTMLElement) => {
+  const clearOf = (cover: HTMLElement, across: boolean) => {
     const area = container?.getBoundingClientRect();
     if (!area) return;
     const box = cover.getBoundingClientRect();
@@ -390,7 +405,7 @@
       return shown ? [shown] : [];
     });
     if (drawn.every((shown) => overlapOf(shown, block) === 0)) return;
-    shiftBy(clearShift(drawn, area, false, cover));
+    shiftBy(clearShift(drawn, area, across, cover));
   };
 
   const separate = (id: string) => {
@@ -402,8 +417,13 @@
     });
   };
 
+  const moves = (
+    shift: { dx: number; dy: number } | null
+  ): shift is { dx: number; dy: number } =>
+    shift !== null && (shift.dx !== 0 || shift.dy !== 0);
+
   const shiftBy = (shift: { dx: number; dy: number } | null) => {
-    if (!map || !shift || (shift.dx === 0 && shift.dy === 0)) return;
+    if (!map || !moves(shift)) return;
     const middle = map.project(map.getCenter());
     map.jumpTo({
       center: map.unproject([middle.x - shift.dx, middle.y - shift.dy])
@@ -454,12 +474,20 @@
     )
       return;
     const box = target.getBoundingClientRect();
-    revealDrawn({
-      left: box.left - area.left - FOCUS_REACH,
-      right: box.right - area.left + FOCUS_REACH,
-      top: box.top - area.top - FOCUS_REACH,
-      bottom: box.bottom - area.top + FOCUS_REACH
-    });
+    const shift = clearShift(
+      [
+        {
+          left: box.left - area.left - FOCUS_REACH,
+          right: box.right - area.left + FOCUS_REACH,
+          top: box.top - area.top - FOCUS_REACH,
+          bottom: box.bottom - area.top + FOCUS_REACH
+        }
+      ],
+      area,
+      true
+    );
+    if (moves(shift)) leaveOverview();
+    shiftBy(shift);
   };
 
   const reveal = (id: string) => {
@@ -470,34 +498,6 @@
   const revealSoon = async (id: string) => {
     await tick();
     reveal(id);
-  };
-
-  const closeCredits = (refocus: boolean) => {
-    if (!creditsOpen) return;
-    creditsOpen = false;
-    if (refocus) chip?.focus();
-  };
-
-  const toggleCredits = async () => {
-    if (creditsOpen) {
-      closeCredits(true);
-      return;
-    }
-    creditsOpen = true;
-    await tick();
-    creditsPanel?.querySelector<HTMLElement>('a')?.focus();
-  };
-
-  const outsideCredits = (event: PointerEvent) => {
-    const target = event.target as Node | null;
-    if (
-      !creditsOpen ||
-      chip?.contains(target) ||
-      creditsPanel?.contains(target)
-    ) {
-      return;
-    }
-    closeCredits(true);
   };
 
   const leaveOverview = () => {
@@ -558,48 +558,55 @@
   const fromBase = (sourceId: unknown) =>
     typeof sourceId === 'string' && baseSources.has(sourceId);
 
-  const marker = (node: HTMLElement, at: LatLon) => {
+  type Placed = { at: LatLon; ids?: readonly string[] };
+
+  const marker = (node: HTMLElement, shown: Placed) => {
     if (!map) return {};
+    let current = shown;
     const placed = new Marker({ element: node })
-      .setLngLat(lngLat(at))
+      .setLngLat(lngLat(shown.at))
       .addTo(map);
     const id = node.dataset['place'];
     if (id) markers.set(id, placed);
     return {
-      update: (next: LatLon) => {
-        placed.setLngLat(lngLat(next));
+      update: (next: Placed) => {
+        current = next;
+        placed.setLngLat(lngLat(next.at));
       },
       destroy: () => {
         const held = node.contains(document.activeElement)
-          ? heldDrops(node)
+          ? (current.ids ?? [])
           : [];
         if (id && markers.get(id) === placed) markers.delete(id);
         placed.remove();
         if (held.length > 0)
           void tick().then(() => {
-            refocus(held);
+            if (document.activeElement === document.body)
+              (focusTarget(held) ?? canvas())?.focus();
           });
       }
     };
   };
 
-  const heldDrops = (node: HTMLElement) => {
-    const shown = node.querySelector<HTMLElement>('[data-drop], [data-drops]');
-    return (shown?.dataset['drops'] ?? shown?.dataset['drop'] ?? '')
-      .split(' ')
-      .filter((drop) => drop !== '');
-  };
+  const trigger =
+    (key: string): Attachment<HTMLButtonElement> =>
+    (node) => {
+      triggers.set(key, node);
+      return () => {
+        if (triggers.get(key) === node) triggers.delete(key);
+      };
+    };
 
-  const refocus = (held: string[]) => {
-    if (document.activeElement !== document.body) return;
-    const next = held
-      .map((drop) =>
-        container?.querySelector<HTMLElement>(
-          `[data-place] :is([data-drop="${CSS.escape(drop)}"], [data-drops~="${CSS.escape(drop)}"])`
-        )
-      )
-      .find((shown) => shown);
-    next?.focus();
+  export const canvas = (): HTMLElement | null => map?.getCanvas() ?? null;
+
+  export const focusTarget = (ids: readonly string[]): HTMLElement | null => {
+    const shown = ids.flatMap((id) => {
+      const spot = spotOf.get(id);
+      const button = spot && triggers.get(spot.key);
+      return button ? [button] : [];
+    });
+    if (shown.length === 0) return null;
+    return shown.find((button) => !button.closest('[inert]')) ?? canvas();
   };
 
   const showPlace = async (id: string) => {
@@ -613,14 +620,7 @@
     reveal(id);
     await tick();
     hideOffscreen();
-    const spot = spotOf.get(id);
-    if (spot) {
-      markers
-        .get(spot.key)
-        ?.getElement()
-        .querySelector<HTMLElement>('button')
-        ?.focus();
-    }
+    focusTarget([id])?.focus();
     onshown();
   };
 
@@ -753,19 +753,35 @@
     });
   });
 
-  $effect(() => {
-    const shown = notice;
+  const followCover = (shown: HTMLElement | undefined, across: boolean) => {
     if (!shown) return;
     const watch = new ResizeObserver(() => {
       if (overview) void frameSoon();
-      else clearOf(shown);
+      else clearOf(shown, across);
     });
     watch.observe(shown);
     return () => {
       watch.disconnect();
       if (overview) void frameSoon();
     };
-  });
+  };
+
+  $effect(() => followCover(notice, false));
+
+  $effect(() => followCover(statusCover, true));
+
+  const followAxis: Attachment<HTMLElement> = (choices) => {
+    const watch = new ResizeObserver(() => {
+      baseAxis =
+        getComputedStyle(choices).flexDirection === 'row'
+          ? 'horizontal'
+          : 'vertical';
+    });
+    watch.observe(choices);
+    return () => {
+      watch.disconnect();
+    };
+  };
 
   $effect(() => {
     const id = keepClear;
@@ -787,19 +803,17 @@
       untrack(() => void showPlace(id));
     }
   });
+
+  $effect(() => {
+    if (failed && show !== null) untrack(onshown);
+  });
 </script>
 
-<svelte:document onpointerdown={outsideCredits} />
-
 {#snippet baseChoice(choice: Base, text: string)}
-  <button
-    type="button"
-    class="flex min-h-11 w-full touch-manipulation items-center justify-center px-2.5 text-sm font-medium text-muted-foreground tiny-map:w-auto {FOCUS_INSET} {PRESS} active:bg-muted aria-pressed:text-foreground aria-pressed:underline aria-pressed:decoration-2 aria-pressed:underline-offset-4"
-    aria-label="{text} map"
-    aria-pressed={base === choice}
-    onclick={() => {
-      base = choice;
-    }}>{text}</button
+  <SegmentedControlItem
+    value={choice}
+    class="flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center px-2.5 text-sm font-medium text-muted-foreground tiny-map:w-auto {FOCUS_INSET} {PRESS} active:bg-muted data-checked:text-foreground data-checked:underline data-checked:decoration-2 data-checked:underline-offset-4"
+    aria-label="{text} map">{text}</SegmentedControlItem
   >
 {/snippet}
 
@@ -823,20 +837,23 @@
       <div class="contents">
         <div
           data-place={spot.key}
-          style:z-index={LAYER_ORDER[spot.layer]}
-          use:marker={spot.at}
+          style:z-index={spot.priority}
+          use:marker={spot}
           onfocusin={revealFocused}
         >
-          {#if spot.ids.length === 1}
-            {@render pin(spot.key, isSelected(spot.ids))}
-          {:else}
-            {@render group(
-              spot.lead,
-              spot.ids,
-              spot.apart,
-              isSelected(spot.ids)
-            )}
-          {/if}
+          <Button
+            class="group grid size-11 place-items-center focus-visible:outline-none"
+            aria-label={label(spot)}
+            aria-haspopup="dialog"
+            aria-current={isSelected(spot.ids) || undefined}
+            {@attach trigger(spot.key)}
+            onclick={() => {
+              onactivate(spot);
+            }}
+          >
+            {@render face(spot, isSelected(spot.ids))}
+          </Button>
+          {@render beside?.(spot)}
         </div>
       </div>
     {/each}
@@ -848,7 +865,7 @@
           style:z-index={ME_ORDER}
           role="img"
           aria-label={me.label}
-          use:marker={me.at}
+          use:marker={me}
         >
           <svg width="60" height="60" viewBox="-8 -8 60 60" aria-hidden="true">
             {#if headingDeg !== null}
@@ -945,12 +962,11 @@
       >
         <p>{noticeText}</p>
         {#if canRetry}
-          <button
-            type="button"
+          <Button
             class="-my-1.5 -mr-1.5 flex min-h-11 touch-manipulation items-center rounded-control px-2 text-sm font-semibold text-action underline underline-offset-4 {FOCUS_INSET} {PRESS} active:bg-muted"
             onclick={() => {
               void apply(base);
-            }}>Retry map</button
+            }}>Retry map</Button
           >
         {/if}
       </div>
@@ -961,14 +977,41 @@
       class="z-10 col-start-1 row-start-1 m-3 mb-0 flex min-w-11 flex-col self-start justify-self-end rounded-xl border border-input bg-card text-foreground shadow-sm short-map:flex-row tiny-map:flex-col"
     >
       <div class="flex min-w-11 flex-col tiny-map:flex-row">
-        {@render baseChoice('chart', 'Chart')}
-        {@render baseChoice('street', 'Street')}
+        <SegmentedControl
+          class="flex flex-col tiny-map:flex-row"
+          aria-label="Base map"
+          orientation={baseAxis}
+          {@attach followAxis}
+          bind:value={
+            () => base,
+            (next) => {
+              if (next === 'chart' || next === 'street') base = next;
+            }
+          }
+        >
+          {@render baseChoice('chart', 'Chart')}
+          {@render baseChoice('street', 'Street')}
+        </SegmentedControl>
         {#if controls}
           <span
             class="mx-2 h-px bg-border tiny-map:mx-0 tiny-map:my-2 tiny-map:h-auto tiny-map:w-px"
             aria-hidden="true"
           ></span>
-          {@render controls()}
+          <div class="relative flex flex-col tiny-map:flex-row">
+            {@render controls()}
+            <div
+              class="pointer-events-none absolute right-full bottom-0 mr-3 flex h-11 items-center tiny-map:top-full tiny-map:right-0 tiny-map:bottom-auto tiny-map:mt-14 tiny-map:mr-0"
+            >
+              <p
+                bind:this={statusNote}
+                role="status"
+                class={status &&
+                  'rounded-control border border-input bg-card px-2.5 py-1.5 text-sm leading-tight font-medium whitespace-nowrap text-foreground shadow-sm'}
+              >
+                {status ?? ''}
+              </p>
+            </div>
+          </div>
         {/if}
       </div>
       <span
@@ -979,18 +1022,12 @@
         class="flex min-w-11 flex-col tiny-map:flex-row tiny-map:justify-end"
       >
         {#if places.length > 0}
-          <button
-            type="button"
-            class={ICON_BUTTON}
-            aria-label={fitLabel}
-            onclick={showAll}
-          >
+          <Button class={ICON_BUTTON} aria-label={fitLabel} onclick={showAll}>
             <Icon name="show-all" />
-          </button>
+          </Button>
         {/if}
         {#if locate}
-          <button
-            type="button"
+          <Button
             class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
             aria-label="Centre on my position"
             aria-disabled={me?.current ? undefined : 'true'}
@@ -1001,54 +1038,59 @@
             }}
           >
             <Icon name="centre" />
-          </button>
+          </Button>
         {/if}
         {#if places.length > 0 || locate}
-          <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
+          <span
+            class="mx-2 h-px bg-border tiny-map:mx-0 tiny-map:my-2 tiny-map:h-auto tiny-map:w-px"
+            aria-hidden="true"
+          ></span>
         {/if}
-        <button
-          type="button"
+        <Button
           class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
           aria-label="Zoom in"
           aria-disabled={zoom >= MAX_ZOOM}
           onclick={() => {
+            if (zoom >= MAX_ZOOM) return;
             leaveOverview();
-            if (zoom < MAX_ZOOM) map?.zoomIn();
+            map?.zoomIn();
           }}
         >
           <Icon name="plus" size={20} />
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
           aria-label="Zoom out"
           aria-disabled={zoom <= MIN_ZOOM}
           onclick={() => {
+            if (zoom <= MIN_ZOOM) return;
             leaveOverview();
-            if (zoom > MIN_ZOOM) map?.zoomOut();
+            map?.zoomOut();
           }}
         >
           <Icon name="minus" size={20} />
-        </button>
+        </Button>
       </div>
     </div>
 
     <div
       class="relative z-10 col-start-1 row-span-2 row-start-1 m-3 max-w-[calc(100%-5.5rem)] self-end justify-self-start short-map:max-w-[calc(100%-8.5rem)]"
     >
-      {#if creditsOpen}
-        <div
-          bind:this={creditsPanel}
-          role="dialog"
-          aria-label="Map credits"
-          tabindex="-1"
-          class="absolute bottom-full left-0 mb-2 w-max max-w-[calc(100vw-1.5rem)] rounded-control border border-input bg-card py-1 text-foreground shadow-sm transition-opacity duration-120 ease-out motion-reduce:transition-none starting:opacity-0"
-          onkeydown={(event) => {
-            if (event.key !== 'Escape') return;
-            event.stopPropagation();
-            closeCredits(true);
+      <Popover>
+        <PopoverTrigger
+          {@attach (node: HTMLButtonElement) => {
+            chip = node;
           }}
+          class="min-h-11 min-w-11 touch-manipulation rounded-[6px] border border-input bg-card px-2 py-1 text-left text-sm leading-[1.3] font-medium text-muted-foreground {FOCUS_INSET} {PRESS} active:bg-muted"
+          >{credit}</PopoverTrigger
         >
+        <PopoverContent
+          side="top"
+          align="start"
+          sideOffset={8}
+          class="max-h-(--available-height) w-max max-w-(--available-width) overflow-y-auto overscroll-contain rounded-control border border-input bg-card py-1 text-foreground shadow-sm transition-opacity duration-120 ease-out motion-reduce:transition-none starting:opacity-0"
+        >
+          <PopoverTitle class="sr-only">Map credits</PopoverTitle>
           <ul>
             {#if (rendered ?? base) === 'chart'}
               <li>
@@ -1091,16 +1133,8 @@
               </li>
             {/if}
           </ul>
-        </div>
-      {/if}
-      <button
-        bind:this={chip}
-        type="button"
-        class="min-h-11 min-w-11 touch-manipulation rounded-[6px] border border-input bg-card px-2 py-1 text-left text-sm leading-[1.3] font-medium text-muted-foreground {FOCUS} {PRESS} active:bg-muted"
-        aria-haspopup="dialog"
-        aria-expanded={creditsOpen}
-        onclick={() => void toggleCredits()}>{credit}</button
-      >
+        </PopoverContent>
+      </Popover>
     </div>
   {/if}
 </div>

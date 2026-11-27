@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import type { Page } from '@playwright/test';
 import { expect, test } from './recipe';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
@@ -13,7 +12,7 @@ const STILL_IN = '1 still in the water';
 test.use({ timezoneId: 'America/New_York' });
 
 const tab = (page: Page, name: string) =>
-  page.getByRole('button', { name, exact: true });
+  page.getByRole('tab', { name, exact: true });
 
 const fishOneMorning = async (page: Page) => {
   const sheet = page.getByRole('dialog');
@@ -24,7 +23,7 @@ const fishOneMorning = async (page: Page) => {
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page
-    .getByRole('group', { name: 'Gear to drop' })
+    .getByRole('radiogroup', { name: 'Gear to drop' })
     .getByText('Net', { exact: true })
     .click();
   await page.getByRole('button', { name: 'Drop net', exact: true }).click();
@@ -44,9 +43,9 @@ const fishOneMorning = async (page: Page) => {
 };
 
 const confirmEnd = async (page: Page) => {
-  const sheet = page.getByRole('dialog');
-  await sheet.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet).toBeHidden();
+  const ask = page.getByRole('alertdialog');
+  await ask.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip ended');
 };
 
@@ -54,15 +53,13 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   page,
   context
 }, info) => {
-  const { log, capture, keep } = recorder(page, info, 'ending-trip', 'Map');
+  const { log, capture, keep } = recorder(page, info, 'ending-trip', 'Gear');
   const sheet = page.getByRole('dialog');
   const mapArea = page.getByRole('region', { name: 'Map', exact: true });
   const endButton = page
     .getByRole('main')
     .getByRole('button', { name: 'End trip' });
 
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await fishOneMorning(page);
@@ -74,20 +71,22 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   await expect(page.getByRole('main')).toContainText('1 in the water');
   await endButton.scrollIntoViewIfNeeded();
   await expect(endButton).toBeInViewport();
-  keep('indexeddb-before.json', await readTrips(page));
+  const running = await readTrips(page);
+  keep('indexeddb-before.json', running);
   log('Gear ends with End trip under the running trip');
   await capture('01-trip-running');
 
   await endButton.click();
-  await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
-  await expect(sheet).toContainText(STILL_IN);
+  const ask = page.getByRole('alertdialog');
+  await expect(ask.getByRole('heading', { name: 'End trip?' })).toBeVisible();
+  await expect(ask).toContainText(STILL_IN);
   await capture('02-confirm');
-  await sheet.getByRole('button', { name: 'Keep trip going' }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'Keep trip going' }).click();
+  await expect(ask).toBeHidden();
   await expect(endButton).toBeFocused();
-  expect((await readTrips(page))[0]?.endedAt).toBeNull();
+  expect(await readTrips(page)).toStrictEqual(running);
   log(
-    'End trip opens End trip? naming the drop still in; Keep trip going closes it, refocuses End trip, stored endedAt stays null'
+    'End trip opens End trip? naming the drop still in; Keep trip going closes it, refocuses End trip, and the stored trip equals indexeddb-before.json'
   );
 
   await endButton.click();
@@ -97,7 +96,9 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   ).toBeFocused();
   await expect(endButton).toHaveCount(0);
   await expect(page.getByRole('main')).toContainText('Nothing in the water');
-  await tab(page, 'Map').click();
+  await expect(
+    page.getByRole('main').getByRole('button', { name: 'View ended trip' })
+  ).toBeVisible();
   const ended = await readTrips(page);
   expect(ended).toHaveLength(1);
   expect(ended[0]?.endedAt).toEqual(expect.any(Number));
@@ -107,9 +108,10 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   ]);
   keep('indexeddb-ended.json', ended);
   log(
-    'End trip in the sheet; toast Trip ended; focus on the Gear heading; Gear says Nothing in the water; stored endedAt set, Net 1 still uncollected'
+    'End trip in the confirmation; toast Trip ended; focus on the Gear heading; Gear says Nothing in the water and offers View ended trip; stored endedAt set, Net 1 still uncollected'
   );
   await capture('03-ended');
+  await tab(page, 'Map').click();
 
   const pastLayer = sheet
     .getByRole('group', { name: 'Also show' })
@@ -180,8 +182,6 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
     exact: true
   });
 
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await fishOneMorning(page);
@@ -190,7 +190,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
     .getByRole('main')
     .getByRole('button', { name: 'End trip' })
     .click();
-  await expect(page.getByRole('dialog')).toContainText(STILL_IN);
+  await expect(page.getByRole('alertdialog')).toContainText(STILL_IN);
   await confirmEnd(page);
   log(
     'made-up fix; drop Pot 1 and Net 1, collect Pot 1 with 2 kept, End trip from Gear and confirm'
@@ -276,16 +276,17 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   await pastTrip.click();
   const deleteTrip = main.getByRole('button', { name: 'Delete trip' });
   await deleteTrip.click();
+  const ask = page.getByRole('alertdialog');
   await expect(
-    sheet.getByRole('heading', { name: 'Delete trip?' })
+    ask.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
   await capture('06-delete-confirm');
-  await sheet.getByRole('button', { name: 'Keep trip' }).click();
+  await ask.getByRole('button', { name: 'Keep trip' }).click();
   await expect(deleteTrip).toBeFocused();
-  expect(await readTrips(page)).toHaveLength(1);
+  expect(await readTrips(page)).toStrictEqual(before);
   await deleteTrip.click();
-  await sheet.getByRole('button', { name: 'Delete trip' }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'Delete trip' }).click();
+  await expect(ask).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip deleted');
   await expect(main).toContainText('No past trips');
   await expect(
@@ -295,7 +296,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   expect(after).toEqual([]);
   keep('indexeddb-after.json', after);
   log(
-    'Delete trip asks first; Keep it refocuses the button and stores nothing; confirming deletes it, toast Trip deleted, empty list with its heading focused, store empty'
+    'Delete trip asks first; Keep trip refocuses the button and leaves the stored trip equal to its pre-delete read; confirming deletes it, toast Trip deleted, empty list with its heading focused, store empty'
   );
   await capture('07-deleted');
 });

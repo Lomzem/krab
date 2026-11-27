@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-export type StorageFault = 'reads' | 'writes' | 'open' | 'defect';
+type StorageFault = 'reads' | 'writes' | 'open' | 'defect';
 
 const FAULT = 'krab-e2e-storage-fault';
 

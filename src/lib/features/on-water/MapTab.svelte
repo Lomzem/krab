@@ -1,37 +1,35 @@
 <script lang="ts">
-  import Icon from '#lib/icon/Icon.svelte';
-  import { FOCUS_INSET, PRESS } from './controls';
+  import { Button } from '@ui-sdk/svelte/button';
+  import { Toggle } from '@ui-sdk/svelte/toggle';
+  import { elementRef } from '#lib/shared/element-ref.js';
+  import type { Snippet } from 'svelte';
+  import Icon from '#lib/shared/Icon.svelte';
+  import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import type { CompassState } from '#lib/features/compass/index.js';
-  import type { Base, Camera, MapPlace } from '#lib/features/map/index.js';
+  import type { Base, Camera } from '#lib/features/map/index.js';
   import {
-    collectedGear,
     compassPoint,
-    dropsInDays,
-    gearInWater,
-    isMultiDay,
-    pastDrops,
+    pastGear,
     roughness,
     tripDates,
+    type ActiveGear,
     type CollectedRow,
     type Fix,
     type GearRow,
     type PastDropRow,
     type Trip
   } from '#lib/features/trip/index.js';
-  import GearHere from './GearHere.svelte';
-  import { inListOrder, spokenItem, type HereItem } from './gear-here';
-  import GroupPin from './GroupPin.svelte';
+  import GearMap from './GearMap.svelte';
+  import type { HereItem, MapItem } from './gear-here';
   import {
     DEFAULT_MAP_FILTER,
     filterHides,
     type MapFilter
   } from './map-filter';
   import MapFilterSheet from './MapFilterSheet.svelte';
-  import PinChip from './PinChip.svelte';
-  import { chipBoxes } from './pin-chip';
 
   let {
-    trip,
+    gear,
     past,
     fix,
     lastFix,
@@ -39,7 +37,6 @@
     compass,
     compassShown,
     oncompass,
-    now,
     base = $bindable('chart'),
     camera = $bindable(null),
     filter = $bindable({ ...DEFAULT_MAP_FILTER }),
@@ -48,7 +45,7 @@
     onopen,
     newest
   }: {
-    trip: Trip | null;
+    gear: ActiveGear | null;
     past: readonly Trip[];
     fix: Fix | null;
     lastFix: Fix | null;
@@ -56,13 +53,12 @@
     compass: CompassState;
     compassShown: boolean;
     oncompass: () => void;
-    now: number;
     base?: Base;
     camera?: Camera | null;
     filter?: MapFilter;
     show: string | null;
     onshown: () => void;
-    onopen: (dropId: string, opener: HTMLElement) => void;
+    onopen: (dropId: string, returnFocus: () => HTMLElement | null) => void;
     newest: string | null;
   } = $props();
 
@@ -77,15 +73,11 @@
     calibrating: 'Compass needs calibrating',
     usable: 'Compass on'
   };
-  const rows = $derived(trip ? gearInWater(trip, fix, now) : []);
+  const rows = $derived(gear?.inWater ?? []);
   const rowsById = $derived(new Map(rows.map((row) => [row.drop.id, row])));
-  const multiDay = $derived(trip !== null && isMultiDay(trip));
-  const inDays = $derived(
-    new Set(trip ? dropsInDays(trip, filter.days, now).map(({ id }) => id) : [])
-  );
-  const collected = $derived(
-    trip && filter.collected ? collectedGear(trip) : []
-  );
+  const multiDay = $derived(gear?.multiDay ?? false);
+  const inDays = $derived(gear?.inDays ?? new Set<string>());
+  const collected = $derived(gear && filter.collected ? gear.collected : []);
   const collectedById = $derived(
     new Map(collected.map((row) => [row.drop.id, row]))
   );
@@ -94,7 +86,7 @@
     filter.past
       ? past.flatMap((ended) => {
           const dates = tripDates(ended);
-          return pastDrops(ended, 'all').map((row): PastPin => ({
+          return pastGear(ended, 'all').rows.map((row): PastPin => ({
             ...row,
             dates
           }));
@@ -107,10 +99,10 @@
     earlier: 'earlier days only',
     all: 'all days'
   } as const;
-  const hides = $derived(filterHides(filter, trip));
+  const hides = $derived(filterHides(filter, gear));
   const filterSummary = $derived(
     [
-      trip && 'gear in the water',
+      gear && 'gear in the water',
       filter.collected && 'collected gear',
       past.length > 0 && filter.past && 'past trips',
       filter.timeInWater && 'time in the water',
@@ -122,6 +114,9 @@
 
   const compassOn = $derived(
     compass.kind !== 'off' && compass.kind !== 'unavailable'
+  );
+  const motionDenied = $derived(
+    compass.kind === 'unavailable' && compass.reason === 'denied'
   );
   const compassState = $derived.by(() => {
     if (compass.kind !== 'unavailable') return COMPASS_STATES[compass.kind];
@@ -255,146 +250,90 @@
     return row && filter.timeInWater ? row.timeInWater.short : null;
   };
 
-  const placeOf = (
+  const mapItemOf = (
     id: string,
-    at: MapPlace['at'] | null,
+    at: MapItem['at'] | null,
     shown: boolean
-  ): MapPlace[] =>
-    itemOf(id).flatMap((item) =>
-      at && shown
-        ? [{ id, at, layer: item.layer, ...chipBoxes(item, timeLabel(id)) }]
-        : []
-    );
-  const places = $derived([
-    ...pastPins.flatMap(({ drop }) => placeOf(drop.id, drop.position, true)),
+  ): MapItem[] =>
+    at && shown
+      ? itemOf(id).map((item) => ({ ...item, at, time: timeLabel(id) }))
+      : [];
+  const mapItems = $derived([
+    ...pastPins.flatMap(({ drop }) => mapItemOf(drop.id, drop.position, true)),
     ...collected.flatMap(({ drop }) =>
-      placeOf(drop.id, drop.position, inDays.has(drop.id))
+      mapItemOf(drop.id, drop.position, inDays.has(drop.id))
     ),
     ...rows.flatMap(({ drop }) =>
-      placeOf(drop.id, drop.position, inDays.has(drop.id))
+      mapItemOf(drop.id, drop.position, inDays.has(drop.id))
     )
   ]);
-
-  let here = $state<string[]>([]);
-  let hereOpener: HTMLElement | null = null;
-  let hereApart = $state(false);
-  let picked = false;
-  const hereItems = $derived(inListOrder(here.flatMap(itemOf)));
-
-  const pick = (id: string) => {
-    picked = true;
-    here = [];
-    if (hereOpener) onopen(id, hereOpener);
-  };
 </script>
 
-<section class="flex flex-1 flex-col" aria-labelledby="map-title">
-  <h1 id="map-title" class="sr-only">Map</h1>
-  <div class="flex flex-1 flex-col">
-    {#await import('#lib/features/map/ChartMap.svelte')}
-      <p class="px-4 pt-4 text-base text-muted-foreground">Loading map</p>
-    {:then { default: ChartMap }}
-      <ChartMap
-        bind:base
-        bind:camera
-        {places}
-        {me}
-        headingDeg={fix ? headingDeg : null}
-        {show}
-        {onshown}
-        keepClear={newest}
-        fitLabel={hides ? 'Fit shown gear' : 'Show all gear'}
+<GearMap
+  status={motionDenied ? 'Motion access off' : null}
+  items={mapItems}
+  {itemOf}
+  {onopen}
+  bind:base
+  bind:camera
+  {me}
+  headingDeg={fix ? headingDeg : null}
+  {show}
+  {onshown}
+  keepClear={newest}
+  fitLabel={hides ? 'Fit shown gear' : 'Show all gear'}
+>
+  {#snippet controls()}
+    {#if gear || past.length > 0}
+      <Button
+        {@attach elementRef<HTMLButtonElement>((element) => {
+          filterButton = element;
+        })}
+        class="relative {CAPSULE_BUTTON} data-active:bg-accent data-active:text-accent-foreground"
+        data-active={hides || undefined}
+        aria-haspopup="dialog"
+        aria-label="Filter, showing {filterSummary}"
+        onclick={() => {
+          filterOpen = true;
+        }}
       >
-        {#snippet controls()}
-          {#if trip || past.length > 0}
-            <button
-              bind:this={filterButton}
-              type="button"
-              class="relative {CAPSULE_BUTTON} data-active:bg-accent data-active:text-accent-foreground"
-              data-active={hides || undefined}
-              aria-haspopup="dialog"
-              aria-label="Filter, showing {filterSummary}"
-              onclick={() => {
-                filterOpen = true;
-              }}
-            >
-              <Icon name="filter" />
-              {#if hides}
-                <span
-                  class="absolute top-2 right-2 size-2 rounded-full bg-action"
-                  aria-hidden="true"
-                ></span>
-              {/if}
-            </button>
-          {/if}
-          {#if compassShown}
-            <button
-              type="button"
-              class="{CAPSULE_BUTTON} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
-              aria-label="Compass"
-              aria-pressed={compassOn}
-              aria-describedby="compass-state"
-              onclick={oncompass}
-            >
-              <Icon
-                name={compass.kind === 'unavailable'
-                  ? 'compass-off'
-                  : 'compass'}
-              />
-            </button>
-            <span id="compass-state" class="sr-only">{compassState}</span>
-          {/if}
-        {/snippet}
-        {#snippet pin(id: string, selected: boolean)}
-          {#each itemOf(id) as item (item.id)}
-            {@const time = timeLabel(id)}
-            <button
-              type="button"
-              class="group grid size-11 place-items-center focus-visible:outline-none"
-              aria-label={spokenItem(item)}
-              aria-haspopup="dialog"
-              aria-current={selected || undefined}
-              data-drop={id}
-              onclick={(event) => {
-                onopen(id, event.currentTarget);
-              }}
-            >
-              <PinChip face={item} {selected} />
-            </button>
-            {#if time}
-              <span
-                class="pointer-events-none absolute top-[calc(50%+15px)] left-1/2 -translate-x-1/2 rounded bg-map-paper/90 px-1 text-xs leading-tight font-semibold whitespace-nowrap text-[#1a2e2b] tabular-nums"
-                aria-hidden="true">{time}</span
-              >
-            {/if}
-          {/each}
-        {/snippet}
-        {#snippet group(
-          lead: string,
-          ids: string[],
-          apart: boolean,
-          selected: boolean
-        )}
-          {#each itemOf(lead) as first (first.id)}
-            <GroupPin
-              lead={first}
-              items={inListOrder(ids.flatMap(itemOf))}
-              {apart}
-              {selected}
-              onopen={(opener: HTMLElement) => {
-                hereOpener = opener;
-                hereApart = apart;
-                here = ids;
-              }}
-            />
-          {/each}
-        {/snippet}
-      </ChartMap>
-    {:catch}
-      <p class="px-4 pt-4 text-base">This phone can't show maps</p>
-    {/await}
-  </div>
-</section>
+        <Icon name="filter" />
+        {#if hides}
+          <span
+            class="absolute top-2 right-2 size-2 rounded-full bg-action"
+            aria-hidden="true"
+          ></span>
+        {/if}
+      </Button>
+    {/if}
+    {#if compassShown}
+      <Toggle
+        class="{CAPSULE_BUTTON} aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+        aria-label="Compass"
+        aria-describedby="compass-state"
+        bind:pressed={
+          () => compassOn,
+          () => {
+            oncompass();
+          }
+        }
+      >
+        <Icon
+          name={compass.kind === 'unavailable' ? 'compass-off' : 'compass'}
+        />
+      </Toggle>
+      <span id="compass-state" class="sr-only">{compassState}</span>
+    {/if}
+  {/snippet}
+  {#snippet frame(map: Snippet)}
+    <section class="flex flex-1 flex-col" aria-labelledby="map-title">
+      <h1 id="map-title" class="sr-only">Map</h1>
+      <div class="flex flex-1 flex-col">
+        {@render map()}
+      </div>
+    </section>
+  {/snippet}
+</GearMap>
 
 <MapFilterSheet
   open={filterOpen}
@@ -405,20 +344,4 @@
     filterOpen = false;
   }}
   returnFocus={() => filterButton}
-/>
-
-<GearHere
-  items={hereItems}
-  apart={hereApart}
-  onpick={pick}
-  onclose={() => {
-    here = [];
-  }}
-  returnFocus={() => {
-    if (picked) {
-      picked = false;
-      return null;
-    }
-    return hereOpener?.isConnected ? hereOpener : null;
-  }}
 />

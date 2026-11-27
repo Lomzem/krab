@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { FOCUS_INSET, PRESS } from './controls';
-  import type { MapPlace } from '#lib/features/map/index.js';
+  import { Button } from '@ui-sdk/svelte/button';
+  import { FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
   import { spokenItem, type HereItem } from './gear-here';
   import GearIcon from './GearIcon.svelte';
+  import type { Layer } from './pin-chip';
   import Sheet from './Sheet.svelte';
   import UncollectedMark from './UncollectedMark.svelte';
 
-  const TITLE_ID = 'gear-here-title';
-  const LOOK: Record<MapPlace['layer'], string> = {
+  const LOOK: Record<Layer, string> = {
     'in-water': 'border-solid border-map-ink bg-map-ink text-map-paper',
     collected: 'border-dashed border-map-muted bg-map-paper text-map-muted',
     past: 'border-dotted border-map-muted bg-map-paper text-map-muted'
@@ -28,18 +28,15 @@
   } = $props();
 </script>
 
-<Sheet open={items.length > 0} titleId={TITLE_ID} {onclose} {returnFocus}>
-  {#snippet heading()}
-    <h2 id={TITLE_ID} class="text-title font-semibold">
-      {items.length} gear {apart ? 'in this area' : 'here'}
-    </h2>
-  {/snippet}
+<Sheet open={items.length > 0} {onclose} {returnFocus}>
+  {#snippet title()}{items.length} gear {apart
+      ? 'in this area'
+      : 'here'}{/snippet}
 
-  <ul class="-mx-4 mt-3 border-t border-border">
+  <ul class="-mx-4 -mt-4">
     {#each items as item (item.id)}
       <li class="border-b border-border">
-        <button
-          type="button"
+        <Button
           class="flex min-h-14 w-full touch-manipulation items-center gap-3 px-4 py-1.5 text-left {FOCUS_INSET} {PRESS} active:bg-muted"
           aria-label={spokenItem(item)}
           onclick={() => {
@@ -73,7 +70,7 @@
               >{item.summary}</span
             >
           </span>
-        </button>
+        </Button>
       </li>
     {/each}
   </ul>

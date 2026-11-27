@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { expect, test } from './recipe';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
@@ -10,8 +9,6 @@ test('placing a drop from Map survives reload', async ({
   context
 }, info) => {
   const { log, capture, keep } = recorder(page, info, 'placing-drop', 'Map');
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await page.goto('/licenses/atkinson-hyperlegible-next-OFL.txt');
   await expect(readTrips(page)).rejects.toThrow('Cannot read Krab IndexedDB');
   expect(
@@ -38,7 +35,7 @@ test('placing a drop from Map survives reload', async ({
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   log('tap Drop pot; saved toast visible');
   await capture('03-dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   const row = page
     .getByRole('main')
     .getByRole('listitem')
@@ -55,7 +52,7 @@ test('placing a drop from Map survives reload', async ({
   keep('indexeddb-before.json', before);
   await capture('04-gear');
   await page.reload();
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect(row).toContainText('At gear');
   const after = await readTrips(page);
   expect(after).toEqual(before);
@@ -69,8 +66,6 @@ test('placing a drop with location denied saves it without a position', async ({
   context
 }, info) => {
   const { log, capture, keep } = recorder(page, info, 'placing-drop', 'Denied');
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.clearPermissions();
   log('fresh iPhone WebKit context; location permission cleared (denied)');
   await page.goto('/');
@@ -82,18 +77,20 @@ test('placing a drop with location denied saves it without a position', async ({
   await expect(steps).toContainText(
     'Settings › Privacy & Security › Location Services'
   );
+  log('Show steps opens Turn on location naming the Settings path');
+  await capture('01-location-steps');
   await steps.getByRole('button', { name: 'Close' }).click();
   await expect(steps).toBeHidden();
-  log('Location is off guidance names Settings');
-  await capture('01-location-off');
+  log('Close leaves the Location is off guidance under the map');
+  await capture('02-location-off');
   keep('indexeddb-before.json', await readTrips(page));
   await page
     .getByRole('button', { name: 'Drop pot without position', exact: true })
     .click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped, no position');
   log('tap Drop pot without position; toast says saved without a position');
-  await capture('02-dropped');
-  await page.getByRole('button', { name: 'Gear', exact: true }).click();
+  await capture('03-dropped');
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await expect(
     page.getByRole('main').getByRole('listitem').filter({ hasText: 'Pot 1' })
   ).toContainText('No position');
@@ -106,5 +103,5 @@ test('placing a drop with location denied saves it without a position', async ({
   });
   keep('indexeddb-after.json', after);
   log('read-only IndexedDB holds Pot 1 with no position, reason denied');
-  await capture('03-gear');
+  await capture('04-gear');
 });

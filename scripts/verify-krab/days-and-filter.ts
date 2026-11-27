@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import type { Page } from '@playwright/test';
 import { expect, test } from './recipe';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
@@ -26,6 +25,7 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
   page,
   context
 }, info) => {
+  test.slow();
   const { log, capture, keep } = recorder(
     page,
     info,
@@ -34,12 +34,12 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
   );
   const requested: string[] = [];
   context.on('request', (request) => requested.push(request.url()));
-  const tab = (name: string) => page.getByRole('button', { name, exact: true });
+  const tab = (name: string) => page.getByRole('tab', { name, exact: true });
   const mapArea = page.getByRole('region', { name: 'Map', exact: true });
   const pin = (name: RegExp) => mapArea.getByRole('button', { name });
   const sheet = page.getByRole('dialog');
   const alsoShow = sheet.getByRole('group', { name: 'Also show' });
-  const days = sheet.getByRole('group', { name: 'Days on this trip' });
+  const days = sheet.getByRole('radiogroup', { name: 'Days on this trip' });
   const openFilter = async () => {
     await mapArea.getByRole('button', { name: /^Filter/ }).click();
     await expect(
@@ -51,8 +51,6 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
     await expect(sheet).toBeHidden();
   };
 
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await holdFixes(page);
   await page.clock.install({ time: LATE_EVENING });

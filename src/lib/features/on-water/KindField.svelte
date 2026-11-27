@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { CHOICE_FOCUS } from './controls';
+  import { Radio, RadioGroup } from '@ui-sdk/svelte/radio';
+  import { FOCUS } from '#lib/shared/control-states.js';
   import { KIND_NAMES, KINDS, type Kind } from '#lib/features/trip/index.js';
   import GearIcon from './GearIcon.svelte';
   import SelectedCheck from './SelectedCheck.svelte';
@@ -25,33 +26,33 @@
   });
 </script>
 
-<fieldset
-  class="grid gap-2"
-  aria-describedby={hint ? `${idPrefix}-kind-hint` : undefined}
->
-  <legend class="mb-2 text-sm font-medium text-muted-foreground">Gear</legend>
-  <div class="grid grid-cols-2 gap-2">
+<div class="grid gap-2">
+  <span
+    id="{idPrefix}-kind-label"
+    class="text-sm font-medium text-muted-foreground">Gear</span
+  >
+  <RadioGroup
+    class="grid grid-cols-2 gap-2"
+    aria-labelledby="{idPrefix}-kind-label"
+    aria-describedby={hint ? `${idPrefix}-kind-hint` : undefined}
+    name="{idPrefix}-kind"
+    bind:value={() => kind, (next) => (kind = next as Kind)}
+  >
     {#each KINDS as option (option)}
-      <label
-        class="flex min-h-12 cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-control border border-input text-base font-medium has-checked:border-primary has-checked:bg-accent has-checked:text-accent-foreground {CHOICE_FOCUS} has-disabled:cursor-not-allowed has-disabled:border-border has-disabled:text-muted-foreground"
+      <Radio
+        value={option}
+        disabled={locked && option !== stored}
+        class="flex min-h-12 cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-control border border-input text-base font-medium data-checked:border-primary data-checked:bg-accent data-checked:text-accent-foreground {FOCUS} data-disabled:cursor-not-allowed data-disabled:border-border data-disabled:text-muted-foreground"
       >
-        <input
-          class="sr-only"
-          type="radio"
-          name="{idPrefix}-kind"
-          value={option}
-          disabled={locked && option !== stored}
-          bind:group={kind}
-        />
         <GearIcon kind={option} />
         {KIND_NAMES[option]}
         <SelectedCheck shown={kind === option} />
-      </label>
+      </Radio>
     {/each}
-  </div>
+  </RadioGroup>
   {#if hint}
     <p id="{idPrefix}-kind-hint" class="text-sm text-muted-foreground">
       {hint}
     </p>
   {/if}
-</fieldset>
+</div>

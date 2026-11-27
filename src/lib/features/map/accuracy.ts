@@ -1,4 +1,4 @@
-import type { LatLon } from '#lib/features/trip/index.js';
+import type { LatLon } from '#lib/shared/lat-lon.js';
 import type { Accuracy } from './base-style';
 
 const EARTH_RADIUS_M = 6_371_008.8;

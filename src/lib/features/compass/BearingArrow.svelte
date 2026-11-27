@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Icon from '#lib/icon/Icon.svelte';
+  import Icon from '#lib/shared/Icon.svelte';
   let { degrees }: { degrees: number } = $props();
 
   let turned = 0;

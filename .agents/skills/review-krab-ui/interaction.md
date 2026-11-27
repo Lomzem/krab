@@ -33,7 +33,7 @@ export default defineConfig({
 });
 ```
 
-Write your own `*.review.ts` scenarios there. Import Playwright's base test, `doctor`, `recorder`, `readTrips` and `MADE_UP_SEA` through the corresponding paths. Preserve the inherited strict server, result/report paths, screenshot-on-failure and teardown. The runner forwards the final config override:
+Write your own `*.review.ts` scenarios there. Import `test` and `expect` from `scripts/verify-krab/recipe.ts`, whose auto fixture writes `doctor.json` before each scenario drives, and `recorder`, `readTrips` and `MADE_UP_SEA` through the corresponding paths. A `test` from `@playwright/test` or `e2e/fixtures` skips the doctor. Preserve the inherited strict server, result/report paths, screenshot-on-failure and teardown. The runner forwards the final config override:
 
 ```sh
 KRAB_VERIFY_EVIDENCE_ROOT=/absolute/durable/round-NN/JUDGE-interaction bun scripts/verify-krab/run.ts --config .scratch/ui-review-sessions/round-NN/JUDGE/review.config.ts
@@ -41,7 +41,7 @@ KRAB_VERIFY_EVIDENCE_ROOT=/absolute/durable/round-NN/JUDGE-interaction bun scrip
 
 Before the first round using this path, the coordinator smoke-tests real UI action/capture and cleanup through it. A `--list` probe alone proves only recipe selection.
 
-Use the recorder for timestamped actions, full-frame PNGs with ARIA/state companions, and doctor output before driving. Retain recipe/config copies and SHA-256 values with each run so ignored scripts remain auditable. Read actual IndexedDB only in readonly transactions when claiming persistence. Keep failed runs and logs as well as successful runs. Never edit a recipe during its run; an adaptive follow-up run gets its own recorded recipe identity. The app-source manifest must remain the frozen identity throughout.
+Use the recorder for timestamped actions, and full-frame PNGs with ARIA/state companions. Retain recipe/config copies and SHA-256 values with each run so ignored scripts remain auditable. Read actual IndexedDB only in readonly transactions when claiming persistence. Keep failed runs and logs as well as successful runs. Never edit a recipe during its run; an adaptive follow-up run gets its own recorded recipe identity. The app-source manifest must remain the frozen identity throughout.
 
 ## Explore independently
 

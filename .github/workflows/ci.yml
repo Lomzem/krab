@@ -70,10 +70,30 @@ jobs:
           bun-version-file: package.json
       - name: Install frozen dependencies
         run: bun install --frozen-lockfile
-      - name: Set up native secret scanner and hooks
-        run: bun run setup:security
       - name: Verify policy commands
         run: bun run test:policy
+
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: package.json
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+      - name: Set up native secret scanner and hooks
+        run: bun run setup:security
       - name: Verify hook and secret-scan behavior
         run: bun run test:security
 
@@ -110,6 +130,7 @@ jobs:
       - name: Build static site
         run: bun run build
       - name: Build a newer version for the update test
+        if: matrix.script == 'test:e2e'
         run: bun run build:next
       - name: Run browser tests
         run: bun run ${{ matrix.script }} --shard ${{ matrix.shard }}

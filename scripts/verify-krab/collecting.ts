@@ -1,13 +1,12 @@
 #!/usr/bin/env bun
 import type { Page } from '@playwright/test';
 import { expect, test } from './recipe';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
 
 const gearTab = (page: Page) =>
-  page.getByRole('button', { name: 'Gear', exact: true });
+  page.getByRole('tab', { name: 'Gear', exact: true });
 
 const inWaterRow = (page: Page) =>
   page
@@ -34,8 +33,6 @@ test('collecting a pot records its catch, survives reload, and drops it again', 
     return trips[0]?.drops.at(-1);
   };
 
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await page.goto('/');

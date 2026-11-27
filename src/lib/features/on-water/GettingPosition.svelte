@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { ACTION_BUTTON, FOCUS, QUIET_BUTTON } from './controls';
+  import { Button } from '@ui-sdk/svelte/button';
+  import { FOCUS } from '#lib/shared/control-states.js';
+  import { ACTION_BUTTON, QUIET_BUTTON } from './controls';
 
   const DEADLINE_ID = 'finding-drop-position-deadline';
 
@@ -52,15 +54,11 @@
     </div>
   </div>
   <div class="grid grid-cols-[auto_1fr] gap-2 compact:flex-none">
-    <button
-      type="button"
-      class="min-h-11! px-3! text-base! {QUIET_BUTTON}"
-      onclick={oncancel}>Cancel</button
+    <Button class="min-h-11! px-3! text-base! {QUIET_BUTTON}" onclick={oncancel}
+      >Cancel</Button
     >
-    <button
-      type="button"
-      class="min-h-11! px-3! text-base! {ACTION_BUTTON}"
-      onclick={onskip}>Save without position</button
+    <Button class="min-h-11! px-3! text-base! {ACTION_BUTTON}" onclick={onskip}
+      >Save without position</Button
     >
   </div>
 </section>

@@ -4,6 +4,7 @@ import {
   expect,
   storedBaits,
   storedCollections,
+  tapsDuring,
   test,
   toastOf
 } from './fixtures';
@@ -11,7 +12,7 @@ import { expectAccessibleInBothThemes } from './accessibility';
 import { failStorage, injectStorageFaults } from './storage-faults';
 
 const gearTab = (page: Page) =>
-  page.getByRole('button', { name: 'Gear', exact: true });
+  page.getByRole('tab', { name: 'Gear', exact: true });
 
 const inWaterRow = (page: Page, name: string) =>
   page
@@ -35,6 +36,7 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
   const sheet = page.getByRole('dialog');
   const step = (name: string) =>
     sheet.getByRole('button', { name, exact: true });
+  const collections = () => storedCollections(page);
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -43,14 +45,24 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await gearTab(page).click();
 
-  await inWaterRow(page, 'Pot 1').click();
-  await expect(
-    sheet.getByRole('button', { name: 'Delete drop' })
-  ).toBeVisible();
-  await expectAccessibleInBothThemes(page);
-  await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+  const collectTaps = await tapsDuring(page, async () => {
+    await inWaterRow(page, 'Pot 1').tap();
+    await expect(
+      sheet.getByRole('button', { name: 'Delete drop' })
+    ).toBeVisible();
+    await expectAccessibleInBothThemes(page);
+    await sheet.getByRole('button', { name: 'Collect', exact: true }).tap();
+    await expect(sheet.getByRole('heading', { name: 'Catch' })).toBeFocused();
+    await expect.poll(collections).toEqual([{ collected: true, catch: null }]);
+  });
+  expect(
+    collectTaps,
+    'taps to collect from the Gear list'
+  ).toBeGreaterThanOrEqual(1);
+  expect(collectTaps, 'taps to collect from the Gear list').toBeLessThanOrEqual(
+    2
+  );
 
-  await expect(sheet.getByRole('heading', { name: 'Catch' })).toBeFocused();
   await expect(
     sheet.getByRole('button', { name: 'Collect', exact: true })
   ).toHaveCount(0);
@@ -62,7 +74,10 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
 
   await step('One more kept').click();
   await page.keyboard.press('Escape');
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
   await expect(sheet).toBeHidden();
   await expect(collectedRow(page, 'Pot 1')).toBeFocused();
   await collectedRow(page, 'Pot 1').click();
@@ -91,7 +106,10 @@ test('collecting keeps the sheet open for the catch, which stays a draft until S
     'Released: not recorded'
   );
   await page.keyboard.press('Escape');
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
   await expect(sheet).toBeHidden();
   await collectedRow(page, 'Pot 1').click();
   await expect(countOf(page, 'Kept')).toContainText('Kept: 2');
@@ -177,7 +195,10 @@ test('Drop again puts the same gear back with its details, and Undo collect in t
   await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
   await sheet.getByRole('button', { name: 'Nothing caught' }).click();
   await sheet.getByRole('button', { name: 'Undo collect' }).click();
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
 
   await expect(
     sheet.getByRole('button', { name: 'Collect', exact: true })
@@ -194,7 +215,7 @@ test('Undo collect on gear with a saved catch asks first and Keep catch keeps it
   page
 }) => {
   const sheet = page.getByRole('dialog');
-  const loss = sheet.getByRole('group', { name: 'Clears the catch' });
+  const loss = page.getByRole('alertdialog', { name: 'Clears the catch' });
   const keepCatch = loss.getByRole('button', { name: 'Keep catch' });
   const undoCollect = sheet.getByRole('button', { name: 'Undo collect' });
 
@@ -216,7 +237,10 @@ test('Undo collect on gear with a saved catch asks first and Keep catch keeps it
 
   await sheet.getByRole('button', { name: 'One more kept' }).click();
   await undoCollect.click();
-  await sheet.getByRole('button', { name: 'Discard changes' }).dblclick();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .dblclick();
   await expect(keepCatch).toBeFocused();
   await expect(countOf(page, 'Kept')).toContainText('Kept: 0');
   expect(await storedCollections(page)).toEqual([
@@ -391,7 +415,10 @@ test('Kept and Released take typed whole counts beside the steppers; a blank or 
     expect(await catchLayout(page)).toEqual(before);
   }
   await page.keyboard.press('Escape');
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
   await expect(sheet).toBeHidden();
   await page.reload();
   await gearTab(page).click();
@@ -416,7 +443,10 @@ test('Kept and Released take typed whole counts beside the steppers; a blank or 
   await expect(released).toHaveAttribute('aria-invalid', 'true');
   await expect(inWaterRow(page, 'Pot 1')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
   await expect(collectedRow(page, 'Pot 1')).toContainText(
     '1400 kept, 0 released'
   );
@@ -434,7 +464,10 @@ test('Kept and Released take typed whole counts beside the steppers; a blank or 
   await sheet.getByRole('button', { name: 'One fewer kept' }).click();
   await expect(kept).toHaveValue('9007199254740990');
   await page.keyboard.press('Escape');
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
   await expect(sheet).toBeHidden();
 });
 
@@ -547,6 +580,13 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   await collectedRow(page, 'Pot 1').click();
   const nothingCaught = sheet.getByRole('button', { name: 'Nothing caught' });
   await expect(nothingCaught).toHaveAttribute('aria-pressed', 'false');
+  await kept.fill('2.5');
+  await page.keyboard.press('Tab');
+  await expect(kept).toHaveAttribute('aria-invalid', 'true');
+  await nothingCaught.click();
+  await expect(kept).toHaveValue('0');
+  await kept.fill('2.5');
+  await expect(kept).not.toHaveAttribute('aria-invalid');
   await nothingCaught.click();
   await expect(nothingCaught).toHaveAttribute('aria-pressed', 'true');
   await sheet.getByRole('button', { name: 'Clear catch' }).click();
@@ -562,11 +602,72 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   await expect(collectedRow(page, 'Pot 1')).toContainText('Nothing caught');
 });
 
-test('the open sheet says what Collect and End trip did in its own status, including a failed write, and stays open for another try', async ({
+test('Up and Down Arrow in a count step it like One more and One fewer, leaving a blank catch blank, and on text that is not a whole number both keep the text and name the fix', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
-  const said = sheet.getByRole('status', { name: 'Messages' });
+  const kept = sheet.getByRole('textbox', { name: 'Kept' });
+  const released = sheet.getByRole('textbox', { name: 'Released' });
+  const nothingCaught = sheet.getByRole('button', { name: 'Nothing caught' });
+  await collectPot(page);
+
+  await kept.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(kept).toHaveValue('');
+  await expect(released).toHaveValue('');
+  await expect(countOf(page, 'Kept')).toContainText('Kept: not recorded');
+
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(kept).toHaveValue('2');
+  await expect(released).toHaveValue('0');
+  await expect(kept).toBeFocused();
+  await expect(nothingCaught).toHaveAttribute('aria-pressed', 'false');
+
+  for (let press = 0; press < 3; press += 1) {
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(kept).toHaveValue('0');
+  await expect(nothingCaught).toHaveAttribute('aria-pressed', 'true');
+
+  const stepsOf = [
+    () => page.keyboard.press('ArrowUp'),
+    () => page.keyboard.press('ArrowDown'),
+    () => sheet.getByRole('button', { name: 'One more released' }).click(),
+    () => sheet.getByRole('button', { name: 'One fewer released' }).click()
+  ];
+  for (const typed of ['-1', '2.5']) {
+    for (const stepBy of stepsOf) {
+      await released.fill('0');
+      await released.fill(typed);
+      await expect(released).not.toHaveAttribute('aria-invalid');
+      await expect(released).toHaveAccessibleDescription('');
+      await stepBy();
+      await expect(released).toHaveValue(typed);
+      await expect(released).toHaveAttribute('aria-invalid', 'true');
+      await expect(released).toHaveAccessibleDescription(
+        'Whole number for Released'
+      );
+      await expect(kept).toHaveValue('0');
+    }
+  }
+
+  await released.fill('');
+  await released.focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(released).toHaveValue('1');
+  await expect(released).not.toHaveAttribute('aria-invalid');
+  await expect(released).toHaveAccessibleDescription('');
+
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(collectedRow(page, 'Pot 1')).toContainText('0 kept, 1 released');
+});
+
+test('the open sheet shows what Collect and End trip did, including a failed write, and stays open for another try', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
   const collect = sheet.getByRole('button', { name: 'Collect', exact: true });
 
   await injectStorageFaults(page);
@@ -577,23 +678,25 @@ test('the open sheet says what Collect and End trip did in its own status, inclu
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await gearTab(page).click();
   await inWaterRow(page, 'Pot 1').click();
-  await expect(said).toHaveText('');
+  await expect(sheet.getByText('Pot 1 dropped')).toHaveCount(0);
 
   await failStorage(page, 'writes');
   await collect.click();
-  await expect(said).toHaveText("Couldn't collect");
+  await expect(sheet.getByText("Couldn't collect")).toBeVisible();
   await expect(collect).toBeVisible();
 
   await failStorage(page, null);
   await collect.click();
-  await expect(said).toHaveText('Pot 1 collected');
+  await expect(sheet.getByText('Pot 1 collected')).toBeVisible();
+  await expect(sheet.getByText("Couldn't collect")).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
+  const ask = page.getByRole('alertdialog', { name: 'End trip?' });
   await page.getByRole('button', { name: 'End trip' }).click();
-  await expect(said).toHaveText('');
+  await expect(ask.getByText('Pot 1 collected')).toHaveCount(0);
   await failStorage(page, 'writes');
-  await sheet.getByRole('button', { name: 'End trip' }).click();
-  await expect(said).toHaveText("Couldn't end the trip");
-  await expect(sheet.getByRole('button', { name: 'End trip' })).toBeVisible();
+  await ask.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask.getByText("Couldn't end the trip")).toBeVisible();
+  await expect(ask.getByRole('button', { name: 'End trip' })).toBeVisible();
 });

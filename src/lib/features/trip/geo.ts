@@ -1,4 +1,4 @@
-export type LatLon = { lat: number; lon: number };
+import type { LatLon } from '#lib/shared/lat-lon.js';
 
 const EARTH_RADIUS_M = 6_371_008.8;
 const METRES_PER_FOOT = 0.3048;

@@ -1,5 +1,5 @@
 import type { Fix, PositionSource } from '#lib/features/trip/index.js';
-import { watchVisibility } from '#lib/page-visibility.js';
+import { watchVisibility } from '#lib/shared/page-visibility.js';
 
 export type LocationPermission = 'prompt' | 'granted' | 'denied';
 
