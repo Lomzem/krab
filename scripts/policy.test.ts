@@ -1336,26 +1336,24 @@ const diagnostics: Record<
         text: block
       })),
   check: (output, copy) =>
-    stripVTControlCharacters(output)
-      .split('\n')
-      .flatMap((line, at, lines) => {
-        const machine = /^\d+ (ERROR|WARNING) "([^"]+)" /.exec(line);
-        if (machine)
-          return [
-            { file: machine[2], text: line, warning: machine[1] === 'WARNING' }
-          ];
-        const human = /^(\/.+):\d+:\d+$/.exec(line)?.[1];
-        const severity = /^(Error|Warn): /.exec(lines[at + 1] ?? '')?.[1];
-        if (human === undefined || severity === undefined) return [];
-        const end = lines.indexOf('', at);
+    output.split('\n').flatMap((line, at, lines) => {
+      const machine = /^\d+ (ERROR|WARNING) "([^"]+)" /.exec(line);
+      if (machine)
         return [
-          {
-            file: relative(copy, human),
-            text: lines.slice(at, end === -1 ? undefined : end).join('\n'),
-            warning: severity === 'Warn'
-          }
+          { file: machine[2], text: line, warning: machine[1] === 'WARNING' }
         ];
-      }),
+      const human = /^(\/.+):\d+:\d+$/.exec(line)?.[1];
+      const severity = /^(Error|Warn): /.exec(lines[at + 1] ?? '')?.[1];
+      if (human === undefined || severity === undefined) return [];
+      const end = lines.indexOf('', at);
+      return [
+        {
+          file: relative(copy, human),
+          text: lines.slice(at, end === -1 ? undefined : end).join('\n'),
+          warning: severity === 'Warn'
+        }
+      ];
+    }),
   'format:check': (output) =>
     output.split('\n').flatMap((line) => {
       const file = /^(\S.*) \([\d.]+m?s\)$/.exec(line)?.[1];
@@ -1440,7 +1438,7 @@ const runPass = async (
     invalid.length > 0 ? 1 : 0,
     `${command} with ${inputs.map((input) => input.variant).join(', ')} fixtures: ${output}`
   );
-  const found = diagnostics[command](output, copy);
+  const found = diagnostics[command](stripVTControlCharacters(output), copy);
   const expected = new Set(invalid.map((input) => input.file));
   for (const diagnostic of found)
     assert.ok(
