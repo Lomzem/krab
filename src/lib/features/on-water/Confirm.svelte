@@ -46,9 +46,16 @@
     presses.stop();
   });
 
+  const keepUnlessBusy = () => {
+    if (!busy) onkeep();
+  };
+
+  const asked = $derived(open ? title : null);
+
   $effect.pre(() => {
-    if (!open) return;
+    if (asked === null) return;
     untrack(() => {
+      presses.absorb();
       presses.forget();
       openedAt = notice?.key ?? 0;
     });
@@ -59,12 +66,17 @@
   });
 </script>
 
+<svelte:window
+  onpointerdowncapture={presses.note}
+  onkeydowncapture={presses.forget}
+/>
+
 <AlertDialog
   {open}
   onOpenChange={(next, details) => {
     if (next) return;
     details.cancel();
-    onkeep();
+    keepUnlessBusy();
   }}
 >
   <AlertDialogContent
@@ -73,8 +85,6 @@
       ? 'none'
       : () => returnFocus() ?? undefined}
     class="fixed inset-0 m-auto h-fit w-[min(24rem,calc(100%-2rem))] rounded-2xl bg-card p-4 text-foreground shadow-xl backdrop:bg-scrim/40"
-    onpointerdown={presses.note}
-    onkeydown={presses.forget}
   >
     <AlertDialogTitle class="text-title font-semibold">{title}</AlertDialogTitle
     >
@@ -101,9 +111,7 @@
         })}
         class="flex-1 basis-36 {PRIMARY_BUTTON}"
         aria-disabled={busy}
-        onclick={() => {
-          if (!busy) onkeep();
-        }}>{keep}</Button
+        onclick={keepUnlessBusy}>{keep}</Button
       >
       <Button
         class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"

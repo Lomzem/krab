@@ -72,12 +72,10 @@
   });
 
   let editingFocus: Element | null = null;
-  let sheet = $state<{ absorbPress: () => void }>();
 
-  const askShown = (loss: Loss) => {
+  const askShown = () => {
     const active = document.activeElement;
     if (active?.closest('[role="dialog"]')) editingFocus = active;
-    if (loss === 'catch') sheet?.absorbPress();
   };
 
   const editing = () =>
@@ -86,12 +84,7 @@
       : null;
 
   $effect.pre(() => {
-    const loss = asking;
-    if (loss !== null) {
-      untrack(() => {
-        askShown(loss);
-      });
-    }
+    if (asking !== null) untrack(askShown);
   });
 
   const dismiss = () => {
@@ -149,7 +142,6 @@
 </script>
 
 <Sheet
-  bind:this={sheet}
   {open}
   onclose={dismiss}
   onbackdrop={() => {

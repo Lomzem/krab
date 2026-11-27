@@ -896,6 +896,8 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
     latitude: MADE_UP_SEA.latitude + index * 0.0012,
     longitude: MADE_UP_SEA.longitude + index * 0.0004
   });
+  // Playwright's clock moves performance.now ahead of the animation timeline, so a sheet spring timed from it never plays.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.clock.install();
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();

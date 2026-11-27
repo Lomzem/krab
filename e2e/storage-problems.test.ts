@@ -43,14 +43,11 @@ const startWithLocation = async (page: Page) => {
 };
 
 const endTheTrip = async (page: Page) => {
-  const sheet = page.getByRole('dialog');
+  const confirmation = page.getByRole('alertdialog', { name: 'End trip?' });
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
-  await page
-    .getByRole('alertdialog')
-    .getByRole('button', { name: 'End trip' })
-    .click();
-  await expect(sheet).toBeHidden();
+  await confirmation.getByRole('button', { name: 'End trip' }).click();
+  await expect(confirmation).toBeHidden();
 };
 
 test('a trip whose stored records fail to read shows that it could not load, not an empty trip, and Retry loads the running trip and past trips', async ({

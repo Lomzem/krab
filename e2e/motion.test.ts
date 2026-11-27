@@ -2,26 +2,59 @@ import type { Page } from '@playwright/test';
 import { expect, test, toastOf } from './fixtures';
 import { animationsSettled } from './settled';
 
-const recordTransitions = (page: Page) =>
+type Recorded = Window & { transitionRuns: string[]; sheetTops: number[] };
+
+const recordMotion = (page: Page) =>
   page.addInitScript(() => {
-    const runs: string[] = [];
-    Object.assign(window, { transitionRuns: runs });
+    const recorded = window as unknown as Recorded;
+    recorded.transitionRuns = [];
+    recorded.sheetTops = [];
     document.addEventListener('transitionrun', (event) => {
       if (!(event.target instanceof Element)) return;
       const owner =
         event.target.getAttribute('role') ??
         event.target.getAttribute('data-slot') ??
         event.target.localName;
-      runs.push(`${owner} ${event.propertyName}`);
+      recorded.transitionRuns.push(`${owner} ${event.propertyName}`);
     });
+    const sample = () => {
+      const sheet = document.querySelector('[role="dialog"]');
+      if (sheet)
+        recorded.sheetTops.push(Math.round(sheet.getBoundingClientRect().top));
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
   });
 
-const transitionRuns = (page: Page) =>
+const toastRuns = (page: Page) =>
   page.evaluate(() =>
-    (window as unknown as { transitionRuns: string[] }).transitionRuns.filter(
-      (run) => run.startsWith('dialog-viewport ') || run.startsWith('group ')
+    (window as unknown as Recorded).transitionRuns.filter((run) =>
+      run.startsWith('group ')
     )
   );
+
+function sheetMoving() {
+  const sheet = document.querySelector('[role="dialog"]');
+  if (!sheet) return true;
+  return sheet
+    .getAnimations()
+    .some(
+      (animation) =>
+        animation.timeline === document.timeline &&
+        animation.playState === 'running'
+    );
+}
+
+const sheetAtRest = (page: Page) =>
+  expect.poll(() => page.evaluate(sheetMoving)).toBe(false);
+
+const sheetTops = (page: Page) =>
+  page.evaluate(() => (window as unknown as Recorded).sheetTops);
+
+const restingTop = (page: Page) =>
+  page
+    .getByRole('dialog')
+    .evaluate((sheet) => Math.round(sheet.getBoundingClientRect().top));
 
 const shownAfterDone = async () => {
   const sheet = document.querySelector('[role="dialog"]');
@@ -51,35 +84,42 @@ test('the Drop toast rises as it fades in and the Filter sheet slides up', async
   page
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await recordTransitions(page);
+  await recordMotion(page);
   await dropAndOpenFilter(page);
 
   await expect
-    .poll(() => transitionRuns(page))
-    .toEqual(
-      expect.arrayContaining([
-        'group translate',
-        'group opacity',
-        'dialog-viewport transform'
-      ])
-    );
+    .poll(() => toastRuns(page))
+    .toEqual(expect.arrayContaining(['group translate', 'group opacity']));
+  await sheetAtRest(page);
+  const rest = await restingTop(page);
+  const tops = await sheetTops(page);
+  expect(tops[0]).toBeGreaterThan(rest);
+  expect(tops.some((top) => top > rest && top < (tops[0] ?? rest))).toBe(true);
 });
 
-test('a closing Filter sheet leaves at once', async ({ page }) => {
-  await dropAndOpenFilter(page);
-  await animationsSettled(page);
+for (const reducedMotion of ['no-preference', 'reduce'] as const)
+  test(`with reduced motion ${reducedMotion}, a closing Filter sheet leaves at once`, async ({
+    page
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    await dropAndOpenFilter(page);
+    await animationsSettled(page);
+    await sheetAtRest(page);
 
-  const shownAfterClose = await page.evaluate(shownAfterDone);
+    const shownAfterClose = await page.evaluate(shownAfterDone);
 
-  expect(shownAfterClose).toBe(false);
-});
+    expect(shownAfterClose).toBe(false);
+  });
 
 test('under reduced motion the Drop toast and the Filter sheet appear at once', async ({
   page
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await recordTransitions(page);
+  await recordMotion(page);
   await dropAndOpenFilter(page);
+  await sheetAtRest(page);
 
-  expect(await transitionRuns(page)).toEqual([]);
+  expect(await toastRuns(page)).toEqual([]);
+  const rest = await restingTop(page);
+  expect(new Set(await sheetTops(page))).toEqual(new Set([rest]));
 });

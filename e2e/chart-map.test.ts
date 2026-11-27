@@ -26,6 +26,9 @@ const mapArea = (page: Page) =>
   page.getByRole('region', { name: 'Map', exact: true });
 const creditsOf = (page: Page) =>
   mapArea(page).getByRole('button', { name: /not for navigation|OpenFreeMap/ });
+const endConfirmation = (page: Page) =>
+  page.getByRole('alertdialog', { name: 'End trip?' });
+
 const potOnMap = (page: Page) =>
   mapArea(page).getByRole('button', { name: /^Pot 1,/ });
 const myPosition = (page: Page) =>
@@ -775,7 +778,6 @@ test('gear either side of the 180th meridian fits the past trip map as one small
   page
 }) => {
   const main = page.getByRole('main');
-  const sheet = page.getByRole('dialog');
   await context.setGeolocation({ latitude: 0, longitude: 179.995 });
   await dropPotAndOpenMap(page);
   await context.setGeolocation({ latitude: 0, longitude: -179.995 });
@@ -784,11 +786,8 @@ test('gear either side of the 180th meridian fits the past trip map as one small
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
-  await page
-    .getByRole('alertdialog')
-    .getByRole('button', { name: 'End trip' })
-    .click();
-  await expect(sheet).toBeHidden();
+  await endConfirmation(page).getByRole('button', { name: 'End trip' }).click();
+  await expect(endConfirmation(page)).toBeHidden();
   await page.getByRole('tab', { name: 'Past trips', exact: true }).click();
   await main.getByRole('button', { name: /2 drops, 2 uncollected$/ }).click();
 
@@ -2000,11 +1999,8 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
   await dropAt(page, 1);
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
-  await page
-    .getByRole('alertdialog')
-    .getByRole('button', { name: 'End trip' })
-    .click();
-  await expect(sheet).toBeHidden();
+  await endConfirmation(page).getByRole('button', { name: 'End trip' }).click();
+  await expect(endConfirmation(page)).toBeHidden();
   await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await shownWholeAtEdge(100, 1);
   await expect(

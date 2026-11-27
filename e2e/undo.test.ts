@@ -886,18 +886,19 @@ test("ending the trip retires a failed drop's Retry so it never saves into the n
   await shownOnceStored(page, failedSave);
   await failStorage(page, null);
 
-  const sheet = page.getByRole('dialog');
+  const confirmation = page.getByRole('alertdialog', { name: 'End trip?' });
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await holdStorage(page);
-  await page
-    .getByRole('alertdialog')
-    .getByRole('button', { name: 'End trip' })
-    .click();
+  await confirmation.getByRole('button', { name: 'End trip' }).click();
+  await expect(
+    confirmation.getByRole('button', { name: 'Keep trip going' })
+  ).toHaveAttribute('aria-disabled', 'true');
   await page.keyboard.press('Escape');
-  await expect(sheet).toBeHidden();
+  await expect(confirmation).toBeVisible();
   await expect(failedSave).toBeHidden();
   await releaseStorage(page);
+  await expect(confirmation).toBeHidden();
   const tripEndedNotice = toastOf(page).filter({ hasText: 'Trip ended' });
   await shownOnceStored(page, tripEndedNotice);
   await page.clock.runFor(3999);

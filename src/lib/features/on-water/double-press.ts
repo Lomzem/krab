@@ -81,8 +81,9 @@ export const doublePressGuard = () => {
       lastPress = null;
     },
     absorb: () => {
+      if (!lastPress) return;
       stop();
-      if (lastPress) stopAbsorbing = absorbDoublePress(lastPress);
+      stopAbsorbing = absorbDoublePress(lastPress);
     },
     stop
   };

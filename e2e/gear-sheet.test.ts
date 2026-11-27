@@ -256,6 +256,82 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
   await expect(page).toHaveURL('about:blank');
 });
 
+test('on a 640 by 320 screen, the second press of a double press on Show on map over unsaved changes leaves Discard changes asking, while a later press there discards and opens Map', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const label = sheet.getByLabel('Label');
+  const showOnMap = sheet.getByRole('button', { name: 'Show on map' });
+  const unsaved = page.getByRole('alertdialog', { name: 'Unsaved changes' });
+  const discard = unsaved.getByRole('button', { name: 'Discard changes' });
+  const mapTab = page
+    .getByRole('tablist', { name: 'Screens' })
+    .getByRole('tab', { name: 'Map', exact: true });
+  const center = async (control: Locator) => {
+    const box = await control.boundingBox();
+    expect(box, 'the control has a box').not.toBeNull();
+    return {
+      x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+      y: (box?.y ?? 0) + (box?.height ?? 0) / 2
+    };
+  };
+  const showOnMapUnder = async (y: number) => {
+    await showOnMap.evaluate((button, target) => {
+      let area = button.parentElement;
+      while (area && area.scrollHeight <= area.clientHeight)
+        area = area.parentElement;
+      const box = button.getBoundingClientRect();
+      if (area) area.scrollTop += box.top + box.height / 2 - target;
+    }, y);
+    await animationsSettled(page);
+  };
+  const editPot1 = async () => {
+    await gearRow(page, 'Pot 1').click();
+    await label.fill('blue float');
+  };
+
+  await page.setViewportSize({ width: 640, height: 320 });
+  await page.clock.install({ time: new Date('2031-03-04T05:00:00Z') });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.clock.pauseAt(new Date('2031-03-04T06:00:00Z'));
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+
+  await editPot1();
+  await showOnMap.focus();
+  await page.keyboard.press('Enter');
+  const point = await center(discard);
+  await page.keyboard.press('Escape');
+  await expect(unsaved).toBeHidden();
+
+  for (const input of ['touch', 'mouse'] as const) {
+    await showOnMapUnder(point.y);
+    const shown = await showOnMap.boundingBox();
+    expect(shown && point.y > shown.y && point.y < shown.y + shown.height).toBe(
+      true
+    );
+    await press(page, input, point.x, point.y, 1);
+    await expect(discard).toBeVisible();
+    await press(page, input, point.x, point.y, 2);
+    await page.clock.runFor(0);
+    await expect(discard).toBeVisible();
+    await expect(label).toHaveValue('blue float');
+    await expect(mapTab).toHaveAttribute('aria-selected', 'false');
+
+    await page.clock.runFor(500);
+    await press(page, input, point.x, point.y, 1);
+    await expect(unsaved).toBeHidden();
+    await expect(sheet).toBeHidden();
+    await expect(mapTab).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+    await expect(gearRow(page, 'Pot 1')).not.toContainText('blue float');
+    if (input === 'touch') await editPot1();
+  }
+});
+
 test('a swipe down closes a gear sheet with no changes, and springs back with no ask while it has unsaved changes', async ({
   page
 }) => {
@@ -269,13 +345,19 @@ test('a swipe down closes a gear sheet with no changes, and springs back with no
     );
   const swipeDown = async () => {
     await atRest();
-    await host.evaluate(async (element) => {
+    return host.evaluate(async (element) => {
+      const content = element.querySelector('[role="dialog"]');
+      const tops: number[] = [];
       element.scrollTo({ top: 0 });
-      for (let frame = 0; frame < 2; frame++)
+      for (let frame = 0; frame < 120 && content?.isConnected; frame++) {
         await new Promise(requestAnimationFrame);
+        tops.push(Math.round(content.getBoundingClientRect().top));
+      }
+      return tops;
     });
   };
 
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await expect(page.getByText('Finding position')).toBeHidden();
@@ -293,10 +375,14 @@ test('a swipe down closes a gear sheet with no changes, and springs back with no
   await label.fill('red float');
   await atRest();
   const top = await sheetTop();
-  await swipeDown();
+  const tops = await swipeDown();
   await atRest();
   await expect(sheet).toBeVisible();
   expect(await sheetTop()).toBe(top);
+  const lowest = Math.max(...tops);
+  expect(lowest).toBeGreaterThan(top);
+  const springBack = tops.slice(tops.indexOf(lowest));
+  expect(springBack.some((at) => at > top && at < lowest)).toBe(true);
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(label).toHaveValue('red float');
 

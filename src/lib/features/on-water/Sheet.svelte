@@ -46,10 +46,6 @@
 
   const presses = doublePressGuard();
 
-  export const absorbPress = () => {
-    presses.absorb();
-  };
-
   $effect(() => () => {
     presses.stop();
   });
