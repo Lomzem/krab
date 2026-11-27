@@ -1669,9 +1669,7 @@ function watchCredits(frames: number) {
     const credits = [...document.querySelectorAll('button')].find((button) =>
       /not for navigation|OpenFreeMap/.test(button.textContent)
     );
-    const toast = document.querySelector(
-      '[aria-label="Messages"] [role="group"]'
-    );
+    const toast = document.querySelector('[aria-label="Messages"] li');
     const shown = credits?.getBoundingClientRect();
     if (credits && shown && shown.width > 0 && toast) {
       watched.frames += 1;
@@ -2344,7 +2342,7 @@ test('a pin panned off the map is inert, out of the Tab order, until it is in vi
         )
       );
     }
-    return names.filter((name) => name.startsWith('Pot 1'));
+    return names.filter((name) => name.startsWith('Pot 1,'));
   };
   await expect(potOnMap(page)).toBeInViewport();
   expect(await tabbedFrom(view)).toHaveLength(1);

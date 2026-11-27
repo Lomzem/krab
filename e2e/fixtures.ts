@@ -102,7 +102,7 @@ export const test = base.extend<{ providers: Providers }>({
 });
 
 export const toastOf = (page: Page) =>
-  page.getByRole('status', { name: 'Messages' }).getByRole('group');
+  page.getByRole('region', { name: 'Messages' }).getByRole('listitem');
 
 type HeldStorage = { releaseStorage?: boolean };
 

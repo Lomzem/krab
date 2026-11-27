@@ -29,7 +29,7 @@ const recordMotion = (page: Page) =>
 const toastRuns = (page: Page) =>
   page.evaluate(() =>
     (window as unknown as Recorded).transitionRuns.filter((run) =>
-      run.startsWith('group ')
+      run.startsWith('toast ')
     )
   );
 
@@ -89,7 +89,7 @@ test('the Drop toast rises as it fades in and the Filter sheet slides up', async
 
   await expect
     .poll(() => toastRuns(page))
-    .toEqual(expect.arrayContaining(['group translate', 'group opacity']));
+    .toEqual(expect.arrayContaining(['toast translate', 'toast opacity']));
   await sheetAtRest(page);
   const rest = await restingTop(page);
   const tops = await sheetTops(page);

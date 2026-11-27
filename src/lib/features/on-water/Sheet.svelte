@@ -101,8 +101,6 @@
       {@render children()}
     </div>
     <p
-      role="status"
-      aria-label="Messages"
       class={said &&
         'border-t border-border px-4 pt-3 text-base leading-snug font-medium'}
     >

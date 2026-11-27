@@ -97,11 +97,7 @@
         {/snippet}
       </AlertDialogDescription>
     {/if}
-    <p
-      role="status"
-      aria-label="Messages"
-      class={said && 'mt-3 text-base leading-snug font-medium'}
-    >
+    <p class={said && 'mt-3 text-base leading-snug font-medium'}>
       {said}
     </p>
     <div class="mt-4 flex flex-wrap gap-2">
