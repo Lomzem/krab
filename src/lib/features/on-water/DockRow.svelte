@@ -35,7 +35,7 @@
     children
   }: {
     notice: Notice | null;
-    onundo: (undo: Undo) => void;
+    onundo: (undo: Undo) => Promise<unknown>;
     onretry: (key: number) => void;
     ondismiss: (key: number) => void;
     blocked?: boolean;
@@ -89,6 +89,15 @@
       else hold('hidden')();
     })
   );
+
+  $effect(() => {
+    if (!covered) return;
+    untrack(() => {
+      touches.clear();
+      release('touch')();
+      release('pointer')();
+    });
+  });
 
   $effect(() => {
     if (!notice) {
@@ -171,8 +180,12 @@
         if (item === element) item = undefined;
       };
     }}
-    onpointerenter={hold('pointer')}
-    onpointerleave={release('pointer')}
+    onpointerenter={(event: PointerEvent) => {
+      if (event.pointerType !== 'touch') hold('pointer')();
+    }}
+    onpointerleave={(event: PointerEvent) => {
+      if (event.pointerType !== 'touch') release('pointer')();
+    }}
     ontouchstart={touchStart}
     ontouchend={touchEnd}
     ontouchcancel={touchEnd}
@@ -190,9 +203,8 @@
             class="{ACTION} text-inverse-action underline underline-offset-4 {FOCUS_INVERSE} aria-disabled:text-inverse-foreground/70 aria-disabled:no-underline"
             aria-disabled={blocked ? 'true' : undefined}
             dismiss={false}
-            onAction={() => {
-              onundo(undo);
-            }}>Undo</ToastAction
+            onAction={() => (blocked ? undefined : onundo(undo))}
+            >Undo</ToastAction
           >
         {:else if notice?.offer.action === 'retry'}
           {@const key = notice.key}

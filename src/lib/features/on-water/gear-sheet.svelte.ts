@@ -47,7 +47,7 @@ export type SheetCommands = {
   collect: (dropId: string) => Promise<unknown>;
   remove: (dropId: string) => Promise<boolean>;
   undoCollect: (dropId: string, name: string) => Promise<unknown>;
-  undoCollectBlocked: (dropId: string) => boolean;
+  saving: (dropId: string) => boolean;
   observeStored: (observer: () => void) => void;
   dropAgain: (dropId: string) => void;
   saveLost: (name: string) => void;
@@ -202,11 +202,9 @@ export class GearSheetSession {
     return this.#refusal;
   }
 
-  get undoCollectBlocked() {
+  get saving() {
     const subject = this.#subject;
-    return (
-      subject !== null && this.#commands.undoCollectBlocked(subject.drop.id)
-    );
+    return subject !== null && this.#commands.saving(subject.drop.id);
   }
 
   get dirty() {
@@ -336,7 +334,7 @@ export class GearSheetSession {
 
   undoCollect() {
     const subject = this.#subject;
-    if (!subject || this.busy || this.undoCollectBlocked) return;
+    if (!subject || this.busy || this.saving) return;
     const putBack = () => {
       void this.#operate(
         'other',
@@ -374,7 +372,7 @@ export class GearSheetSession {
   #checked() {
     const subject = this.#subject;
     const draft = this.#draft;
-    if (!subject || !draft || this.busy) return null;
+    if (!subject || !draft || this.busy || this.saving) return null;
     const checked = checkDraft(draft.of(subject.drop), subject.gear.kind);
     if (checked.valid)
       return { subject, edit: checked.edit, kind: checked.kind };

@@ -267,15 +267,13 @@ export class OnWater {
     }
   }
 
-  undoCollectBlocked(dropId: string) {
+  saving(dropId: string) {
     return this.#saving.includes(dropId);
   }
 
   get undoBlocked() {
     const offer = this.notice?.offer;
-    return (
-      offer?.action === 'undo-collect' && this.undoCollectBlocked(offer.dropId)
-    );
+    return offer?.action === 'undo-collect' && this.saving(offer.dropId);
   }
 
   async undo(undo: Undo) {
@@ -334,7 +332,7 @@ export class OnWater {
   }
 
   async undoCollect(dropId: string, name: string) {
-    if (this.undoCollectBlocked(dropId)) return false;
+    if (this.saving(dropId)) return false;
     const undone = await resultOf(this.#book.undoCollect(dropId));
     if (Result.isFailure(undone)) {
       this.#say(

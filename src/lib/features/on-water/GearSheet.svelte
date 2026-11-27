@@ -129,8 +129,7 @@
       if (!entered) return;
       entered = false;
       if (!open) return;
-      if (asking !== null || session.dirty) enter();
-      dismiss();
+      if (session.dismiss() !== 'left') enter();
     });
   });
 
@@ -209,14 +208,14 @@
     <Button
       type="submit"
       form={FORM_ID}
-      aria-disabled={busy}
+      aria-disabled={busy || session.saving}
       class="flex-[1_1_7rem] {collectLeads ? PRIMARY_BUTTON : ACTION_BUTTON}"
       >Save</Button
     >
     {#if subject && canUndoCollect(subject.trip, subject.drop)}
       <Button
         class="grow {QUIET_BUTTON}"
-        aria-disabled={busy || session.undoCollectBlocked}
+        aria-disabled={busy || session.saving}
         onclick={() => {
           session.undoCollect();
         }}>Undo collect</Button

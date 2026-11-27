@@ -67,7 +67,7 @@ const sessionWith = (overrides: Partial<SheetCommands> = {}) => {
     collect: vi.fn(() => Promise.resolve()),
     remove: vi.fn(() => Promise.resolve(true)),
     undoCollect: vi.fn(() => Promise.resolve()),
-    undoCollectBlocked: () => false,
+    saving: () => false,
     observeStored: vi.fn(),
     dropAgain: vi.fn(),
     saveLost: vi.fn(),
@@ -97,7 +97,7 @@ const collectedOnWater = async () => {
     collect: (id) => water.collect(id),
     remove: (id) => water.remove(id),
     undoCollect: (id, name) => water.undoCollect(id, name),
-    undoCollectBlocked: (id) => water.undoCollectBlocked(id),
+    saving: (id) => water.saving(id),
     observeStored: (observer) => {
       water.observeStored(observer);
     },
@@ -237,7 +237,7 @@ it('asks before unsaved changes are lost, ignores a backdrop tap, and asks after
   expect(commands.remove).toHaveBeenCalledWith('d2');
 });
 
-it('keeps a label saved after its sheet reopened when the reopened sheet saves other details', async () => {
+it('refuses Save and Drop again in a reopened sheet while that drop has a pending Save, so the pending label is kept', async () => {
   const { session, dropId, stored } = await collectedOnWater();
   session.show(origin(dropId));
   assert(session.draft);
@@ -245,13 +245,20 @@ it('keeps a label saved after its sheet reopened when the reopened sheet saves o
   session.save();
   expect(session.dismiss()).toBe('left');
   session.show(origin(dropId));
-  await vi.waitFor(() => {
-    expect(stored()?.label).toBe('Ledge');
-  });
 
   assert(session.draft);
+  expect(session.saving).toBe(true);
+  session.draft.details.notes = 'early';
+  session.save();
+  session.dropAgain();
+  expect(session.busy).toBe(false);
+  expect(session.open).toBe(true);
+  await vi.waitFor(() => {
+    expect(session.saving).toBe(false);
+  });
+  expect(stored()).toMatchObject({ label: 'Ledge', notes: '' });
+
   expect(session.draft.details.label).toBe('Ledge');
-  expect(session.dirty).toBe(false);
   session.draft.details.notes = 'tangled';
   session.save();
   await vi.waitFor(() => {
@@ -271,12 +278,12 @@ it('refuses Undo collect in a reopened sheet while a catch Save of that drop is 
   expect(session.dismiss()).toBe('left');
   session.show(origin(dropId));
 
-  expect(session.undoCollectBlocked).toBe(true);
+  expect(session.saving).toBe(true);
   expect(water.undoBlocked).toBe(true);
   session.undoCollect();
   expect(session.asking).toBe(null);
   await vi.waitFor(() => {
-    expect(session.undoCollectBlocked).toBe(false);
+    expect(session.saving).toBe(false);
   });
   await water.reload();
   expect(stored()?.collectedAt).not.toBe(null);

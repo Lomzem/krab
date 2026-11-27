@@ -103,7 +103,7 @@
     collect: (dropId) => water.collect(dropId),
     remove: (dropId) => water.remove(dropId),
     undoCollect: (dropId, name) => water.undoCollect(dropId, name),
-    undoCollectBlocked: (dropId) => water.undoCollectBlocked(dropId),
+    saving: (dropId) => water.saving(dropId),
     observeStored: (observer) => {
       water.observeStored(observer);
     },
@@ -258,13 +258,12 @@
     });
   };
 
-  const undo = (target: Undo) => {
-    void water.undo(target).then(async (undone) => {
+  const undo = (target: Undo) =>
+    water.undo(target).then(async (undone) => {
       if (!undone) return;
       await tick();
       restingFocus()?.focus();
     });
-  };
 
   const opensFrom =
     (from: SheetOrigin['from']) => (dropId: string, opener: HTMLElement) => {

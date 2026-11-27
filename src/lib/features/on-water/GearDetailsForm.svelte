@@ -131,7 +131,7 @@
     {#if canDropAgain(subject.trip, drop)}
       <Button
         class="w-full {PRIMARY_BUTTON}"
-        aria-disabled={busy}
+        aria-disabled={busy || session.saving}
         onclick={() => {
           session.dropAgain();
         }}
