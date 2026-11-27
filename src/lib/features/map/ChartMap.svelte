@@ -417,8 +417,13 @@
     });
   };
 
+  const moves = (
+    shift: { dx: number; dy: number } | null
+  ): shift is { dx: number; dy: number } =>
+    shift !== null && (shift.dx !== 0 || shift.dy !== 0);
+
   const shiftBy = (shift: { dx: number; dy: number } | null) => {
-    if (!map || !shift || (shift.dx === 0 && shift.dy === 0)) return;
+    if (!map || !moves(shift)) return;
     const middle = map.project(map.getCenter());
     map.jumpTo({
       center: map.unproject([middle.x - shift.dx, middle.y - shift.dy])
@@ -469,12 +474,20 @@
     )
       return;
     const box = target.getBoundingClientRect();
-    revealDrawn({
-      left: box.left - area.left - FOCUS_REACH,
-      right: box.right - area.left + FOCUS_REACH,
-      top: box.top - area.top - FOCUS_REACH,
-      bottom: box.bottom - area.top + FOCUS_REACH
-    });
+    const shift = clearShift(
+      [
+        {
+          left: box.left - area.left - FOCUS_REACH,
+          right: box.right - area.left + FOCUS_REACH,
+          top: box.top - area.top - FOCUS_REACH,
+          bottom: box.bottom - area.top + FOCUS_REACH
+        }
+      ],
+      area,
+      true
+    );
+    if (moves(shift)) leaveOverview();
+    shiftBy(shift);
   };
 
   const reveal = (id: string) => {

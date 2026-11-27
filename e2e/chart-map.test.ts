@@ -918,7 +918,7 @@ const SIX_IN_A_LINE = [
 ] as const;
 
 for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
-  test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, six drops in a line ending with a ${last.toLowerCase()} each keep a marker or a place in a group as the map settles, zooms out and back, shows all, zooms in twice and filters, drawn whole and tappable inside the map view with no control over any of them, and each opens its own gear`, async ({
+  test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, six drops in a line ending with a ${last.toLowerCase()} each keep a marker or a place in a group as the map settles, zooms out and back, shows all, zooms in twice and filters, drawn whole and tappable inside the map view with no control over any of them, and each opens its own gear and leaves the markers still as my position renews`, async ({
     page
   }) => {
     test.slow();
@@ -1024,6 +1024,12 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
       await expect(dialogs.getByRole('heading', { level: 2 })).toHaveText(name);
       await page.keyboard.press('Escape');
       await expect(dialogs).toHaveCount(0);
+      const closed = await markers.evaluateAll(markerFootprints);
+      await page.clock.runFor(4000);
+      expect(
+        await markers.evaluateAll(markerFootprints),
+        `markers as my position renews after ${name} closes`
+      ).toEqual(closed);
     }
   });
 }
