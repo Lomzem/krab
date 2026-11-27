@@ -88,7 +88,7 @@
   let pastTripId = $state<string | null>(null);
   let pastTrips = $state<{ heading: () => HTMLElement | null }>();
   let pastShow = $state<string | null>(null);
-  let pastShowNext: string | null = null;
+  let droppingAgain = $state(false);
   let slowAttempt = $state.raw<DropAttempt | null>(null);
   let dropReplaced = false;
   const savingAttempt = $derived(water.pending?.attempt ?? null);
@@ -109,7 +109,11 @@
     },
     dropAgain: (dropId) => {
       now = Date.now();
-      void water.dropAgain(dropId).then(focusDropAfterSave);
+      droppingAgain = true;
+      void water.dropAgain(dropId).then((saved) => {
+        droppingAgain = false;
+        return focusDropAfterSave(saved);
+      });
     },
     saveLost: (name) => {
       water.saveLost(name);
@@ -220,6 +224,7 @@
   const switchTo = async (next: Tab) => {
     if (next === tab) return;
     if (main) scrolls[tab] = main.scrollTop;
+    if (next !== 'map') showOnMap = null;
     tab = next;
     await tick();
     if (main) main.scrollTop = scrolls[next];
@@ -274,20 +279,19 @@
       });
     };
 
-  const sheetReturnFocus = () => {
-    if (pastShowNext !== null) {
-      pastShow = pastShowNext;
-      pastShowNext = null;
-      return null;
-    }
-    if (water.pending?.phase === 'acquiring' || savingShown) return null;
-    if (showOnMap !== null) return mapTabButton;
-    return gearSheet.returnFocus() ?? restingFocus();
-  };
+  const sheetReturnFocus = $derived(
+    pastShow !== null ||
+      (droppingAgain && (water.pending?.phase === 'acquiring' || savingShown))
+      ? 'none'
+      : () =>
+          showOnMap === null
+            ? (gearSheet.returnFocus() ?? restingFocus())
+            : mapTabButton
+  );
 
   const show = ({ trip, drop: target }: SheetSubject) => {
     if (trip.endedAt !== null) {
-      pastShowNext = target.id;
+      pastShow = target.id;
       return;
     }
     now = Date.now();

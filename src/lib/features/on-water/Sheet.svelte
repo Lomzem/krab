@@ -32,12 +32,17 @@
     subtitle?: Snippet;
     onclose: () => void;
     onbackdrop?: () => void;
-    returnFocus: () => HTMLElement | null | undefined;
+    returnFocus: (() => HTMLElement | null | undefined) | 'none';
     notice?: Notice | null;
     describedBy?: string;
     children: Snippet;
     footer?: Snippet;
   } = $props();
+
+  const finalFocus = $derived.by(() => {
+    const target = returnFocus;
+    return target === 'none' ? 'none' : () => target() ?? undefined;
+  });
 
   let openedAt = $state(0);
   const said = $derived(notice && notice.key > openedAt ? notice.text : '');
@@ -77,7 +82,7 @@
 <Dialog {open} presentation="sheet" onOpenChange={changeOpen}>
   <DialogContent
     aria-describedby={describedBy}
-    finalFocus={() => returnFocus() ?? undefined}
+    {finalFocus}
     class="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-card text-foreground shadow-xl [--sheet-backdrop:color-mix(in_oklab,var(--color-scrim)_40%,transparent)]"
     onpointerdown={presses.note}
     onkeydown={presses.forget}

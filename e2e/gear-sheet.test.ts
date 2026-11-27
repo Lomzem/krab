@@ -13,6 +13,7 @@ import {
   expectAccessibleInBothThemes,
   expectFocusTrapped
 } from './accessibility';
+import { failStorage, injectStorageFaults } from './storage-faults';
 
 const gearRow = (page: Page, name: string | RegExp) =>
   page.getByRole('main').getByRole('button').filter({ hasText: name });
@@ -391,6 +392,79 @@ test('a swipe down closes a gear sheet with no changes, and springs back with no
   await expect(pot1).toContainText('red float');
   await page.goBack();
   await expect(page).toHaveURL('about:blank');
+});
+
+const followsMouseDrag = async ({ page }: { page: Page }) => {
+  const sheet = page.getByRole('dialog');
+  const sheetTop = () =>
+    sheet.evaluate((element) =>
+      Math.round(element.getBoundingClientRect().top)
+    );
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+  await gearRow(page, 'Pot 1').click();
+  await expect(sheet).toHaveAttribute('data-driver', 'pointer');
+  await expect.poll(() => sheet.evaluate(springing)).toBe(false);
+  const top = await sheetTop();
+  const box = await sheet.getByRole('heading', { name: 'Pot 1' }).boundingBox();
+  expect(box).not.toBeNull();
+  const x = (box?.x ?? 0) + (box?.width ?? 0) / 2;
+  const y = (box?.y ?? 0) + (box?.height ?? 0) / 2;
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 60, { steps: 12 });
+  await expect.poll(sheetTop).toBeGreaterThan(top + 30);
+  await page.mouse.move(x, y, { steps: 12 });
+  await page.mouse.up();
+
+  await expect.poll(sheetTop).toBe(top);
+  await expect(sheet).toBeVisible();
+};
+
+test.describe('with a mouse and no touch', () => {
+  test.use({ hasTouch: false });
+
+  test(
+    'under reduced motion a gear sheet follows a mouse drag down, then rests where it was',
+    followsMouseDrag
+  );
+});
+
+test('when Delete drop over unsaved changes fails to store, the sheet stays open with focus back on Delete drop', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const deleteDrop = sheet.getByRole('button', { name: 'Delete drop' });
+
+  await injectStorageFaults(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+  await gearRow(page, 'Pot 1').click();
+  await sheet.getByLabel('Label').fill('red float');
+  await failStorage(page, 'writes');
+
+  await deleteDrop.focus();
+  await page.keyboard.press('Enter');
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
+
+  await expect(toastOf(page)).toContainText("Couldn't delete the drop");
+  await expect(sheet).toBeVisible();
+  await expect(deleteDrop).toBeFocused();
+  expect(await storedDrops(page)).toBe(1);
 });
 
 test('deleting a drop right after closing another gear sheet returns focus to the Gear heading, not to the other gear', async ({

@@ -53,7 +53,7 @@
     session: GearSheetSession;
     now: number;
     denied?: boolean;
-    returnFocus: () => HTMLElement | null | undefined;
+    returnFocus: (() => HTMLElement | null | undefined) | 'none';
     notice: Notice | null;
     direction?: Snippet<[Drop]>;
   } = $props();

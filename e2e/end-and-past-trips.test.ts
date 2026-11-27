@@ -569,3 +569,35 @@ test('two past trips on the same day show their start times, and Delete trip nam
   await ask.getByRole('button', { name: 'Keep trip' }).click();
   await expect(ask).toBeHidden();
 });
+
+test('on a 640 by 320 screen with doubled text, the End trip ask fits the screen and scrolls to its title and both actions', async ({
+  page
+}) => {
+  const ask = page.getByRole('alertdialog');
+
+  await page.setViewportSize({ width: 640, height: 320 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await dropOf(page, 'Pot', 'Pot 1');
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '200%';
+  });
+  await tab(page, 'Gear').click();
+  await page.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeVisible();
+
+  const box = await ask.boundingBox();
+  expect(box && box.y >= 0 && box.y + box.height <= 320).toBe(true);
+  for (const part of [
+    ask.getByRole('heading', { name: 'End trip?' }),
+    ask.getByRole('button', { name: 'Keep trip going' }),
+    ask.getByRole('button', { name: 'End trip' })
+  ]) {
+    await part.scrollIntoViewIfNeeded();
+    await expect(part).toBeInViewport({ ratio: 1 });
+  }
+  await ask.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeHidden();
+  await expect(toastOf(page)).toContainText('Trip ended');
+});

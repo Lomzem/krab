@@ -37,6 +37,11 @@
     children?: Snippet;
   } = $props();
 
+  const finalFocus = $derived.by(() => {
+    const target = returnFocus;
+    return target === 'none' ? 'none' : () => target() ?? undefined;
+  });
+
   let keepButton = $state<HTMLButtonElement>();
   let openedAt = $state(0);
   const said = $derived(notice && notice.key > openedAt ? notice.text : '');
@@ -84,10 +89,8 @@
 >
   <AlertDialogContent
     initialFocus={() => keepButton}
-    finalFocus={returnFocus === 'none'
-      ? 'none'
-      : () => returnFocus() ?? undefined}
-    class="fixed inset-0 m-auto h-fit w-[min(24rem,calc(100%-2rem))] rounded-2xl border border-border bg-card p-4 text-foreground shadow-xl backdrop:bg-scrim/40"
+    {finalFocus}
+    class="fixed inset-0 m-auto h-fit max-h-[calc(100dvh-2rem)] w-[min(24rem,calc(100%-2rem))] overflow-y-auto overscroll-contain rounded-2xl border border-border bg-card p-4 text-foreground shadow-xl backdrop:bg-scrim/40"
   >
     <AlertDialogTitle class="text-title font-semibold">{title}</AlertDialogTitle
     >

@@ -134,8 +134,11 @@
   }
 
   [data-slot='dialog-content'][data-presentation='sheet'] {
-    translate: none !important;
     opacity: 1 !important;
+  }
+
+  [data-slot='dialog-content'][data-presentation='sheet'][data-driver='scroll-snap'] {
+    translate: none !important;
   }
 }
 

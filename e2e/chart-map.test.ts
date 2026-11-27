@@ -2437,3 +2437,47 @@ test('a focused pin shows a white then navy ring, outside the magenta ring of ge
   expect(shadows).toContain('rgb(163, 37, 111) 0px 0px 0px 5px');
   for (const band of MAP_RING_BANDS(5)) expect(shadows).toContain(band);
 });
+
+test('when the map cannot start, Show on map leaves no pending show, so a gear sheet closed later on Gear returns focus to its row', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const gearTab = page.getByRole('tab', { name: 'Gear', exact: true });
+  const pot1 = gearRow(page, 'Pot 1');
+
+  await page.addInitScript(() => {
+    const canvas: {
+      getContext: (
+        this: HTMLCanvasElement,
+        type: string,
+        ...rest: unknown[]
+      ) => unknown;
+    } = HTMLCanvasElement.prototype;
+    const { getContext } = canvas;
+    canvas.getContext = function (type, ...rest) {
+      return type.startsWith('webgl')
+        ? null
+        : getContext.call(this, type, ...rest);
+    };
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await expect(page.getByText("This phone can't show maps")).toBeVisible();
+
+  await gearTab.click();
+  await pot1.click();
+  await sheet.getByRole('button', { name: 'Show on map' }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(
+    page.getByRole('tab', { name: 'Map', exact: true })
+  ).toHaveAttribute('aria-selected', 'true');
+
+  await gearTab.click();
+  await pot1.click();
+  await sheet.getByRole('button', { name: 'Close' }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(pot1).toBeFocused();
+});

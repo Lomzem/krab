@@ -137,7 +137,8 @@ test('typing a saved bait in another case picks the saved spelling and Enter add
 
   await gearRow(page, 'Pot 2').click();
   await other.click();
-  await sheet.getByRole('button', { name: 'Clear bait' }).click();
+  await sheet.getByRole('button', { name: 'Clear bait' }).focus();
+  await page.keyboard.press('Enter');
   await expect(other).toBeFocused();
   await expect(
     sheet

@@ -790,6 +790,10 @@
       untrack(() => void showPlace(id));
     }
   });
+
+  $effect(() => {
+    if (failed && show !== null) untrack(onshown);
+  });
 </script>
 
 {#snippet baseChoice(choice: Base, text: string)}
