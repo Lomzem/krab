@@ -53,7 +53,7 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   page,
   context
 }, info) => {
-  const { log, capture, keep } = recorder(page, info, 'ending-trip', 'Map');
+  const { log, capture, keep } = recorder(page, info, 'ending-trip', 'Gear');
   const sheet = page.getByRole('dialog');
   const mapArea = page.getByRole('region', { name: 'Map', exact: true });
   const endButton = page
@@ -95,7 +95,9 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   ).toBeFocused();
   await expect(endButton).toHaveCount(0);
   await expect(page.getByRole('main')).toContainText('Nothing in the water');
-  await tab(page, 'Map').click();
+  await expect(
+    page.getByRole('main').getByRole('button', { name: 'View ended trip' })
+  ).toBeVisible();
   const ended = await readTrips(page);
   expect(ended).toHaveLength(1);
   expect(ended[0]?.endedAt).toEqual(expect.any(Number));
@@ -105,9 +107,10 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   ]);
   keep('indexeddb-ended.json', ended);
   log(
-    'End trip in the sheet; toast Trip ended; focus on the Gear heading; Gear says Nothing in the water; stored endedAt set, Net 1 still uncollected'
+    'End trip in the confirmation; toast Trip ended; focus on the Gear heading; Gear says Nothing in the water and offers View ended trip; stored endedAt set, Net 1 still uncollected'
   );
   await capture('03-ended');
+  await tab(page, 'Map').click();
 
   const pastLayer = sheet
     .getByRole('group', { name: 'Also show' })
@@ -292,7 +295,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   expect(after).toEqual([]);
   keep('indexeddb-after.json', after);
   log(
-    'Delete trip asks first; Keep it refocuses the button and stores nothing; confirming deletes it, toast Trip deleted, empty list with its heading focused, store empty'
+    'Delete trip asks first; Keep trip refocuses the button and stores nothing; confirming deletes it, toast Trip deleted, empty list with its heading focused, store empty'
   );
   await capture('07-deleted');
 });

@@ -17,7 +17,7 @@ bun run setup:security
 bun scripts/verify-krab/run.ts
 ```
 
-The executable helper reuses `scripts/e2e-container.ts`: build the static app once with `bun run build` (`--skip-next-build` skips `bun run build:next`, which only `e2e/offline-and-update.test.ts` needs), mount this checkout at `/work`, run as the host UID/GID, and use the checkout's dependencies. The custom Playwright config launches `vite preview --host 127.0.0.1 --port 4173 --strictPort`. Readiness requires the HTTP response followed by the visible first-launch location explanation. Each journey starts with empty localStorage and IndexedDB in a fresh browser context. There is no account, backend, migration or seed step: Krab creates its IndexedDB schema on first use.
+The executable helper reuses `scripts/e2e-container.ts`: build the static app once with `bun run build` (`--skip-next-build` skips `bun run build:next`, which only `e2e/offline-and-update.test.ts` needs), mount this checkout at `/work`, run as the host UID/GID, and use the checkout's dependencies. The custom Playwright config launches `vite preview --host 127.0.0.1 --port 4173 --strictPort`. The wrapper's readiness gate is the HTTP response from that preview; each recipe then waits for its own first UI state, such as the first-launch location explanation, before acting. Each journey starts with empty localStorage and IndexedDB in a fresh browser context. There is no account, backend, migration or seed step: Krab creates its IndexedDB schema on first use.
 
 Launch, doctor, drive, evidence copy and cleanup are one bounded command. Success is every configured journey passing, exit 0, and `Evidence retained after cleanup: <absolute path>`. Build/test output is saved to `run.log` at that path.
 
@@ -39,7 +39,7 @@ This requires exactly one active container matching this checkout and the pinned
 
 [The journey config](../../../scripts/verify-krab.config.ts) selects the executable recipes; [the feature map](features/README.md) describes coverage and limitations. Invoke them through `bun scripts/verify-krab/run.ts` so build, Docker checks, evidence retention and teardown all run. The recipes use the iPhone WebKit project from [playwright.config.ts](../../../playwright.config.ts), grant geolocation, and supply only its fictional mid-ocean `MADE_UP_SEA` position. The chart alignment journey samples real NOAA tiles at named public landmarks without setting them as a position or drop, so it runs only under the wrapper.
 
-Use the executable recipe's accessible roles and names when driving the documented journey. Drive real UI actions; use page evaluation for read-only observations of real browser IndexedDB and rendered evidence metadata. Never insert trip records or call component state setters to manufacture success.
+Use the executable recipe's accessible roles and names when driving the documented journey. The screen tabs are manual tabs: a click opens one, but arrow keys only move focus and Enter or Space opens it, as "the screen tabs take one Tab stop…" in `e2e/chart-map.test.ts` proves. Drive real UI actions; use page evaluation for read-only observations of real browser IndexedDB and rendered evidence metadata. Never insert trip records or call component state setters to manufacture success.
 
 For future permission/offline journeys in this recipe, use fresh contexts: `await context.clearPermissions()` denies location in this WebKit environment (it does not emulate an iOS prompt), `await context.grantPermissions(['geolocation'])` grants it, and `await context.setOffline(true)` / `await context.setOffline(false)` controls network access. The placing-drop recipe drives denied location with `clearPermissions()`; offline reload is not claimed by it. Add the owning ticket's observable requirements before treating them as verified. A missing precondition fails the journey; do not substitute a convenient path.
 
@@ -51,7 +51,7 @@ For UI refactors, follow [visual-review.md](visual-review.md) for representative
 
 Default persistent root:
 
-`.scratch/on-water-workflow/verify-evidence/<timestamp>-<pid>/`, resolved from the repository root where the command runs
+`.scratch/on-water-workflow/verify-evidence/<timestamp>-<pid>/`, resolved from the repository root where the command runs. `.scratch/` is gitignored and lies outside `test-results/verify-krab-lock`, so the evidence survives cleanup inside the checkout.
 
 Configure the parent directory before launch:
 
@@ -61,11 +61,21 @@ KRAB_VERIFY_EVIDENCE_ROOT=/absolute/ignored/evidence bun scripts/verify-krab/run
 
 Choose a gitignored location outside this run's scratch directory. Every artifact must contain only made-up coordinates, except the chart alignment journey's public-landmark tile samples in `alignment.json`; those landmarks are never a browser position or drop, and screenshots, IndexedDB snapshots and every other artifact still hold only made-up positions. Browser contexts never use host location. Do not attach real trip data or broaden this recipe to an existing browser profile.
 
-Each entry point records timestamped `actions.jsonl`, before/action/result screenshots, ARIA snapshots, `doctor.json`, and `indexeddb-before.json` / `indexeddb-after.json`. The latter are read through the page from the real `krab` database's `trips` store in readonly transactions. The reader never creates or upgrades that database: it rejects when the database or its `trips` store is missing. Require the saved made-up fix and unchanged records after reload alongside the visible Pot 1 row; a toast or final screenshot alone is insufficient. `run.log` records execution and failure output. The wrapper also retains `manifest.json`, `index.md` and, when Playwright starts, `artifacts/results.json`; manual screenshots have matching `.state.json` metadata and failed tests retain automatic failure screenshots. See [visual-review.md](visual-review.md) for attribution and review limits. On failure, keep partial evidence and report the failed action and unmet precondition. Do not claim another entry point's proof covers a skipped path.
+Each journey records timestamped `actions.jsonl` and, through the auto `doctorReceipt` fixture, `doctor.json`. Each manual capture writes a PNG with matching `.aria.txt` and `.state.json` beside it. The other artifacts follow the claim each recipe makes:
+
+| Claim                                           | Required artifacts                                                                                                                                       |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A write is stored, survives reload or is undone | IndexedDB snapshots around the write, for example `indexeddb-before.json` and `indexeddb-after.json`, or a named snapshot such as `indexeddb-ended.json` |
+| A refused or dismissed edit stores nothing      | A snapshot before the edit and an assertion that a later read equals it                                                                                  |
+| A visual state only                             | The capture and its `.state.json`; a snapshot only when the recipe also reads the store                                                                  |
+| NOAA chart alignment                            | `alignment.json` with the sampled tiles and landmarks                                                                                                    |
+| Provider requests carry no position             | `requests.json`                                                                                                                                          |
+
+Snapshots are read through the page from the real `krab` database's `trips` store in readonly transactions. The reader never creates or upgrades that database: it rejects when the database or its `trips` store is missing. Require the saved made-up fix and unchanged records after reload alongside the visible Pot 1 row; a toast or final screenshot alone is insufficient. Read each recipe for the snapshots it keeps. `run.log` records execution and failure output. The wrapper also retains `manifest.json`, `index.md` and, when Playwright starts, `artifacts/results.json`; manual screenshots have matching `.state.json` metadata and failed tests retain automatic failure screenshots. See [visual-review.md](visual-review.md) for attribution and review limits. On failure, keep partial evidence and report the failed action and unmet precondition. Do not claim another entry point's proof covers a skipped path.
 
 ## Cleanup
 
-Playwright stops the preview process group it launched and closes its browser contexts. The existing Docker runner uses `--rm`. The wrapper copies artifacts out, removes only `test-results/verify-krab-lock`, and confirms the copied evidence directory still exists before returning. Confirm the named run directory contains screenshots, action logs and both IndexedDB snapshots after exit.
+Playwright stops the preview process group it launched and closes its browser contexts. The existing Docker runner uses `--rm`. The wrapper copies artifacts out, removes only `test-results/verify-krab-lock`, and confirms the copied evidence directory still exists before returning. Confirm the named run directory contains screenshots, action logs, `doctor.json` per journey and each recipe's snapshots after exit.
 
 Run no kill-by-name commands. After an interrupted wrapper, inspect `docker ps --filter volume="$PWD"` and the scratch receipt before acting. Stop only the container positively identified as this run's (matching checkout, command and launch time) with `docker stop <container-id>`. Copy `test-results/verify-krab-lock` to the chosen evidence root before removing that lock directory. If ownership is uncertain, report it and leave the process alone. Normal failed test iterations go through the same automatic cleanup as successful ones.
 

@@ -189,7 +189,10 @@ test('finding gear on the Map tab and from the Gear list', async ({
   await sheet.getByRole('button', { name: 'Show on map' }).click();
   await expect(pot).toBeFocused();
   await expect(pot).toBeInViewport();
-  log('Gear > Pot 1 > Show on map returns to the Map focused on Pot 1');
+  await expect(pot).toHaveAttribute('aria-current', 'true');
+  log(
+    'Gear > Pot 1 > Show on map returns to the Map focused on Pot 1, marked as the shown gear'
+  );
   await capture('03-shown-on-map');
 
   const street = map.getByRole('radio', { name: 'Street map' });

@@ -24,14 +24,14 @@ Preconditions: a fresh context and made-up position as in the parent skill, plus
 bun run scripts/e2e-container.ts e2e/offline-and-update.test.ts e2e/wake-lock.test.ts
 ```
 
-The executable owners are [offline-and-update.test.ts](../../../../e2e/offline-and-update.test.ts) and [wake-lock.test.ts](../../../../e2e/wake-lock.test.ts). They define host setup, deployment transitions, API fakes and assertions. The static host can swap builds, redirect chosen paths and go offline. The update journeys require all pages to close before the next build takes over.
+The executable owners are [offline-and-update.test.ts](../../../../e2e/offline-and-update.test.ts) and [wake-lock.test.ts](../../../../e2e/wake-lock.test.ts). They define host setup, deployment transitions, API fakes and assertions. The static host can swap builds, redirect chosen paths and go offline. The update journeys require all pages to close before the next build takes over; the update spec then polls fresh launches until one serves the new build.
 
 Coverage includes offline Map/Gear restoration, waiting updates and next-launch activation, refusal of redirected shell updates, operation without wake lock, explicit permission refusal, and the supported lock lifecycle through a counting fake. The fake releases on hide and refuses hidden requests; it proves reacquisition on visibility return and after a release while visible.
 
 ## Gotchas
 
 - Linux WebKit is not iOS Safari. Home Screen launch, actual screen-on behaviour and iOS update timing need the [device checklist](device-checks.md). Headless WebKit always refuses the real wake lock, so the supported path runs only against the e2e fake; a physical iPhone still has to confirm the screen stays on.
-- In container WebKit, `page.goto` hung on port 4190, while ports 4174–4178 worked. Keep new hosts in that range.
+- In container WebKit, `page.goto` hung on port 4190, while ports 4174–4179 worked. The update spec's static hosts use 4178 and 4179. Keep new hosts in that range.
 - Close every page before expecting the new build. Reload alone keeps the waiting worker waiting, which is the intended behaviour.
 - The visually hidden Net radio didn't respond to `check()` in time before the toast expired; the wake lock recipe drops a second pot instead.
 - The kill switch in the root `README.md` has no browser recipe; it was checked by hand once. `src/service-worker/worker.test.ts` runs its activation.
