@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-export type Fix = { latitude: number; longitude: number; accuracy?: number };
+type Fix = { latitude: number; longitude: number; accuracy?: number };
 
 type HeldFix = {
   deliverFix?: PositionCallback;

@@ -2,7 +2,6 @@ import { strict as assert } from 'node:assert';
 import {
   mkdir,
   mkdtemp,
-  cp,
   readdir,
   readFile,
   rm,
@@ -15,6 +14,7 @@ import { basename, dirname, join, relative } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { stripVTControlCharacters } from 'node:util';
+import { copySource } from './source-copy.ts';
 
 const root = realpathSync(await mkdtemp(join(tmpdir(), 'krab-policy-')));
 const cleanup = () => {
@@ -1302,14 +1302,6 @@ const cases: PolicyCase[] = [
     risk: 'Class sorting skips tv calls or misses the theme stylesheet'
   }
 ];
-const COPIED_OUT = [
-  '.git',
-  'node_modules',
-  '.svelte-kit',
-  'build',
-  '.scratch',
-  '.tools'
-];
 const writable = (entry: string) =>
   entry === '$app' || (entry.startsWith('.') && entry !== '.bin');
 const fixtures = cases.map((row, index) => {
@@ -1392,13 +1384,7 @@ const run = (copy: string, ...args: string[]) =>
   });
 const copyOf = async (name: string) => {
   const copy = join(root, name);
-  await cp(source, copy, {
-    recursive: true,
-    filter: (path) =>
-      !COPIED_OUT.some((part) =>
-        path.slice(source.length).split('/').includes(part)
-      )
-  });
+  await copySource(source, copy);
   await mkdir(join(copy, 'node_modules'));
   for (const entry of await readdir(join(source, 'node_modules')))
     if (!writable(entry))

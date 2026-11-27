@@ -108,6 +108,7 @@
       water.observeStored(observer);
     },
     dropAgain: (dropId) => {
+      if (water.pending) return;
       now = Date.now();
       droppingAgain = true;
       void water.dropAgain(dropId).then((saved) => {

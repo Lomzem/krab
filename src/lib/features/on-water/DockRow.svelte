@@ -187,6 +187,9 @@
     onpointerleave={(event: PointerEvent) => {
       if (event.pointerType !== 'touch') release('pointer')();
     }}
+    onmousedown={(event: MouseEvent) => {
+      event.preventDefault();
+    }}
     ontouchstart={touchStart}
     ontouchend={touchEnd}
     ontouchcancel={touchEnd}

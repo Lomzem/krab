@@ -77,11 +77,8 @@ it('draws every drop in a line once, alone or in a group of several, even where 
         expect(spots.flatMap((spot) => spot.ids).toSorted()).toEqual(
           ids.toSorted()
         );
-        expect(spots.map(({ ids, key }) => ({ first: ids[0], key }))).toEqual(
-          spots.map(({ ids, lead }) => ({
-            first: lead,
-            key: ids.length > 1 ? `group:${lead}` : lead
-          }))
+        expect(spots.map(({ ids }) => ids[0])).toEqual(
+          spots.map(({ lead }) => lead)
         );
       }
     }

@@ -1,11 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, assert, expect, it, vi } from 'vitest';
 import type { Drop, Trip } from '#lib/features/trip/index.js';
-import {
-  GearSheetSession,
-  type SheetCommands,
-  type SheetOrigin
-} from './gear-sheet.svelte';
+import { GearSheetSession, type SheetOrigin } from './gear-sheet.svelte';
 import { OnWater, type SaveProblem } from './on-water.svelte';
 
 const T0 = Date.UTC(2026, 5, 1, 13, 0, 0);
@@ -59,6 +55,8 @@ const origin = (dropId: string): SheetOrigin => ({
   from: 'list',
   returnFocus: () => null
 });
+
+type SheetCommands = ConstructorParameters<typeof GearSheetSession>[0];
 
 const sessionWith = (overrides: Partial<SheetCommands> = {}) => {
   const commands: SheetCommands = {
@@ -162,20 +160,6 @@ it('ignores a late Save of a closed sheet in the newer sheet and reports it lost
   expect(session.busy).toBe(false);
   expect(session.problem).toBe(null);
   expect(commands.saveLost).toHaveBeenCalledWith('Pot 1');
-});
-
-it('closes at once when dismissed during a pending Save of unsaved changes', () => {
-  const { session } = sessionWith({
-    save: vi.fn(() => deferred<SaveProblem | null>().promise)
-  });
-  session.show(origin('d1'));
-  if (session.draft) session.draft.details.label = 'Ledge';
-  session.save();
-
-  expect(session.busy).toBe(true);
-  expect(session.dirty).toBe(true);
-  expect(session.dismiss()).toBe('left');
-  expect(session.open).toBe(false);
 });
 
 it('saves the edits before Drop again starts placing, and places nothing when the save is refused', async () => {

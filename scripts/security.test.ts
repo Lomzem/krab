@@ -5,6 +5,7 @@ import { cp, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { copySource } from './source-copy.ts';
 
 const source = process.cwd();
 const root = await mkdtemp(join(tmpdir(), 'krab-security-'));
@@ -34,18 +35,7 @@ async function repository(name: string) {
 }
 async function checkout(name: string) {
   const cwd = join(root, name);
-  await cp(source, cwd, {
-    recursive: true,
-    filter: (path) =>
-      ![
-        '.git',
-        'node_modules',
-        '.svelte-kit',
-        'build',
-        '.scratch',
-        '.tools'
-      ].some((part) => path.slice(source.length).split('/').includes(part))
-  });
+  await copySource(source, cwd);
   await symlink(join(source, 'node_modules'), join(cwd, 'node_modules'));
   return repository(name);
 }

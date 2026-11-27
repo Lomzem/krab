@@ -94,6 +94,57 @@ test('an unheld Undo toast lasts 8 seconds and Undo within it removes only that 
   await expect(gearRow('Pot 2')).toHaveCount(0);
 });
 
+type CountedWrites = { readwrites?: number };
+
+const countReadwrites = (page: Page) =>
+  page.evaluate(() => {
+    type Begin = (this: IDBDatabase, ...args: unknown[]) => IDBTransaction;
+    const counted = window as CountedWrites;
+    counted.readwrites = 0;
+    const database = IDBDatabase.prototype;
+    const begin = Reflect.get(database, 'transaction') as Begin;
+    const countedBegin: Begin = function (...args) {
+      if (args[1] === 'readwrite')
+        counted.readwrites = (counted.readwrites ?? 0) + 1;
+      return Reflect.apply(begin, this, args);
+    };
+    Reflect.set(database, 'transaction', countedBegin);
+  });
+
+const readwrites = (page: Page) =>
+  page.evaluate(() => (window as CountedWrites).readwrites);
+
+test('two taps on Undo while its write waits on storage submit one Undo', async ({
+  page
+}) => {
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await holdStorage(page);
+  await countReadwrites(page);
+
+  const box = await undoOf(page).boundingBox();
+  expect(box, 'Undo has a tappable area').not.toBeNull();
+  const x = (box?.x ?? 0) + (box?.width ?? 0) / 2;
+  const y = (box?.y ?? 0) + (box?.height ?? 0) / 2;
+  await page.touchscreen.tap(x, y);
+  await expect(undoOf(page)).toHaveAttribute('aria-busy', 'true');
+  await expect(undoOf(page)).toHaveAttribute('aria-disabled', 'true');
+  await page.touchscreen.tap(x, y);
+  await expect
+    .poll(() => readwrites(page), {
+      message: 'The Undo write never reached storage.'
+    })
+    .toBe(1);
+
+  await releaseStorage(page);
+  await expect(toastOf(page)).toContainText('Pot 1 removed');
+  expect(await storedDrops(page)).toBe(0);
+  expect(
+    await readwrites(page),
+    'A second tap on a pending Undo submitted it again.'
+  ).toBe(1);
+});
+
 test('focus inside the Undo toast holds it past 8 seconds and keeps the remaining time', async ({
   page
 }) => {
@@ -132,6 +183,64 @@ test('a touch held on the Undo toast holds it past 8 seconds and keeps the remai
     targetTouches: [],
     changedTouches: touch.changedTouches
   });
+  await expectExpiresAfter(page, 6000);
+});
+
+type Shown = { hidden?: boolean };
+
+const overrideVisibility = () => {
+  const shown = window as Shown;
+  shown.hidden = false;
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => (shown.hidden ? 'hidden' : 'visible')
+  });
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    get: () => shown.hidden
+  });
+};
+
+const setHidden = (page: Page, hidden: boolean) =>
+  page.evaluate((next) => {
+    (window as Shown).hidden = next;
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+
+test('a focused Undo toast stays held while Krab is hidden, even after focus leaves, and keeps the remaining time when shown', async ({
+  page
+}) => {
+  await page.addInitScript(overrideVisibility);
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.clock.runFor(3000);
+
+  await undoOf(page).focus();
+  await setHidden(page, true);
+  await undoOf(page).blur();
+  await page.clock.runFor(20_000);
+  await expect(
+    undoOf(page),
+    'Undo expired while Krab was hidden.'
+  ).toBeEnabled();
+
+  await setHidden(page, false);
+  await expectExpiresAfter(page, 5000);
+});
+
+test('a tap on the Undo toast text does not hold it, so Undo still ends at 8 seconds', async ({
+  page
+}) => {
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.clock.runFor(2000);
+
+  const box = await toastOf(page).getByText('Pot 1 dropped').boundingBox();
+  expect(box, 'toast text has a tappable area').not.toBeNull();
+  await page.touchscreen.tap(
+    (box?.x ?? 0) + (box?.width ?? 0) / 2,
+    (box?.y ?? 0) + (box?.height ?? 0) / 2
+  );
   await expectExpiresAfter(page, 6000);
 });
 
@@ -273,6 +382,62 @@ test('the Undo toast is out of reach behind a gear sheet, and outside one its bu
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   expect(await storedDrops(page)).toBe(1);
 });
+
+const toastBehindSheet = (page: Page) =>
+  page
+    .getByRole('region', { name: 'Messages', includeHidden: true })
+    .getByRole('listitem', { includeHidden: true });
+
+const holds: Record<string, (page: Page) => Promise<void>> = {
+  focus: (page) => undoOf(page).focus(),
+  pointer: async (page) => {
+    const box = await toastOf(page).boundingBox();
+    expect(box, 'toast has a pointer area').not.toBeNull();
+    await page.mouse.move(
+      (box?.x ?? 0) + (box?.width ?? 0) / 2,
+      (box?.y ?? 0) + (box?.height ?? 0) / 2
+    );
+  },
+  touch: async (page) => {
+    await toastOf(page).dispatchEvent(
+      'touchstart',
+      await touchesAt(toastOf(page))
+    );
+  }
+};
+
+for (const [hold, start] of Object.entries(holds)) {
+  test(`a ${hold} hold on the Undo toast ends when a gear sheet covers it, so the toast expires behind the sheet and stays gone after it closes`, async ({
+    page
+  }) => {
+    await openWithPausedClock(page);
+    await dropPot(page, 'Pot 1');
+    await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+    await page.mouse.move(0, 0);
+    await page.clock.runFor(2000);
+
+    await start(page);
+    await page.clock.runFor(20_000);
+    await expect(
+      undoOf(page),
+      `Undo expired during a ${hold} hold.`
+    ).toBeEnabled();
+
+    await inWaterRow(page, 'Pot 1').dispatchEvent('click');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.clock.runFor(5999);
+    await expect(toastBehindSheet(page)).toHaveCount(1);
+    await page.clock.runFor(1);
+    await expect(
+      toastBehindSheet(page),
+      `The ${hold} hold outlived the gear sheet that covered the toast.`
+    ).toHaveCount(0);
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(toastOf(page)).toHaveCount(0);
+  });
+}
 
 const inWaterRow = (page: Page, name: string) =>
   page

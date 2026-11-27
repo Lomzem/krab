@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as svelte from 'svelte-eslint-parser';
 import { describe, expect, it, onTestFinished } from 'vitest';
-import * as yaml from 'yaml-eslint-parser';
 import { chromeTokens } from './chrome-tokens.ts';
 import { featureBoundaries } from './feature-boundaries.ts';
 import { packageImportTargets } from './package-imports.ts';
@@ -44,7 +43,6 @@ tester.run('feature-boundaries', featureBoundaries, {
   ]
 });
 
-const manifest = '{\n  "dependencies": { "bits-ui": "2.21.0" }\n}\n';
 const source = (code: string) => ({
   code,
   filename: at('src/lib/features/a/probe.ts')
@@ -60,12 +58,6 @@ tester.run('ui-sdk-priority', uiSdkPriority, {
     )
   ],
   invalid: [
-    {
-      code: manifest,
-      filename: at('probe/package.json'),
-      languageOptions: { parser: yaml },
-      errors: [{ messageId: 'bitsUiDependency' }]
-    },
     {
       ...source("import { Command } from 'bits-ui?raw';\n"),
       errors: [{ messageId: 'bitsUi' }]

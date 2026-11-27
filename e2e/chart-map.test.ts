@@ -1332,9 +1332,12 @@ test('on a 320 by 640 screen with a map notice showing, a new drop stays clear o
   page,
   providers
 }) => {
+  await page.clock.install();
   await page.setViewportSize({ width: 320, height: 640 });
   await dropPotAndOpenMap(page);
-  await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
+  await page.mouse.move(0, 0);
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   providers.cutOff();
   await reconnect(context);
   await expect(cannotLoad(page)).toBeVisible();
@@ -1364,7 +1367,9 @@ test('on a 320 by 640 screen with a map notice showing, a new drop stays clear o
   await expect.poll(coveredBy).toEqual([]);
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
   const during = await footprint();
-  await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
+  await page.mouse.move(0, 0);
+  await page.clock.fastForward(8000);
+  await expect(toastOf(page)).toBeHidden();
   expect(await footprint()).toEqual(during);
   await expect.poll(() => newest.evaluateAll(takeTapsAtCentre)).toEqual([true]);
 });
@@ -1378,6 +1383,9 @@ for (const [width, height] of [
     page,
     providers
   }) => {
+    const START = new Date('2031-03-04T05:00:00Z');
+    const PAUSED = new Date('2031-03-04T06:00:00Z');
+    await page.clock.install({ time: START });
     await holdFixes(page);
     await letFixAge(page);
     await page.setViewportSize({ width, height });
@@ -1392,32 +1400,59 @@ for (const [width, height] of [
     await context.setOffline(true);
     await streetMapButton(page).click();
     await expect(offline(page)).toBeVisible();
+
+    await page.clock.pauseAt(PAUSED);
     await deliverFix(page, {
       ...MADE_UP_SEA,
       latitude: MADE_UP_SEA.latitude - 0.02
     });
     await expect(page.getByText('Finding position')).toBeHidden();
     await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
-    await expect(toastOf(page)).toContainText('Pot 2 dropped');
-    const newest = mapArea(page).getByRole('button', { name: /^Pot 2[ ,]/ });
-    await expect(newest).toBeVisible();
-    const footprint = async () => {
-      const [marker] = await newest.evaluateAll(markerFootprints);
-      expect(marker, 'Pot 2 map footprint').toBeDefined();
-      return marker;
-    };
-    let during = await footprint();
     await expect
       .poll(async () => {
-        const now = await footprint();
-        const still = JSON.stringify(now) === JSON.stringify(during);
-        during = now;
-        return still;
+        await page.clock.runFor(0);
+        return toastOf(page).filter({ hasText: 'Pot 2 dropped' }).count();
       })
-      .toBe(true);
+      .toBe(1);
+    await page.mouse.move(0, 0);
+    const newest = mapArea(page).getByRole('button', { name: /^Pot 2[ ,]/ });
+    const lastPosition = mapArea(page).getByRole('img', {
+      name: 'Last position'
+    });
+    const layout = async () => {
+      const [pin] = await newest.evaluateAll(markerFootprints);
+      expect(pin, 'Pot 2 map footprint').toBeDefined();
+      return { view: await boxOf(drawnView(page)), pin };
+    };
+    const settled = async () => {
+      let last = await layout();
+      await expect
+        .poll(async () => {
+          await page.clock.runFor(16);
+          const now = await layout();
+          const still = JSON.stringify(now) === JSON.stringify(last);
+          last = now;
+          return still;
+        })
+        .toBe(true);
+      return last;
+    };
+    const runTo = async (at: number) => {
+      const now = await page.evaluate(() => Date.now());
+      await page.clock.runFor(at - now);
+    };
+
+    const dropped = await settled();
+    await expect(lastPosition).toHaveCount(0);
+
+    await runTo(PAUSED.getTime() + 5001);
+    await expect(lastPosition).toBeVisible();
     await expect(toastOf(page)).toContainText('Pot 2 dropped');
-    await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
-    expect(await footprint()).toEqual(during);
+    expect(await settled(), 'as my position goes stale').toEqual(dropped);
+
+    await runTo(PAUSED.getTime() + 8000);
+    await expect(toastOf(page)).toBeHidden();
+    expect(await settled(), 'once Undo ends').toEqual(dropped);
   });
 }
 
@@ -2219,11 +2254,14 @@ for (const [width, height] of [
     page,
     providers
   }) => {
+    await page.clock.install();
     await page.setViewportSize({ width, height });
     const map = mapArea(page);
     const notice = cannotLoad(page);
     await dropPotAndOpenMap(page);
-    await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
+    await page.mouse.move(0, 0);
+    await page.clock.fastForward(8000);
+    await expect(toastOf(page)).toBeHidden();
     await drawnView(page).press('ArrowLeft');
     await expect
       .poll(() => offCentre(page, potOnMap(page)))
@@ -2297,7 +2335,9 @@ for (const [width, height] of [
     await expectMapWhole(page, MAP_CONTROLS);
     await expect(toastOf(page)).toContainText('Pot 2 dropped');
     if (height < 600) {
-      await expect(toastOf(page)).toBeHidden({ timeout: 10_000 });
+      await page.mouse.move(0, 0);
+      await page.clock.fastForward(8000);
+      await expect(toastOf(page)).toBeHidden();
     }
     await expect
       .poll(() =>

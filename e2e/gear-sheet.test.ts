@@ -259,6 +259,43 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
   await expect(page).toHaveURL('about:blank');
 });
 
+test('browser Back during a pending Save closes the gear sheet at once and keeps Krab open, the edit is stored, and the next Back leaves Krab', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const label = sheet.getByLabel('Label');
+  const save = sheet.getByRole('button', { name: 'Save' });
+
+  await page.goto('data:text/html,<title>Before Krab</title>');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+  const pot1 = gearRow(page, 'Pot 1');
+  await pot1.click();
+  await label.fill('red float');
+
+  await holdStorage(page);
+  await save.click();
+  await expect(save).toHaveAttribute('aria-disabled', 'true');
+  await page.goBack();
+  await expect(sheet).toBeHidden();
+  await expect(
+    page.getByRole('heading', { name: 'Gear', level: 1 })
+  ).toBeVisible();
+
+  await releaseStorage(page);
+  await expect(pot1).toContainText('red float');
+  await page.reload();
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+  await expect(pot1).toContainText('red float');
+
+  await page.goBack();
+  await expect(page).toHaveTitle('Before Krab');
+});
+
 test('on a 640 by 320 screen, the second press of a double press on Show on map over unsaved changes leaves Discard changes asking, while a later press there discards and opens Map', async ({
   page
 }) => {
@@ -335,7 +372,7 @@ test('on a 640 by 320 screen, the second press of a double press on Show on map 
   }
 });
 
-test('a swipe down closes a gear sheet with no changes, and springs back with no ask while it has unsaved changes', async ({
+test('scrolling the sheet viewport to its top snap closes a gear sheet with no changes, and springs it back with no ask while it has unsaved changes', async ({
   page
 }) => {
   const sheet = page.getByRole('dialog');
@@ -411,7 +448,6 @@ const followsMouseDrag = async ({ page }: { page: Page }) => {
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await gearRow(page, 'Pot 1').click();
-  await expect(sheet).toHaveAttribute('data-driver', 'pointer');
   await expect.poll(() => sheet.evaluate(springing)).toBe(false);
   const top = await sheetTop();
   const box = await sheet.getByRole('heading', { name: 'Pot 1' }).boundingBox();

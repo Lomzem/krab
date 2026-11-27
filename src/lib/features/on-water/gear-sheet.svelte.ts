@@ -37,7 +37,7 @@ export type SheetOrigin = {
   returnFocus: () => HTMLElement | null;
 };
 
-export type SheetCommands = {
+type SheetCommands = {
   trips: () => readonly Trip[];
   save: (
     dropId: string,
