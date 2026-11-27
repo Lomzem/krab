@@ -784,7 +784,10 @@ test('gear either side of the 180th meridian fits the past trip map as one small
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
-  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'End trip' })
+    .click();
   await expect(sheet).toBeHidden();
   await page.getByRole('tab', { name: 'Past trips', exact: true }).click();
   await main.getByRole('button', { name: /2 drops, 2 uncollected$/ }).click();
@@ -1997,7 +2000,10 @@ test('uncollected gear from past trips grouped at the east edge of the map shows
   await dropAt(page, 1);
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
-  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'End trip' })
+    .click();
   await expect(sheet).toBeHidden();
   await page.getByRole('tab', { name: 'Map', exact: true }).click();
   await shownWholeAtEdge(100, 1);

@@ -101,7 +101,6 @@
   --motion-receipt-in: 180ms;
   --motion-receipt-out: 140ms;
   --motion-sheet-in: 220ms;
-  --motion-sheet-out: 160ms;
   --motion-press: 90ms;
 }
 
@@ -135,7 +134,6 @@
     --motion-receipt-in: 0ms;
     --motion-receipt-out: 0ms;
     --motion-sheet-in: 0ms;
-    --motion-sheet-out: 0ms;
     --motion-press: 0ms;
   }
 }
@@ -148,5 +146,22 @@ body {
 @keyframes receipt-out {
   to {
     opacity: 0;
+  }
+}
+
+[data-slot='dialog-viewport']:has(> [data-ending-style]) {
+  display: none !important;
+}
+
+[data-slot='dialog-content'][data-presentation='sheet'] {
+  translate: none !important;
+  opacity: 1 !important;
+}
+
+[data-slot='dialog-viewport']:has(> [data-presentation='sheet']) {
+  transition: transform var(--motion-sheet-in) ease-out;
+
+  @starting-style {
+    transform: translateY(100%);
   }
 }

@@ -245,7 +245,10 @@ const closeSheet = async (page: Page, how: 'Escape' | 'Discard' | 'Save') => {
     await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   } else await page.keyboard.press('Escape');
   if (how === 'Discard') {
-    await sheet.getByRole('button', { name: 'Discard changes' }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Discard changes' })
+      .click();
   }
   await expect(sheet).toBeHidden();
   await page.mouse.move(0, 0);
@@ -332,8 +335,8 @@ test("saving a recorded catch retires that gear's Collect Undo so it cannot clea
   ).toBeHidden();
   await collectedRow(page, 'Pot 4').click();
   await sheet.getByRole('button', { name: 'Undo collect' }).click();
-  await sheet
-    .getByRole('group', { name: 'Clears the catch' })
+  await page
+    .getByRole('alertdialog', { name: 'Clears the catch' })
     .getByRole('button', { name: 'Undo collect' })
     .click();
   await expect(toastOf(page)).toContainText('Pot 4 back in, catch cleared');
@@ -887,7 +890,10 @@ test("ending the trip retires a failed drop's Retry so it never saves into the n
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
   await holdStorage(page);
-  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'End trip' })
+    .click();
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   await expect(failedSave).toBeHidden();
@@ -925,8 +931,9 @@ test("End trip waits while a failed drop's Retry is saving, so the retried drop 
   await shownOnceStored(page, failedSave);
   await failStorage(page, null);
 
-  const sheet = page.getByRole('dialog');
-  const confirmEnd = sheet.getByRole('button', { name: 'End trip' });
+  const confirmEnd = page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'End trip' });
   await holdStorage(page);
   await failedSave.getByRole('button', { name: 'Retry' }).click();
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();

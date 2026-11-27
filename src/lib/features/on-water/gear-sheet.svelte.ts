@@ -115,6 +115,10 @@ export class SheetDraft {
     }
   }
 
+  get subject() {
+    return this.#base();
+  }
+
   get kind() {
     return this.#kind ?? this.#base().gear.kind;
   }

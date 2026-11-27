@@ -5,6 +5,8 @@ const finished = async () => {
     .getAnimations()
     .filter(
       (animation) =>
+        (animation instanceof CSSAnimation ||
+          animation instanceof CSSTransition) &&
         animation.effect?.getComputedTiming().iterations !== Infinity
     );
   await Promise.all(

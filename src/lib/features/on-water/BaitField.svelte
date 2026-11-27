@@ -31,12 +31,14 @@
     bait = $bindable(''),
     search = $bindable({ query: '', refused: false }),
     choices,
-    idPrefix
+    idPrefix,
+    onescape
   }: {
     bait?: string;
     search?: BaitSearch;
     choices: readonly BaitChoice[];
     idPrefix: string;
+    onescape: () => void;
   } = $props();
 
   let open = $state(false);
@@ -135,8 +137,10 @@
     <CollapsiblePanel>
       <div
         onkeydowncapture={(event) => {
-          if (event.key === 'Escape' && search.query !== '')
+          if (event.key === 'Escape' && search.query !== '') {
             event.stopPropagation();
+            onescape();
+          }
           if (
             event.key === 'Enter' &&
             highlighted === null &&

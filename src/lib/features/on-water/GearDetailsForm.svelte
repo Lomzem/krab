@@ -13,11 +13,7 @@
   import { ACTION_BUTTON, PRIMARY_BUTTON, QUIET_BUTTON } from './controls';
   import DetailsFields from './DetailsFields.svelte';
   import type { CatchDraft, InvalidField } from './details-draft';
-  import type {
-    GearSheetSession,
-    SheetDraft,
-    SheetSubject
-  } from './gear-sheet.svelte';
+  import type { GearSheetSession, SheetDraft } from './gear-sheet.svelte';
   import KindField from './KindField.svelte';
 
   const FIELD_IDS: Record<InvalidField, string> = {
@@ -29,24 +25,22 @@
 
   let {
     session,
-    subject,
-    draft,
+    draft: opened,
     formId,
     now,
     denied = false,
-    direction,
-    inert = false
+    direction
   }: {
     session: GearSheetSession;
-    subject: SheetSubject;
     draft: SheetDraft;
     formId: string;
     now: number;
     denied?: boolean;
     direction?: Snippet<[Drop]>;
-    inert?: boolean;
   } = $props();
 
+  const draft = untrack(() => opened);
+  const subject = $derived(draft.subject);
   const drop = $derived(subject.drop);
   const stored = $derived(subject.gear.kind);
   const idPrefix = $derived(`gear-${drop.id}`);
@@ -99,7 +93,7 @@
   };
 </script>
 
-<form id={formId} class="grid gap-5" {inert} onsubmit={submit} novalidate>
+<form id={formId} class="grid gap-5" onsubmit={submit} novalidate>
   {#if collectedAt === null && subject.trip.endedAt !== null}
     <p class="text-base font-medium">Uncollected</p>
   {:else if collectedAt === null}
@@ -170,5 +164,8 @@
     bind:baitSearch={draft.baitSearch}
     {baits}
     {idPrefix}
+    onescape={() => {
+      session.dismiss();
+    }}
   />
 </form>

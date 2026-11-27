@@ -40,10 +40,8 @@
   const overlayClass = `peer absolute inset-0 size-full cursor-pointer rounded-control ${FOCUS}`;
 </script>
 
-<Sheet {open} titleId={TITLE_ID} {onclose} {returnFocus}>
-  {#snippet heading()}
-    <h2 id={TITLE_ID} class="text-title font-semibold">Map filter</h2>
-  {/snippet}
+<Sheet {open} {onclose} {returnFocus}>
+  {#snippet title()}Map filter{/snippet}
 
   <fieldset class="mt-4">
     <legend class="mb-2 text-control font-semibold">Also show</legend>

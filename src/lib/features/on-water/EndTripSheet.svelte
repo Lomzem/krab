@@ -1,13 +1,7 @@
 <script lang="ts">
-  import { Button } from '@ui-sdk/svelte/button';
-  import { elementRef } from '#lib/shared/element-ref.js';
   import type { Trip } from '#lib/features/trip/index.js';
-  import { DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
-  import Sheet from './Sheet.svelte';
+  import Confirm from './Confirm.svelte';
   import type { Notice } from './on-water.svelte';
-
-  const TITLE_ID = 'end-trip-title';
-  const NOTE_ID = 'end-trip-note';
 
   let {
     trip,
@@ -30,44 +24,21 @@
   const uncollected = $derived(
     trip ? trip.drops.filter((drop) => drop.collectedAt === null).length : 0
   );
-
-  let keep = $state<HTMLButtonElement>();
 </script>
 
-<Sheet
+<Confirm
   {open}
-  titleId={TITLE_ID}
-  describedBy={NOTE_ID}
-  initialFocus={() => keep}
-  {onclose}
+  title="End trip?"
+  keep="Keep trip going"
+  go="End trip"
+  {busy}
+  onkeep={onclose}
+  ongo={onend}
   {returnFocus}
   {notice}
 >
-  {#snippet heading()}
-    <h2 id={TITLE_ID} class="text-title font-semibold">End trip?</h2>
-  {/snippet}
-
-  <div id={NOTE_ID} class="space-y-1 text-base leading-normal">
-    {#if uncollected > 0}
-      <p>{uncollected} still in the water</p>
-    {/if}
-    <p class="text-muted-foreground">Kept in Past trips</p>
-  </div>
-
-  {#snippet footer()}
-    <Button
-      {@attach elementRef<HTMLButtonElement>((element) => {
-        keep = element;
-      })}
-      class="flex-1 basis-36 {PRIMARY_BUTTON}"
-      onclick={onclose}>Keep trip going</Button
-    >
-    <Button
-      class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
-      aria-disabled={busy}
-      onclick={() => {
-        if (!busy) onend();
-      }}>End trip</Button
-    >
-  {/snippet}
-</Sheet>
+  {#if uncollected > 0}
+    <p>{uncollected} still in the water</p>
+  {/if}
+  <p class="text-muted-foreground">Kept in Past trips</p>
+</Confirm>

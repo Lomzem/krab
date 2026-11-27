@@ -1,8 +1,6 @@
 <script lang="ts">
   import Sheet from './Sheet.svelte';
 
-  const TITLE_ID = 'location-steps-title';
-
   let {
     open,
     onclose,
@@ -14,10 +12,8 @@
   } = $props();
 </script>
 
-<Sheet {open} titleId={TITLE_ID} {onclose} {returnFocus}>
-  {#snippet heading()}
-    <h2 id={TITLE_ID} class="text-title font-semibold">Turn on location</h2>
-  {/snippet}
+<Sheet {open} {onclose} {returnFocus}>
+  {#snippet title()}Turn on location{/snippet}
 
   <ol
     class="grid list-decimal gap-3 pb-2 pl-6 text-base marker:text-muted-foreground"

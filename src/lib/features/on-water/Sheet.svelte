@@ -1,269 +1,123 @@
 <script lang="ts">
+  import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogTitle,
+    type DialogOpenChangeDetails
+  } from '@ui-sdk/svelte/dialog';
   import Icon from '#lib/shared/Icon.svelte';
   import { FOCUS } from '#lib/shared/control-states.js';
-  import { tick, untrack, type Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
+  import { doublePressGuard } from './double-press';
   import type { Notice } from './on-water.svelte';
+
+  type Dismissal = 'outside-press' | 'swipe';
 
   let {
     open,
-    titleId,
+    title,
+    subtitle,
     onclose,
     onbackdrop,
     returnFocus,
     notice = null,
     describedBy,
-    initialFocus,
-    bodyInert = false,
-    heading,
     children,
     footer
   }: {
     open: boolean;
-    titleId: string;
+    title: Snippet;
+    subtitle?: Snippet;
     onclose: () => void;
     onbackdrop?: () => void;
     returnFocus: () => HTMLElement | null | undefined;
     notice?: Notice | null;
     describedBy?: string;
-    initialFocus?: () => HTMLElement | null | undefined;
-    bodyInert?: boolean;
-    heading: Snippet;
     children: Snippet;
     footer?: Snippet;
   } = $props();
 
-  const FOCUSABLE =
-    'a[href], button, input:not([type="hidden"]), select, textarea, summary, [tabindex], [contenteditable]:not([contenteditable="false"])';
-
-  let dialog = $state<HTMLDialogElement>();
   let openedAt = $state(0);
   const said = $derived(notice && notice.key > openedAt ? notice.text : '');
-  let body = $state<HTMLDivElement>();
 
-  const reachable = (element: HTMLElement) =>
-    element.tabIndex >= 0 &&
-    !element.matches(':disabled') &&
-    !element.closest('[inert]') &&
-    element.getClientRects().length > 0 &&
-    getComputedStyle(element).visibility !== 'hidden';
+  const backdropped = (reason: string): reason is Dismissal =>
+    reason === 'outside-press' || reason === 'swipe';
 
-  const tabStops = (root: HTMLElement) => {
-    const candidates = [
-      ...root.querySelectorAll<HTMLElement>(FOCUSABLE)
-    ].filter(reachable);
-    const grouped = (element: HTMLElement): element is HTMLInputElement =>
-      element instanceof HTMLInputElement &&
-      element.type === 'radio' &&
-      element.name !== '';
-    const groupStop = (radio: HTMLInputElement) => {
-      const group = candidates
-        .filter(grouped)
-        .filter((other) => other.name === radio.name);
-      return group.find((other) => other.checked) ?? group[0];
-    };
-    return candidates.filter(
-      (element) => !grouped(element) || groupStop(element) === element
-    );
-  };
-
-  const cycleFocus = (event: KeyboardEvent) => {
-    if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey)
-      return;
-    if (!dialog?.open || event.defaultPrevented) return;
-    const from = document.activeElement;
-    if (from && from !== document.body && !dialog.contains(from)) return;
-    event.preventDefault();
-    const stops = tabStops(dialog);
-    const after = (element: HTMLElement) =>
-      from instanceof Node &&
-      element !== from &&
-      Boolean(
-        from.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING
-      );
-    const before = (element: HTMLElement) =>
-      from instanceof Node &&
-      element !== from &&
-      !element.contains(from) &&
-      Boolean(
-        from.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_PRECEDING
-      );
-    const next = event.shiftKey
-      ? (stops.findLast(before) ?? stops.at(-1))
-      : (stops.find(after) ?? stops[0]);
-    next?.focus();
-  };
-
-  const revealFocused = (event: FocusEvent) => {
-    const field = event.target;
-    if (!(field instanceof HTMLElement)) return;
-    requestAnimationFrame(() => {
-      if (document.activeElement === field) {
-        field.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-      }
-    });
-  };
-
-  const DOUBLE_TAP_MS = 350;
-  const DOUBLE_CLICK_MS = 500;
-  const DOUBLE_TAP_REACH_PX = 44;
-  const PRESS_EVENTS = [
-    'pointerdown',
-    'mousedown',
-    'pointerup',
-    'mouseup',
-    'click',
-    'dblclick',
-    'pointercancel'
-  ] as const;
-
-  type Press = { x: number; y: number; at: number };
-
-  let lastPress: Press | null = null;
-  let endDoublePress = () => {};
-
-  const notePress = (event: PointerEvent) => {
-    lastPress = { x: event.clientX, y: event.clientY, at: performance.now() };
-  };
-
-  const noteKey = () => {
-    lastPress = null;
-  };
-
-  const absorbDoublePress = (press: Press) => {
-    const age = performance.now() - press.at;
-    if (age >= DOUBLE_CLICK_MS) return () => {};
-    let pressing = false;
-    let tapping = age < DOUBLE_TAP_MS;
-    let held = false;
-    let expired = false;
-    const absorb = (event: Event) => {
-      const { type, detail, clientX, clientY } = event as MouseEvent;
-      const touch =
-        event instanceof PointerEvent && event.pointerType === 'touch';
-      if (type === 'pointerdown' && touch) {
-        pressing =
-          tapping &&
-          Math.hypot(clientX - press.x, clientY - press.y) <=
-            DOUBLE_TAP_REACH_PX;
-      } else if (type === 'pointerdown' || type === 'mousedown') {
-        if (detail === 0) return;
-        pressing = detail >= 2;
-      } else if (type === 'click' && detail === 0) {
-        pressing = false;
-      }
-      if (!pressing) {
-        stop();
-        return;
-      }
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (type.endsWith('down')) held = true;
-      else if (type.endsWith('up') || type === 'pointercancel') release();
-    };
-    const release = () => {
-      held = false;
-      if (!expired) return;
-      clearTimeout(ending);
-      ending = setTimeout(stop, DOUBLE_CLICK_MS);
-    };
-    const stop = () => {
-      clearTimeout(timer);
-      clearTimeout(ending);
-      for (const type of PRESS_EVENTS)
-        window.removeEventListener(type, absorb, true);
-    };
-    for (const type of PRESS_EVENTS)
-      window.addEventListener(type, absorb, true);
-    const timer = setTimeout(() => {
-      tapping = false;
-    }, DOUBLE_TAP_MS - age);
-    let ending = setTimeout(() => {
-      expired = true;
-      if (!held) stop();
-    }, DOUBLE_CLICK_MS - age);
-    return stop;
-  };
+  const presses = doublePressGuard();
 
   export const absorbPress = () => {
-    endDoublePress();
-    if (lastPress) endDoublePress = absorbDoublePress(lastPress);
+    presses.absorb();
   };
 
   $effect(() => () => {
-    endDoublePress();
+    presses.stop();
   });
 
-  $effect(() => {
-    if (!dialog) return;
-    if (open && !dialog.open) {
-      endDoublePress();
-      lastPress = null;
-      openedAt = untrack(() => notice?.key ?? 0);
-      dialog.showModal();
-      untrack(() => initialFocus?.())?.focus();
-      if (body) body.scrollTop = 0;
-    } else if (!open && dialog.open) {
-      endDoublePress();
-      if (lastPress) endDoublePress = absorbDoublePress(lastPress);
-      lastPress = null;
-      dialog.close();
-      void tick().then(() => returnFocus()?.focus());
-    }
+  $effect.pre(() => {
+    if (!open) return;
+    untrack(() => {
+      presses.stop();
+      presses.forget();
+      openedAt = notice?.key ?? 0;
+    });
+    return () => {
+      presses.absorb();
+      presses.forget();
+    };
   });
+
+  const changeOpen = (next: boolean, details: DialogOpenChangeDetails) => {
+    if (next) return;
+    details.cancel();
+    if (backdropped(details.reason)) (onbackdrop ?? onclose)();
+    else onclose();
+  };
 </script>
 
-<svelte:document onkeydown={cycleFocus} />
-
-<dialog
-  bind:this={dialog}
-  aria-labelledby={titleId}
-  aria-describedby={describedBy}
-  class="m-0 mt-auto max-h-[88dvh] w-full max-w-none flex-col overflow-hidden rounded-t-2xl bg-card p-0 text-foreground shadow-xl transition-[translate] duration-(--motion-sheet-in) ease-out backdrop:bg-scrim/40 open:flex starting:open:[translate:0_100%]"
-  onpointerdown={notePress}
-  onkeydown={noteKey}
-  oncancel={(event) => {
-    event.preventDefault();
-    onclose();
-  }}
-  onclick={(event) => {
-    if (event.target === dialog) (onbackdrop ?? onclose)();
-  }}
->
-  <header class="flex items-center gap-3 border-b border-border py-2 pr-2 pl-4">
-    <div class="min-w-0 flex-1">{@render heading()}</div>
-    <button
-      type="button"
-      class="flex size-11 flex-none touch-manipulation items-center justify-center rounded-control text-muted-foreground {FOCUS}"
-      onclick={onclose}
-    >
-      <Icon name="close" />
-      <span class="sr-only">Close</span>
-    </button>
-  </header>
-  <div
-    bind:this={body}
-    inert={bodyInert || undefined}
-    class={[
-      'min-h-0 flex-1 overscroll-contain px-4 py-4 [&_:focus]:scroll-my-4',
-      bodyInert ? 'overflow-hidden' : 'overflow-y-auto'
-    ]}
-    onfocusin={revealFocused}
+<Dialog {open} presentation="sheet" onOpenChange={changeOpen}>
+  <DialogContent
+    aria-describedby={describedBy}
+    finalFocus={() => returnFocus() ?? undefined}
+    class="flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-card text-foreground shadow-xl [--sheet-backdrop:color-mix(in_oklab,var(--color-scrim)_40%,transparent)]"
+    onpointerdown={presses.note}
+    onkeydown={presses.forget}
   >
-    {@render children()}
-  </div>
-  <p
-    role="status"
-    aria-label="Messages"
-    class={said &&
-      'border-t border-border px-4 pt-3 text-base leading-snug font-medium'}
-  >
-    {said}
-  </p>
-  {#if footer}
-    <footer
-      class="flex flex-wrap gap-2 border-t border-border bg-card px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+    <header
+      class="flex items-center gap-3 border-b border-border py-2 pr-2 pl-4"
     >
-      {@render footer()}
-    </footer>
-  {/if}
-</dialog>
+      <div class="min-w-0 flex-1">
+        <DialogTitle class="flex items-center gap-2 text-title font-semibold"
+          >{@render title()}</DialogTitle
+        >
+        {@render subtitle?.()}
+      </div>
+      <DialogClose
+        class="flex size-11 flex-none touch-manipulation items-center justify-center rounded-control text-muted-foreground {FOCUS}"
+      >
+        <Icon name="close" />
+        <span class="sr-only">Close</span>
+      </DialogClose>
+    </header>
+    <div
+      class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 [&_:focus]:scroll-my-4"
+    >
+      {@render children()}
+    </div>
+    <p
+      role="status"
+      aria-label="Messages"
+      class={said &&
+        'border-t border-border px-4 pt-3 text-base leading-snug font-medium'}
+    >
+      {said}
+    </p>
+    {#if footer}
+      <footer
+        class="flex flex-wrap gap-2 border-t border-border bg-card px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+      >
+        {@render footer()}
+      </footer>
+    {/if}
+  </DialogContent>
+</Dialog>

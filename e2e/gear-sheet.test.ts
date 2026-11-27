@@ -17,6 +17,15 @@ import {
 const gearRow = (page: Page, name: string | RegExp) =>
   page.getByRole('main').getByRole('button').filter({ hasText: name });
 
+const springing = (element: Element) =>
+  element
+    .getAnimations()
+    .some(
+      (animation) =>
+        animation.timeline === document.timeline &&
+        animation.playState === 'running'
+    );
+
 const focusIsInside = (dialog: Locator) =>
   dialog.evaluate((element) => element.contains(document.activeElement));
 
@@ -51,10 +60,11 @@ test('the gear sheet keeps edits as a draft, saves details and kind, and deletes
 
   await label.fill('red float');
   await page.keyboard.press('Escape');
+  const unsaved = page.getByRole('alertdialog', { name: 'Unsaved changes' });
   await expect(
-    sheet.getByRole('button', { name: 'Keep editing' })
+    unsaved.getByRole('button', { name: 'Keep editing' })
   ).toBeFocused();
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await unsaved.getByRole('button', { name: 'Discard changes' }).click();
   await expect(sheet).toBeHidden();
   await expect(pot1).toBeFocused();
   await pot1.click();
@@ -115,8 +125,7 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
 }) => {
   const sheet = page.getByRole('dialog');
   const label = sheet.getByLabel('Label');
-  const form = sheet.locator('form');
-  const unsaved = sheet.getByRole('group', { name: 'Unsaved changes' });
+  const unsaved = page.getByRole('alertdialog', { name: 'Unsaved changes' });
   const keepEditing = unsaved.getByRole('button', { name: 'Keep editing' });
   const discard = unsaved.getByRole('button', { name: 'Discard changes' });
   const save = sheet.getByRole('button', { name: 'Save' });
@@ -157,20 +166,13 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
   await label.focus();
   await page.keyboard.press('Escape');
   await expect(keepEditing).toBeFocused();
-  await expect(save).toBeHidden();
-  await expect(form).toHaveJSProperty('inert', true);
-  await page.keyboard.press('Tab');
-  await expect(discard).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(discard).not.toBeFocused();
-  await keepEditing.focus();
-  await page.keyboard.press('Shift+Tab');
-  await expect(keepEditing).not.toBeFocused();
-  await keepEditing.focus();
+  await expect(unsaved).toHaveAccessibleName('Unsaved changes');
+  await expectFocusTrapped(page, unsaved);
   await tapBackdrop();
+  await settle();
+  await expect(unsaved).toBeVisible();
   await keepEditing.click();
   await expect(unsaved).toBeHidden();
-  await expect(form).toHaveJSProperty('inert', false);
   await expect(label).toBeFocused();
   await expect(label).toHaveValue('red float');
 
@@ -250,6 +252,57 @@ test('a gear sheet with unsaved changes ignores a backdrop tap and asks before C
     page.getByRole('main').getByRole('button', { name: /^Pot 1/ })
   ).toBeFocused();
 
+  await page.goBack();
+  await expect(page).toHaveURL('about:blank');
+});
+
+test('a swipe down closes a gear sheet with no changes, and springs back with no ask while it has unsaved changes', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const label = sheet.getByLabel('Label');
+  const host = page.locator('[data-slot="dialog-viewport"]');
+  const atRest = () => expect.poll(() => sheet.evaluate(springing)).toBe(false);
+  const sheetTop = () =>
+    sheet.evaluate((element) =>
+      Math.round(element.getBoundingClientRect().top)
+    );
+  const swipeDown = async () => {
+    await atRest();
+    await host.evaluate(async (element) => {
+      element.scrollTo({ top: 0 });
+      for (let frame = 0; frame < 2; frame++)
+        await new Promise(requestAnimationFrame);
+    });
+  };
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await expect(page.getByText('Finding position')).toBeHidden();
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+  const pot1 = gearRow(page, 'Pot 1');
+
+  await pot1.click();
+  await swipeDown();
+  await expect(sheet).toBeHidden();
+  await expect(pot1).toBeFocused();
+
+  await pot1.click();
+  await label.fill('red float');
+  await atRest();
+  const top = await sheetTop();
+  await swipeDown();
+  await atRest();
+  await expect(sheet).toBeVisible();
+  expect(await sheetTop()).toBe(top);
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(label).toHaveValue('red float');
+
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(pot1).toContainText('red float');
   await page.goBack();
   await expect(page).toHaveURL('about:blank');
 });
@@ -495,7 +548,7 @@ test('on a 320 by 640 screen, tabbing from corrected Depth through Label and Bai
 
   const outsideBody = () =>
     notes.evaluate((field) => {
-      const body = field.closest('dialog > div');
+      const body = field.closest('[data-slot="dialog-content"] > div');
       if (!body) return 'no body';
       const shown = body.getBoundingClientRect();
       const box = field.getBoundingClientRect();
@@ -525,7 +578,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const collectHidden = async () => {
       await animationsSettled(page);
       return collect.evaluate((button) => {
-        const body = button.closest('dialog > div');
+        const body = button.closest('[data-slot="dialog-content"] > div');
         if (!body) return 'no body';
         const shown = body.getBoundingClientRect();
         const box = button.getBoundingClientRect();
@@ -555,7 +608,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       .getByLabel('Notes', { exact: true })
       .fill('Fictional note about the outer float');
     await sheet.getByRole('button', { name: 'Close' }).click();
-    await sheet.getByRole('button', { name: 'Discard changes' }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Discard changes' })
+      .click();
     await expect(sheet).toBeHidden();
     await gearRow(page, 'Pot 1').click();
     await expect(sheet.getByRole('heading', { name: 'Pot 1' })).toBeVisible();
@@ -569,7 +625,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       .last()
       .click();
     await page.keyboard.press('Escape');
-    await sheet.getByRole('button', { name: 'Discard changes' }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Discard changes' })
+      .click();
     await expect(sheet).toBeHidden();
 
     await page.getByRole('tab', { name: 'Map', exact: true }).click();
@@ -689,7 +748,13 @@ function countClicksBeneath() {
   const counted = window as Reached;
   counted.reached = 0;
   document.body.addEventListener('click', ({ target }) => {
-    if (target instanceof Element && target.closest('dialog')) return;
+    if (
+      target instanceof Element &&
+      target.closest(
+        '[data-slot="dialog-viewport"], [role="dialog"], [role="alertdialog"]'
+      )
+    )
+      return;
     counted.reached = (counted.reached ?? 0) + 1;
   });
 }
@@ -975,8 +1040,12 @@ test('an open bait search with typed text keeps Save from closing and asks befor
   const clear = sheet.getByRole('button', { name: 'Clear bait' });
   const notes = sheet.getByLabel('Notes', { exact: true });
   const save = sheet.getByRole('button', { name: 'Save' });
-  const keepEditing = sheet.getByRole('button', { name: 'Keep editing' });
-  const discard = sheet.getByRole('button', { name: 'Discard changes' });
+  const keepEditing = page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Keep editing' });
+  const discard = page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' });
   const pot1 = gearRow(page, 'Pot 1');
   const pot2 = gearRow(page, 'Pot 2');
   const addBait = async (name: string) => {

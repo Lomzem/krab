@@ -54,9 +54,10 @@ test('visual inventory through a dense overnight trip', async ({
     for (const key of ['Tab', 'Shift+Tab']) {
       for (let step = 0; step < 16; step += 1) {
         await page.keyboard.press(key);
-        const inside = await sheet.evaluate((element) =>
-          element.contains(document.activeElement)
-        );
+        const inside = await page
+          .getByRole('dialog')
+          .or(page.getByRole('alertdialog'))
+          .evaluate((element) => element.contains(document.activeElement));
         observations.push({ key, step, inside });
         keep(`focus-${name}.json`, observations);
         expect(inside).toBe(true);
@@ -220,11 +221,12 @@ test('visual inventory through a dense overnight trip', async ({
     .getByRole('main')
     .getByRole('button', { name: 'End trip' })
     .click();
-  await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
+  const ask = page.getByRole('alertdialog');
+  await expect(ask.getByRole('heading', { name: 'End trip?' })).toBeVisible();
   await capture('14-end-confirmation');
   await checkFocus('end');
-  await sheet.getByRole('button', { name: 'End trip', exact: true }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'End trip', exact: true }).click();
+  await expect(ask).toBeHidden();
   await page.clock.runFor(8001);
   await tab('Past trips').click();
   const past = page.getByRole('main').getByRole('listitem').getByRole('button');
@@ -237,11 +239,11 @@ test('visual inventory through a dense overnight trip', async ({
   await capture('16-past-trip-detail');
   await page.getByRole('button', { name: 'Delete trip', exact: true }).click();
   await expect(
-    sheet.getByRole('heading', { name: 'Delete trip?' })
+    ask.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
   await capture('17-delete-confirmation');
   await checkFocus('delete');
-  await sheet.getByRole('button', { name: 'Keep trip' }).click();
+  await ask.getByRole('button', { name: 'Keep trip' }).click();
   keep('indexeddb-after.json', await readTrips(page));
   log(
     'Map filter, end confirmation, past-trip list and detail, delete confirmation; keep trip'
@@ -389,7 +391,10 @@ test('visual inventory for bait picker', async ({ page }, info) => {
   await search.scrollIntoViewIfNeeded();
   await capture('05-bait-unmatched-query');
   await page.keyboard.press('Escape');
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
   await expect(sheet).toBeHidden();
   keep('indexeddb-after.json', await readTrips(page));
   log(

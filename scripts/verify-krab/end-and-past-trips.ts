@@ -44,9 +44,9 @@ const fishOneMorning = async (page: Page) => {
 };
 
 const confirmEnd = async (page: Page) => {
-  const sheet = page.getByRole('dialog');
-  await sheet.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet).toBeHidden();
+  const ask = page.getByRole('alertdialog');
+  await ask.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip ended');
 };
 
@@ -79,11 +79,12 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
   await capture('01-trip-running');
 
   await endButton.click();
-  await expect(sheet.getByRole('heading', { name: 'End trip?' })).toBeVisible();
-  await expect(sheet).toContainText(STILL_IN);
+  const ask = page.getByRole('alertdialog');
+  await expect(ask.getByRole('heading', { name: 'End trip?' })).toBeVisible();
+  await expect(ask).toContainText(STILL_IN);
   await capture('02-confirm');
-  await sheet.getByRole('button', { name: 'Keep trip going' }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'Keep trip going' }).click();
+  await expect(ask).toBeHidden();
   await expect(endButton).toBeFocused();
   expect((await readTrips(page))[0]?.endedAt).toBeNull();
   log(
@@ -190,7 +191,7 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
     .getByRole('main')
     .getByRole('button', { name: 'End trip' })
     .click();
-  await expect(page.getByRole('dialog')).toContainText(STILL_IN);
+  await expect(page.getByRole('alertdialog')).toContainText(STILL_IN);
   await confirmEnd(page);
   log(
     'made-up fix; drop Pot 1 and Net 1, collect Pot 1 with 2 kept, End trip from Gear and confirm'
@@ -276,16 +277,17 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
   await pastTrip.click();
   const deleteTrip = main.getByRole('button', { name: 'Delete trip' });
   await deleteTrip.click();
+  const ask = page.getByRole('alertdialog');
   await expect(
-    sheet.getByRole('heading', { name: 'Delete trip?' })
+    ask.getByRole('heading', { name: 'Delete trip?' })
   ).toBeVisible();
   await capture('06-delete-confirm');
-  await sheet.getByRole('button', { name: 'Keep trip' }).click();
+  await ask.getByRole('button', { name: 'Keep trip' }).click();
   await expect(deleteTrip).toBeFocused();
   expect(await readTrips(page)).toHaveLength(1);
   await deleteTrip.click();
-  await sheet.getByRole('button', { name: 'Delete trip' }).click();
-  await expect(sheet).toBeHidden();
+  await ask.getByRole('button', { name: 'Delete trip' }).click();
+  await expect(ask).toBeHidden();
   await expect(toastOf(page)).toContainText('Trip deleted');
   await expect(main).toContainText('No past trips');
   await expect(

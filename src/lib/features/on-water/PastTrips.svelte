@@ -17,16 +17,17 @@
   import GearMap from './GearMap.svelte';
   import type { MapItem } from './gear-here';
   import { FOCUS, FOCUS_INSET, PRESS } from '#lib/shared/control-states.js';
-  import { DAY_CHOICE, DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
+  import { DAY_CHOICE, DESTRUCTIVE_BUTTON } from './controls';
   import GearIcon from './GearIcon.svelte';
   import LoadFailed from './LoadFailed.svelte';
   import SelectedCheck from './SelectedCheck.svelte';
-  import Sheet from './Sheet.svelte';
+  import Confirm from './Confirm.svelte';
   import type { Notice } from './on-water.svelte';
   import UncollectedMark from './UncollectedMark.svelte';
 
-  const DELETE_TITLE_ID = 'delete-trip-title';
-  const DELETE_NOTE_ID = 'delete-trip-note';
+  const TRIP_TITLE_ID = 'past-trip-title';
+  const LIST_TITLE_ID = 'past-trips-title';
+
   const DAY_CHOICES: readonly { days: PastDaySelection; name: string }[] = [
     { days: 'last', name: 'Last day' },
     { days: 'earlier', name: 'Earlier days' },
@@ -37,7 +38,6 @@
     past,
     failed,
     selected = $bindable(null),
-    titleHeading = $bindable(),
     show,
     onshown,
     onopen,
@@ -48,7 +48,6 @@
     past: readonly Trip[];
     failed: boolean;
     selected?: string | null;
-    titleHeading?: HTMLHeadingElement;
     show: string | null;
     onshown: () => void;
     onopen: (
@@ -65,7 +64,6 @@
   let deleteOpen = $state(false);
   let deleting = $state(false);
   let deleteButton = $state<HTMLButtonElement>();
-  let keepButton = $state<HTMLButtonElement>();
   let list = $state<HTMLUListElement>();
 
   const summaries = $derived(pastTripSummaries(past));
@@ -96,9 +94,12 @@
     else onshown();
   });
 
+  export const heading = () =>
+    document.getElementById(current ? TRIP_TITLE_ID : LIST_TITLE_ID);
+
   const focusHeading = async () => {
     await tick();
-    titleHeading?.focus();
+    heading()?.focus();
   };
 
   const openTrip = (tripId: string) => {
@@ -114,7 +115,7 @@
     const row = from
       ? list?.querySelector<HTMLElement>(`[data-trip="${from}"]`)
       : null;
-    (row ?? titleHeading)?.focus();
+    (row ?? heading())?.focus();
   };
 
   const keepTrip = () => {
@@ -217,7 +218,7 @@
 {/snippet}
 
 {#if current}
-  <section aria-labelledby="past-trip-title" class="pb-6">
+  <section aria-labelledby={TRIP_TITLE_ID} class="pb-6">
     <div class="px-4 pt-3">
       <Button
         class="-ml-2 flex min-h-11 touch-manipulation items-center gap-1 rounded-control px-2 text-base font-medium text-primary {FOCUS}"
@@ -226,8 +227,7 @@
         <Icon name="back" size={20} />All past trips
       </Button>
       <h1
-        id="past-trip-title"
-        bind:this={titleHeading}
+        id={TRIP_TITLE_ID}
         tabindex="-1"
         class="mt-1 text-display font-semibold focus:outline-none"
       >
@@ -310,10 +310,9 @@
     </div>
   </section>
 {:else}
-  <section aria-labelledby="past-trips-title" class="pb-6">
+  <section aria-labelledby={LIST_TITLE_ID} class="pb-6">
     <h1
-      id="past-trips-title"
-      bind:this={titleHeading}
+      id={LIST_TITLE_ID}
       tabindex="-1"
       class="px-4 pt-3 pb-2 text-display font-semibold focus:outline-none"
     >
@@ -356,45 +355,25 @@
   </section>
 {/if}
 
-<Sheet
+<Confirm
   open={deleteOpen && trip !== null}
-  titleId={DELETE_TITLE_ID}
-  describedBy={DELETE_NOTE_ID}
-  initialFocus={() => keepButton}
-  onclose={keepTrip}
+  title="Delete trip?"
+  keep="Keep trip"
+  go="Delete trip"
+  busy={deleting}
+  onkeep={keepTrip}
+  ongo={() => void confirmDelete()}
   {notice}
-  returnFocus={() => (deleteButton?.isConnected ? deleteButton : titleHeading)}
+  returnFocus={() => (deleteButton?.isConnected ? deleteButton : heading())}
 >
-  {#snippet heading()}
-    <h2 id={DELETE_TITLE_ID} class="text-title font-semibold">Delete trip?</h2>
-  {/snippet}
-
   {#if current}
-    <div id={DELETE_NOTE_ID} class="space-y-1 text-base leading-normal">
-      <p class="font-medium">
-        <span aria-hidden="true"
-          >{tripTitle(current, true)} · {current.dropCount}</span
-        ><span class="sr-only"
-          >{tripTitle(current, false)}, {current.dropCount}</span
-        >
-      </p>
-      <p class="text-muted-foreground">Can't be undone</p>
-    </div>
+    <p class="font-medium">
+      <span aria-hidden="true"
+        >{tripTitle(current, true)} · {current.dropCount}</span
+      ><span class="sr-only"
+        >{tripTitle(current, false)}, {current.dropCount}</span
+      >
+    </p>
+    <p class="text-muted-foreground">Can't be undone</p>
   {/if}
-
-  {#snippet footer()}
-    <Button
-      {@attach elementRef<HTMLButtonElement>((element) => {
-        keepButton = element;
-      })}
-      class="flex-1 basis-36 {PRIMARY_BUTTON}"
-      aria-disabled={deleting}
-      onclick={keepTrip}>Keep trip</Button
-    >
-    <Button
-      class="flex-1 basis-36 {DESTRUCTIVE_BUTTON}"
-      aria-disabled={deleting}
-      onclick={() => void confirmDelete()}>Delete trip</Button
-    >
-  {/snippet}
-</Sheet>
+</Confirm>

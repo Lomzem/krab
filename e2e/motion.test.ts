@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test, toastOf } from './fixtures';
+import { animationsSettled } from './settled';
 
 const recordTransitions = (page: Page) =>
   page.addInitScript(() => {
@@ -7,7 +8,10 @@ const recordTransitions = (page: Page) =>
     Object.assign(window, { transitionRuns: runs });
     document.addEventListener('transitionrun', (event) => {
       if (!(event.target instanceof Element)) return;
-      const owner = event.target.getAttribute('role') ?? event.target.localName;
+      const owner =
+        event.target.getAttribute('role') ??
+        event.target.getAttribute('data-slot') ??
+        event.target.localName;
       runs.push(`${owner} ${event.propertyName}`);
     });
   });
@@ -15,9 +19,20 @@ const recordTransitions = (page: Page) =>
 const transitionRuns = (page: Page) =>
   page.evaluate(() =>
     (window as unknown as { transitionRuns: string[] }).transitionRuns.filter(
-      (run) => run.startsWith('dialog ') || run.startsWith('group ')
+      (run) => run.startsWith('dialog-viewport ') || run.startsWith('group ')
     )
   );
+
+const shownAfterDone = async () => {
+  const sheet = document.querySelector('[role="dialog"]');
+  const done = [...(sheet?.querySelectorAll('button') ?? [])].find(
+    (button) => button.textContent.trim() === 'Done'
+  );
+  done?.click();
+  for (let frame = 0; frame < 2; frame++)
+    await new Promise(requestAnimationFrame);
+  return sheet?.checkVisibility() ?? false;
+};
 
 const dropAndOpenFilter = async (page: Page) => {
   await page.goto('/');
@@ -35,6 +50,7 @@ const dropAndOpenFilter = async (page: Page) => {
 test('the Drop toast rises as it fades in and the Filter sheet slides up', async ({
   page
 }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await recordTransitions(page);
   await dropAndOpenFilter(page);
 
@@ -44,9 +60,18 @@ test('the Drop toast rises as it fades in and the Filter sheet slides up', async
       expect.arrayContaining([
         'group translate',
         'group opacity',
-        'dialog translate'
+        'dialog-viewport transform'
       ])
     );
+});
+
+test('a closing Filter sheet leaves at once', async ({ page }) => {
+  await dropAndOpenFilter(page);
+  await animationsSettled(page);
+
+  const shownAfterClose = await page.evaluate(shownAfterDone);
+
+  expect(shownAfterClose).toBe(false);
 });
 
 test('under reduced motion the Drop toast and the Filter sheet appear at once', async ({

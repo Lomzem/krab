@@ -451,6 +451,7 @@ test('supplemental UI review with live maps and accessibility observations', asy
   await row.click();
   await expect(sheet).toBeVisible();
   await depth.fill('-3');
+  await settledObservation(() => depth.boundingBox());
   await sheet.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(depth).toBeFocused();
   await capture('08-css-zoom-validation');
@@ -815,9 +816,9 @@ test('Trip ended shows, then leaves on its own', async ({
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
-  const sheet = page.getByRole('dialog');
-  await sheet.getByRole('button', { name: 'End trip' }).click();
-  await expect(sheet).toBeHidden();
+  const ask = page.getByRole('alertdialog');
+  await ask.getByRole('button', { name: 'End trip' }).click();
+  await expect(ask).toBeHidden();
   await page.mouse.move(0, 0);
   const ended = toastOf(page).getByText('Trip ended');
   await expect(ended).toBeVisible();

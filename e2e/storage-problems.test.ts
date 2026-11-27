@@ -46,7 +46,10 @@ const endTheTrip = async (page: Page) => {
   const sheet = page.getByRole('dialog');
   await page.getByRole('tab', { name: 'Gear', exact: true }).click();
   await page.getByRole('button', { name: 'End trip' }).click();
-  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'End trip' })
+    .click();
   await expect(sheet).toBeHidden();
 };
 

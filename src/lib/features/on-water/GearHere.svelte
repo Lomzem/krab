@@ -7,7 +7,6 @@
   import Sheet from './Sheet.svelte';
   import UncollectedMark from './UncollectedMark.svelte';
 
-  const TITLE_ID = 'gear-here-title';
   const LOOK: Record<Layer, string> = {
     'in-water': 'border-solid border-map-ink bg-map-ink text-map-paper',
     collected: 'border-dashed border-map-muted bg-map-paper text-map-muted',
@@ -29,12 +28,10 @@
   } = $props();
 </script>
 
-<Sheet open={items.length > 0} titleId={TITLE_ID} {onclose} {returnFocus}>
-  {#snippet heading()}
-    <h2 id={TITLE_ID} class="text-title font-semibold">
-      {items.length} gear {apart ? 'in this area' : 'here'}
-    </h2>
-  {/snippet}
+<Sheet open={items.length > 0} {onclose} {returnFocus}>
+  {#snippet title()}{items.length} gear {apart
+      ? 'in this area'
+      : 'here'}{/snippet}
 
   <ul class="-mx-4 mt-3 border-t border-border">
     {#each items as item (item.id)}

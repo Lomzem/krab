@@ -16,12 +16,14 @@
     draft = $bindable(emptyDraft()),
     baitSearch = $bindable({ query: '', refused: false }),
     baits,
-    idPrefix
+    idPrefix,
+    onescape
   }: {
     draft?: DetailsDraft;
     baitSearch?: BaitSearch;
     baits: readonly BaitChoice[];
     idPrefix: string;
+    onescape: () => void;
   } = $props();
 
   const depthError = $derived(
@@ -74,6 +76,7 @@
     bind:search={baitSearch}
     choices={baits}
     {idPrefix}
+    {onescape}
   />
   <div class="grid gap-2">
     <label class={label} for="{idPrefix}-notes">Notes</label>

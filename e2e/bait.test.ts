@@ -46,7 +46,10 @@ test('a saved custom bait is a one-tap choice after reload and on a new trip whi
   await sheet.getByRole('button', { name: 'Save' }).click();
   await expect(sheet.getByLabel('Depth')).toBeFocused();
   await page.keyboard.press('Escape');
-  await sheet.getByRole('button', { name: 'Discard changes' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Discard changes' })
+    .click();
   await expect(sheet).toBeHidden();
   expect(await storedBaits(page)).toEqual(['']);
 
@@ -74,7 +77,10 @@ test('a saved custom bait is a one-tap choice after reload and on a new trip whi
   expect(await storedBaits(page)).toEqual(['Fish heads', 'Fish heads']);
 
   await page.getByRole('button', { name: 'End trip' }).click();
-  await sheet.getByRole('button', { name: 'End trip' }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'End trip' })
+    .click();
   await expect(toastOf(page)).toContainText('Trip ended');
   await dropPot(page, 'Pot 1');
   expect(await storedBaits(page)).toEqual(['Fish heads', 'Fish heads', '']);

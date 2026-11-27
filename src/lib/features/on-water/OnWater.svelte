@@ -86,7 +86,7 @@
   let ending = $state(false);
   let endedTripId = $state<string | null>(null);
   let pastTripId = $state<string | null>(null);
-  let pastHeading = $state<HTMLHeadingElement>();
+  let pastTrips = $state<{ heading: () => HTMLElement | null }>();
   let pastShow = $state<string | null>(null);
   let pastShowNext: string | null = null;
   let slowAttempt = $state.raw<DropAttempt | null>(null);
@@ -247,7 +247,7 @@
   };
 
   const restingFocus = () => {
-    if (tab === 'trips') return pastHeading;
+    if (tab === 'trips') return pastTrips?.heading();
     if (tab === 'gear') return gearHeading;
     return dropButton;
   };
@@ -315,7 +315,7 @@
     pastTripId = endedTrip.id;
     await switchTo('trips');
     await tick();
-    pastHeading?.focus();
+    pastTrips?.heading()?.focus();
   };
 
   const endReturnFocus = () =>
@@ -425,10 +425,10 @@
     <TabsPanel value="trips" keepMounted class="flex min-h-0 flex-1 flex-col">
       {#if tab === 'trips' && water.load !== 'opening'}
         <PastTrips
+          bind:this={pastTrips}
           past={water.past}
           failed={water.load === 'failed'}
           bind:selected={pastTripId}
-          bind:titleHeading={pastHeading}
           show={pastShow}
           onshown={() => {
             pastShow = null;
