@@ -62,7 +62,10 @@ const testOnlyFrom = (allowed, otherTests, message) => ({
   'no-restricted-imports': [
     'error',
     {
-      patterns: [{ regex: `^(?!${allowed}$)`, importNames: ['test'], message }]
+      patterns: [
+        { regex: `^(?!${allowed}$)`, importNames: ['test'], message },
+        { regex: `^(?:${otherTests})$`, importNames: ['default'], message }
+      ]
     }
   ],
   'no-restricted-syntax': [
@@ -156,7 +159,7 @@ export default defineConfig([
     ignores: ['scripts/verify-krab/recipe.ts', '**/*.test.ts'],
     rules: testOnlyFrom(
       '\\./recipe',
-      '@playwright.test|(?:\\.\\.?.)+e2e.fixtures(?:\\.ts)?',
+      '@?playwright.test|(?:\\.\\.?.)+e2e.fixtures(?:\\.ts)?',
       USE_RECIPE_TEST
     )
   },

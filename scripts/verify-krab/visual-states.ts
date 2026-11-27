@@ -35,7 +35,7 @@ test('visual inventory through a dense overnight trip', async ({
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(page, info, 'visual-inventory', 'UI');
-  // Playwright's clock moves performance.now ahead of the animation timeline, so a sheet spring timed from it never plays.
+  // Playwright's clock moves performance.now ahead of the animation timeline, so a sheet spring timed from it can stall.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await holdFixes(page);
   await page.clock.install({ time: EVENING });
@@ -325,7 +325,7 @@ test('visual inventory for bait picker', async ({ page }, info) => {
     'visual-inventory',
     'Bait'
   );
-  // Playwright's clock moves performance.now ahead of the animation timeline, so a sheet spring timed from it never plays.
+  // Playwright's clock moves performance.now ahead of the animation timeline, so a sheet spring timed from it can stall.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await holdFixes(page);
   await page.clock.install({ time: EVENING });

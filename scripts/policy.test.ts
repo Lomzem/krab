@@ -197,6 +197,35 @@ const cases: PolicyCase[] = [
     risk: 'A dynamic import takes the e2e test without the doctor receipt, or other dynamic imports are refused'
   },
   {
+    name: 'default Playwright import versus the recipe doctor fixture',
+    file: 'scripts/verify-krab/probe.ts',
+    valid: 'import { expect } from "@playwright/test"; export { expect };',
+    invalid:
+      'import playwright from "@playwright/test"; export const drive = playwright;',
+    command: 'lint',
+    diagnostic: "Import test from './recipe'",
+    risk: 'A default import takes the Playwright test without the doctor receipt, or expect from Playwright is refused'
+  },
+  {
+    name: 'dynamic unscoped Playwright import versus the recipe doctor fixture',
+    file: 'scripts/verify-krab/probe.ts',
+    valid: 'export const load = () => import("@playwright/test/reporter");',
+    invalid: 'export const load = () => import("playwright/test");',
+    command: 'lint',
+    diagnostic: "Import test from './recipe'",
+    risk: 'The unscoped playwright/test entry drives the preview without the doctor receipt, or a neighbouring Playwright module is refused'
+  },
+  {
+    name: 'default Playwright import versus the providers fixture',
+    file: 'e2e/probe.test.ts',
+    valid: 'import { expect } from "@playwright/test"; export { expect };',
+    invalid:
+      'import playwright from "@playwright/test"; export const drive = playwright;',
+    command: 'lint',
+    diagnostic: "Import test from './fixtures'",
+    risk: 'A default import takes the Playwright test without the NOAA and OpenFreeMap fixture, or expect from Playwright is refused'
+  },
+  {
     name: 'throw syntax in verify-krab recipes',
     file: 'scripts/verify-krab/probe.ts',
     valid:

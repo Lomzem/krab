@@ -30,10 +30,13 @@ export const holdFixes = (page: Page) =>
       };
       clearInterval(renewal);
       renewal = setInterval(renew, 4000);
+      queueMicrotask(renew);
       return 1;
     };
     navigator.geolocation.clearWatch = () => {
       report = null;
+      held.deliverFix = undefined;
+      held.denyLocation = undefined;
       clearInterval(renewal);
     };
   });
