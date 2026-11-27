@@ -87,7 +87,7 @@
     finalFocus={returnFocus === 'none'
       ? 'none'
       : () => returnFocus() ?? undefined}
-    class="fixed inset-0 m-auto h-fit w-[min(24rem,calc(100%-2rem))] rounded-2xl bg-card p-4 text-foreground shadow-xl backdrop:bg-scrim/40"
+    class="fixed inset-0 m-auto h-fit w-[min(24rem,calc(100%-2rem))] rounded-2xl border border-border bg-card p-4 text-foreground shadow-xl backdrop:bg-scrim/40"
   >
     <AlertDialogTitle class="text-title font-semibold">{title}</AlertDialogTitle
     >

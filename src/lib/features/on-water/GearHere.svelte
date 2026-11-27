@@ -33,7 +33,7 @@
       ? 'in this area'
       : 'here'}{/snippet}
 
-  <ul class="-mx-4 mt-3 border-t border-border">
+  <ul class="-mx-4 -mt-4">
     {#each items as item (item.id)}
       <li class="border-b border-border">
         <Button
