@@ -10,6 +10,7 @@
   import { untrack, type Snippet } from 'svelte';
   import { DESTRUCTIVE_BUTTON, PRIMARY_BUTTON } from './controls';
   import { doublePressGuard } from './double-press';
+  import { openModal } from './modal.svelte';
   import type { Notice } from './on-water.svelte';
 
   let {
@@ -45,6 +46,8 @@
   $effect(() => () => {
     presses.stop();
   });
+
+  $effect(() => (open ? openModal() : undefined));
 
   const keepUnlessBusy = () => {
     if (!busy) onkeep();

@@ -3,7 +3,6 @@
     createToaster,
     Toast,
     ToastAction,
-    ToastClose,
     ToastRegion,
     ToastTitle
   } from '@ui-sdk/svelte/toast';
@@ -13,6 +12,7 @@
   import { FOCUS, FOCUS_INVERSE } from '#lib/shared/control-states.js';
   import { Countdown } from './countdown';
   import { coverRow } from './cover-row';
+  import { modalOpen } from './modal.svelte';
   import type { Notice, Offer, Undo } from './on-water.svelte';
 
   const SHOWN_MS: Record<Offer['action'], number | null> = {
@@ -51,9 +51,10 @@
   let row = $state<HTMLDivElement>();
   let item: HTMLElement | undefined;
   const held = new SvelteSet<string>();
+  const touches = new SvelteSet<number>();
   let left = $state(1);
-  let leaving = $state<{ key: number; text: string } | null>(null);
   const showing = $derived(notice !== null);
+  const covered = $derived(modalOpen());
 
   const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -92,16 +93,15 @@
   $effect(() => {
     if (!notice) {
       untrack(() => {
+        touches.clear();
         for (const reason of held) if (reason !== 'hidden') held.delete(reason);
       });
       return;
     }
-    leaving = null;
     const shownMs = SHOWN_MS[notice.offer.action];
     if (shownMs === null) return;
-    const { key, text } = notice;
+    const { key } = notice;
     const current = new Countdown(shownMs, () => {
-      leaving = { key, text };
       ondismiss(key);
     });
     untrack(() => {
@@ -133,6 +133,14 @@
     held.delete(reason);
     countdown?.release(reason);
   };
+  const touchStart = (event: TouchEvent) => {
+    for (const touch of event.changedTouches) touches.add(touch.identifier);
+    hold('touch')();
+  };
+  const touchEnd = (event: TouchEvent) => {
+    for (const touch of event.changedTouches) touches.delete(touch.identifier);
+    if (touches.size === 0) release('touch')();
+  };
 </script>
 
 <div class="grid min-h-14 grid-cols-1 bg-card" bind:this={row}>
@@ -145,27 +153,18 @@
   >
     {@render children?.()}
   </div>
-  {#if leaving && !notice}
-    <p
-      class="pointer-events-none col-start-1 row-start-1 flex animate-[receipt-out_var(--motion-receipt-out)_ease-in_forwards] items-center bg-inverse px-4 text-base font-medium text-inverse-foreground"
-      aria-hidden="true"
-      onanimationend={() => {
-        leaving = null;
-      }}
-    >
-      <span class="line-clamp-2">{leaving.text}</span>
-    </p>
-  {/if}
 </div>
 
 <ToastRegion
   {toaster}
   aria-label="Messages"
-  class="pointer-events-none *:grid *:h-full [body:has([role=alertdialog][data-open])_&]:opacity-0 [body:has([role=dialog][data-open])_&]:opacity-0"
+  shortcut={covered ? null : 'F6'}
+  inert={covered}
+  class="pointer-events-none *:grid *:h-full {covered ? 'opacity-0' : ''}"
   {@attach showing && row ? coverRow(row) : undefined}
 >
   <Toast
-    class="pointer-events-auto relative flex min-w-0 items-center gap-1 bg-inverse py-1.5 pr-1 pl-4 text-inverse-foreground transition-[opacity,translate] duration-(--motion-receipt-in) ease-out data-starting-style:translate-y-1 data-starting-style:opacity-0 [body:has([role=alertdialog][data-open])_&]:pointer-events-none [body:has([role=dialog][data-open])_&]:pointer-events-none {FOCUS}"
+    class="pointer-events-auto relative flex min-w-0 items-center gap-1 bg-inverse py-1.5 pr-1 pl-4 text-inverse-foreground transition-[opacity,translate] duration-(--motion-receipt-in) ease-out data-starting-style:translate-y-1 data-starting-style:opacity-0 {FOCUS}"
     {@attach (element: HTMLElement) => {
       item = element;
       return () => {
@@ -174,47 +173,52 @@
     }}
     onpointerenter={hold('pointer')}
     onpointerleave={release('pointer')}
-    ontouchstart={hold('touch')}
-    ontouchend={release('touch')}
-    ontouchcancel={release('touch')}
+    ontouchstart={touchStart}
+    ontouchend={touchEnd}
+    ontouchcancel={touchEnd}
     onfocusin={hold('focus')}
     onfocusout={release('focus')}
   >
-    <ToastTitle
-      class="line-clamp-2 flex-1 text-base leading-snug font-medium"
-    />
-    {#if notice && notice.offer.action !== 'none' && notice.offer.action !== 'retry'}
-      {@const undo = notice.offer}
-      <ToastAction
-        class="{ACTION} text-inverse-action underline underline-offset-4 {FOCUS_INVERSE} aria-disabled:text-inverse-foreground/70 aria-disabled:no-underline"
-        aria-disabled={blocked ? 'true' : undefined}
-        dismiss={false}
-        onAction={() => {
-          onundo(undo);
-        }}>Undo</ToastAction
-      >
-    {:else if notice?.offer.action === 'retry'}
-      {@const key = notice.key}
-      <ToastAction
-        class="{ACTION} text-inverse-action underline underline-offset-4 {FOCUS_INVERSE}"
-        dismiss={false}
-        onAction={() => {
-          onretry(key);
-        }}>Retry</ToastAction
-      >
-      <ToastClose
-        class="{ACTION} font-medium text-inverse-foreground {FOCUS_INVERSE}"
-        action={() => {
-          ondismiss(key);
-        }}>Dismiss</ToastClose
-      >
-    {/if}
-    {#if notice && SHOWN_MS[notice.offer.action] !== null}
-      <span
-        class="absolute inset-x-0 bottom-0 h-0.75 origin-left bg-inverse-action"
-        style:transform="scaleX({left})"
-        aria-hidden="true"
-      ></span>
-    {/if}
+    {#snippet render({ props })}
+      <li {...props} tabindex="-1">
+        <ToastTitle
+          class="line-clamp-2 flex-1 text-base leading-snug font-medium"
+        />
+        {#if notice && notice.offer.action !== 'none' && notice.offer.action !== 'retry'}
+          {@const undo = notice.offer}
+          <ToastAction
+            class="{ACTION} text-inverse-action underline underline-offset-4 {FOCUS_INVERSE} aria-disabled:text-inverse-foreground/70 aria-disabled:no-underline"
+            aria-disabled={blocked ? 'true' : undefined}
+            dismiss={false}
+            onAction={() => {
+              onundo(undo);
+            }}>Undo</ToastAction
+          >
+        {:else if notice?.offer.action === 'retry'}
+          {@const key = notice.key}
+          <ToastAction
+            class="{ACTION} text-inverse-action underline underline-offset-4 {FOCUS_INVERSE}"
+            dismiss={false}
+            onAction={() => {
+              onretry(key);
+            }}>Retry</ToastAction
+          >
+          <ToastAction
+            class="{ACTION} font-medium text-inverse-foreground {FOCUS_INVERSE}"
+            dismiss={false}
+            onAction={() => {
+              ondismiss(key);
+            }}>Dismiss</ToastAction
+          >
+        {/if}
+        {#if notice && SHOWN_MS[notice.offer.action] !== null}
+          <span
+            class="absolute inset-x-0 bottom-0 h-0.75 origin-left bg-inverse-action"
+            style:transform="scaleX({left})"
+            aria-hidden="true"
+          ></span>
+        {/if}
+      </li>
+    {/snippet}
   </Toast>
 </ToastRegion>

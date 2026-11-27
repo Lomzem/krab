@@ -172,6 +172,108 @@ test('a touch held on the Undo toast also holds the notice that replaces it, and
   ).toBeHidden();
 });
 
+test('two touches hold the Undo toast until the last one lifts, and it then keeps the remaining time', async ({
+  page
+}) => {
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.clock.runFor(2000);
+
+  const first = await touchesAt(toastOf(page));
+  const [one] = first.changedTouches;
+  const two = { ...one, identifier: 1 };
+  await toastOf(page).dispatchEvent('touchstart', first);
+  await toastOf(page).dispatchEvent('touchstart', {
+    touches: [one, two],
+    targetTouches: [one, two],
+    changedTouches: [two]
+  });
+  await toastOf(page).dispatchEvent('touchend', {
+    touches: [two],
+    targetTouches: [two],
+    changedTouches: [one]
+  });
+  await page.clock.runFor(20_000);
+  await expect(
+    undoOf(page),
+    'Lifting one of two fingers released the hold.'
+  ).toBeEnabled();
+
+  await toastOf(page).dispatchEvent('touchcancel', {
+    touches: [],
+    targetTouches: [],
+    changedTouches: [two]
+  });
+  await expectExpiresAfter(page, 6000);
+});
+
+function visibleTextWith(text: string) {
+  return [...document.querySelectorAll('body *')]
+    .filter(
+      (element) =>
+        element.childElementCount === 0 &&
+        !element.closest('[data-ui-sdk-announcer]') &&
+        element.textContent.includes(text) &&
+        element.checkVisibility({ opacityProperty: true })
+    )
+    .map((element) => element.outerHTML);
+}
+
+test('an expiring toast leaves the dock at once under full motion', async ({
+  page
+}) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.clock.runFor(7999);
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+
+  await page.clock.runFor(1);
+  const shownAtExpiry = await page.evaluate(visibleTextWith, 'Pot 1 dropped');
+  expect(
+    shownAtExpiry,
+    'An expired toast leaves at once; no fading copy stays in the dock.'
+  ).toEqual([]);
+});
+
+test('the Undo toast is out of reach behind a gear sheet, and outside one its buttons are the only Tab stops', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const focusInToast = () =>
+    toastOf(page).evaluate((toast) => toast.contains(document.activeElement));
+
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+
+  await page.keyboard.press('F6');
+  await expect(toastOf(page)).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(undoOf(page)).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  expect(
+    await focusInToast(),
+    'The toast item is a Tab stop; only its buttons should be.'
+  ).toBe(false);
+
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+  await inWaterRow(page, 'Pot 1').click();
+  await expect(sheet).toBeVisible();
+  const label = sheet.getByLabel('Label');
+  await label.focus();
+  await page.keyboard.press('F6');
+  await expect(
+    label,
+    'F6 left the open sheet for the hidden toast.'
+  ).toBeFocused();
+  await page.keyboard.press('Tab');
+  expect(await focusInToast()).toBe(false);
+  await page.keyboard.press('Enter');
+  await page.clock.runFor(0);
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  expect(await storedDrops(page)).toBe(1);
+});
+
 const inWaterRow = (page: Page, name: string) =>
   page
     .getByRole('main')
@@ -273,6 +375,25 @@ test('a Collect toast lasts 8 seconds and Undo within it puts only that gear bac
   await expect(toastOf(page)).toContainText('Pot 2 back in the water');
   await expect(inWaterRow(page, 'Pot 2')).toBeVisible();
   await expect(inWaterRow(page, 'Pot 1')).toHaveCount(0);
+});
+
+test('Undo collect names the gear by its saved kind', async ({ page }) => {
+  const sheet = page.getByRole('dialog');
+
+  await openWithPausedClock(page);
+  await dropPot(page, 'Pot 1');
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+
+  await collectInSheet(page, 'Pot 1');
+  await sheet
+    .getByRole('radiogroup', { name: 'Gear' })
+    .getByText('Net', { exact: true })
+    .click();
+  await closeSheet(page, 'Save');
+  await expect(toastOf(page)).toContainText('Pot 1 collected');
+  await undoOf(page).click();
+  await expect(toastOf(page)).toContainText('Net 1 back in the water');
+  await expect(inWaterRow(page, 'Net 1')).toBeVisible();
 });
 
 test("saving a recorded catch retires that gear's Collect Undo so it cannot clear the catch, while a save without a catch and another gear's Collect toast keep their Undo and time", async ({

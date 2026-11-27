@@ -10,6 +10,7 @@
   import { FOCUS } from '#lib/shared/control-states.js';
   import { untrack, type Snippet } from 'svelte';
   import { doublePressGuard } from './double-press';
+  import { openModal } from './modal.svelte';
   import type { Notice } from './on-water.svelte';
 
   type Dismissal = 'outside-press' | 'swipe';
@@ -49,6 +50,8 @@
   $effect(() => () => {
     presses.stop();
   });
+
+  $effect(() => (open ? openModal() : undefined));
 
   $effect.pre(() => {
     if (!open) return;

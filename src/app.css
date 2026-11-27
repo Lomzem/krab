@@ -99,7 +99,6 @@
   --map-alert: #b3261e;
   --map-selected: #a3256f;
   --motion-receipt-in: 180ms;
-  --motion-receipt-out: 140ms;
   --motion-press: 90ms;
 }
 
@@ -131,7 +130,6 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-receipt-in: 0ms;
-    --motion-receipt-out: 0ms;
     --motion-press: 0ms;
   }
 
@@ -144,12 +142,6 @@
 body {
   background: var(--background);
   color: var(--foreground);
-}
-
-@keyframes receipt-out {
-  to {
-    opacity: 0;
-  }
 }
 
 [data-slot='dialog-viewport']:has(> [data-ending-style]) {

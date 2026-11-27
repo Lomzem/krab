@@ -349,8 +349,8 @@ export class OnWater {
     if (undone.success.changed) {
       this.#say(
         undone.success.catchCleared
-          ? `${name} back in, catch cleared`
-          : `${name} back in the water`
+          ? `${undone.success.name} back in, catch cleared`
+          : `${undone.success.name} back in the water`
       );
       return true;
     }
