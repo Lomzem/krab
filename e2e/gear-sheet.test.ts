@@ -1105,6 +1105,7 @@ test('an open bait search with typed text keeps Save from closing and asks befor
 
   await expectAccessibleInBothThemes(page);
 
+  await page.mouse.move(0, 0);
   await search.fill('fish');
   await expect(sheet.getByRole('listbox', { name: 'Bait' })).toBeVisible();
   expect(await controlsListbox(search)).toBe(true);
