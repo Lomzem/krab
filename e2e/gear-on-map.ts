@@ -1,67 +1,89 @@
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect } from './fixtures';
 
-const GEAR = /^(?:Pot|Net) \d+\b/;
-const GROUP = / \+\d+ more (?:here|in this area)/;
+export type Spot = { place: string; chooser: string | null; gear: string[] };
 
-const buttonNames = async (area: Locator) =>
-  [...(await area.ariaSnapshot()).matchAll(/- button "([^"]*)"/g)].map(
-    ([, name]) => name
-  );
+export const markerAt = (map: Locator, place: string) =>
+  map.locator(`[data-place="${place}"]`).getByRole('button');
 
-const gearNames = async (map: Locator) =>
-  (await buttonNames(map)).filter((name) => GEAR.test(name));
+const press = (target: Locator) =>
+  target.dispatchEvent('click', undefined, { timeout: 1000 });
 
-export type Spot = { name: string; gear: string[] };
-
-const readSpots = async (map: Locator, names: string[]) => {
-  const chooser = map.page().getByRole('dialog');
-  const spots: Spot[] = [];
-  for (const name of names) {
-    if (!GROUP.test(name)) {
-      spots.push({ name, gear: [GEAR.exec(name)?.[0] ?? name] });
-      continue;
-    }
-    await map
-      .getByRole('button', { name, exact: true })
-      .dispatchEvent('click', undefined, { timeout: 1000 });
-    const listed = await gearNames(chooser);
-    spots.push({
-      name,
-      gear: listed.map((item) => GEAR.exec(item)?.[0] ?? item)
-    });
-    await chooser.getByRole('button', { name: 'Close' }).dispatchEvent('click');
-    await expect(chooser).toHaveCount(0);
-  }
-  return spots;
+const readSpot = async (map: Locator, place: string): Promise<Spot> => {
+  const dialog = map.page().getByRole('dialog');
+  const title = dialog.getByRole('heading', { level: 2 });
+  await press(markerAt(map, place));
+  await title.waitFor();
+  const heading = (await title.innerText()).trim();
+  const gear = await dialog
+    .getByRole('list')
+    .getByRole('button')
+    .evaluateAll((choices) =>
+      choices.map(
+        (choice) =>
+          (choice instanceof HTMLElement ? choice.innerText : '')
+            .trim()
+            .split('\n')[0] ?? ''
+      )
+    );
+  await press(dialog.getByRole('button', { name: 'Close', exact: true }));
+  await dialog.waitFor({ state: 'detached' });
+  return gear.length === 0
+    ? { place, chooser: null, gear: [heading] }
+    : { place, chooser: heading, gear };
 };
 
-const settledNames = async (map: Locator) => {
+const placesOf = (map: Locator) =>
+  map
+    .locator('[data-place]')
+    .evaluateAll((markers) =>
+      markers.map((marker) => marker.getAttribute('data-place') ?? '')
+    );
+
+const settledPlaces = async (map: Locator) => {
   let seen = '';
-  let names: string[] = [];
+  let places: string[] = [];
   await expect
     .poll(async () => {
-      names = await gearNames(map);
-      const now = JSON.stringify(names);
+      places = await placesOf(map);
+      const now = JSON.stringify(places);
       const same = now === seen;
       seen = now;
       return same;
     })
     .toBe(true);
-  return names;
+  return places;
+};
+
+const keepFocus = async (page: Page) => {
+  const before = await page.evaluateHandle(() => document.activeElement);
+  return () =>
+    before.evaluate((element) => {
+      if (
+        element instanceof HTMLElement &&
+        element !== document.body &&
+        element.isConnected
+      )
+        element.focus();
+      else if (document.activeElement instanceof HTMLElement)
+        document.activeElement.blur();
+    });
 };
 
 export const gearSpots = async (map: Locator) => {
+  const restoreFocus = await keepFocus(map.page());
   let spots: Spot[] = [];
   await expect(async () => {
-    const names = await settledNames(map);
-    const read = await readSpots(map, names);
-    expect(await gearNames(map)).toEqual(names);
+    const places = await settledPlaces(map);
+    const read: Spot[] = [];
+    for (const place of places) read.push(await readSpot(map, place));
+    expect(await placesOf(map)).toEqual(places);
     expect(
       await map.locator('[data-place] button').count(),
-      'marker buttons, named or not'
-    ).toBe(names.length);
+      'one marker button for each place'
+    ).toBe(places.length);
     spots = read;
   }).toPass({ timeout: 20000 });
+  await restoreFocus();
   return spots;
 };

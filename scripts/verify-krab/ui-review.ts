@@ -4,7 +4,7 @@ import { expect, test } from './recipe';
 import AxeBuilder from '@axe-core/playwright';
 import { MADE_UP_SEA } from '../../playwright.config';
 import { toastOf } from '../../e2e/fixtures';
-import { gearSpots } from '../../e2e/gear-on-map';
+import { gearSpots, markerAt } from '../../e2e/gear-on-map';
 import { deliverFix, holdFixes } from '../../e2e/held-geolocation';
 import { readTrips, recorder } from './evidence';
 
@@ -182,10 +182,6 @@ function measureSheet(dialog: Element) {
   return { actions, field };
 }
 
-function labelsOf(buttons: Element[]) {
-  return buttons.map((button) => button.getAttribute('aria-label') ?? '');
-}
-
 function boxesOf(buttons: Element[]) {
   return buttons.map((button) => {
     const { x, y, width, height } = button.getBoundingClientRect();
@@ -303,14 +299,14 @@ test('supplemental UI review with live maps and accessibility observations', asy
   await page.clock.fastForward(8000);
   await expect(toastOf(page)).toBeHidden();
   const map = page.getByRole('region', { name: 'Map', exact: true });
-  const spots = map.getByRole('button', { name: /^Pot \d+[ ,]/ });
+  const spots = map.locator('[data-place]').getByRole('button');
+  const eight = Array.from(
+    { length: 8 },
+    (_, index) => `Pot ${String(index + 1)}`
+  );
   const drawn = async () =>
-    (await spots.evaluateAll(labelsOf)).reduce(
-      (count, name) =>
-        count + 1 + Number(/ \+(\d+) more /.exec(name)?.[1] ?? 0),
-      0
-    );
-  await expect.poll(drawn).toBe(8);
+    (await gearSpots(map)).flatMap(({ gear }) => gear).toSorted();
+  await expect.poll(drawn, { timeout: 30000 }).toEqual(eight);
   for (const spot of await spots.all()) await expect(spot).toBeInViewport();
   const overview = await settledObservation(() => spots.evaluateAll(boxesOf));
   keep('overview-spots.json', { viewport: page.viewportSize(), overview });
@@ -329,16 +325,22 @@ test('supplemental UI review with live maps and accessibility observations', asy
   expect(chartCredits.parts.length).toBeGreaterThan(0);
   for (const part of chartCredits.parts)
     expect(part.ratio, part.text).toBeGreaterThanOrEqual(4.5);
-  const group = map.getByRole('button', { name: / \+7 more in this area$/ });
   const zoomOut = map.getByRole('button', { name: 'Zoom out', exact: true });
   let outs = 0;
   await expect(async () => {
-    if (!(await group.isVisible())) {
+    if ((await spots.count()) > 1) {
       await zoomOut.click();
       outs += 1;
     }
-    await expect(group).toBeVisible({ timeout: 1500 });
+    await expect(spots).toHaveCount(1, { timeout: 1500 });
   }).toPass({ timeout: 30000 });
+  const together = await gearSpots(map);
+  expect(together).toHaveLength(1);
+  const [whole] = together;
+  expect(whole.chooser).toBe('8 gear in this area');
+  expect(whole.gear.toSorted()).toEqual(eight);
+  const group = markerAt(map, whole.place);
+  await expect(group).toBeVisible();
   await capture('03a-live-chart-group');
   const axeGroup = await new AxeBuilder({ page }).analyze();
   keep('axe-group.json', axeGroup);
@@ -348,11 +350,10 @@ test('supplemental UI review with live maps and accessibility observations', asy
   await expect(
     sheet.getByRole('heading', { name: '8 gear in this area' })
   ).toBeVisible();
-  await expect(sheet.getByRole('button', { name: /^Pot \d+, / })).toHaveCount(
-    8
-  );
+  const choices = sheet.getByRole('list').getByRole('button');
+  await expect(choices).toHaveCount(8);
   await capture('03b-group-list');
-  await sheet.getByRole('button', { name: /^Pot 5, / }).click();
+  await choices.nth(whole.gear.indexOf('Pot 5')).click();
   await expect(sheet.getByRole('heading', { level: 2 })).toHaveText('Pot 5');
   await capture('03c-group-member-sheet');
   await page.keyboard.press('Escape');
@@ -667,8 +668,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   const holding = (await gearSpots(map)).find(({ gear }) =>
     gear.includes('Pot 2')
   );
-  const lead = /^(?:Pot|Net) \d+/.exec(holding?.name ?? '')?.[0] ?? 'Pot 2';
-  const newest = map.getByRole('button', { name: new RegExp(`^${lead}[ ,]`) });
+  const newest = markerAt(map, holding?.place ?? '');
   const during = await settledObservation(() => newest.evaluate(footprintOf));
   const tag = `${String(size.width)}x${String(size.height)}`;
   const covers = {
@@ -738,7 +738,7 @@ test('a single newest drop and its time label stay clear of Undo on a fresh Char
   await expect(page.getByText('Finding position')).toBeHidden();
   await page.getByRole('button', { name: 'Drop pot', exact: true }).click();
   await expect(toastOf(page)).toContainText('Pot 1 dropped');
-  const pin = map.getByRole('button', { name: /^Pot 1,/ });
+  const pin = map.locator('[data-place]').getByRole('button');
   await expect(pin).toBeVisible();
   const street = map.getByRole('radio', { name: 'Street map', exact: true });
   const measure = async () => ({
@@ -831,6 +831,7 @@ test('Trip ended shows, then leaves on its own', async ({
 
 function markerStates(buttons: Element[]) {
   return buttons.map((button) => ({
+    place: button.closest('[data-place]')?.getAttribute('data-place'),
     name: button.getAttribute('aria-label'),
     current: button.getAttribute('aria-current'),
     focused: button === document.activeElement
@@ -915,7 +916,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await expect
     .poll(async () => (await readTrips(page))[0]?.drops.length)
     .toBe(6);
-  const markers = map.getByRole('button', { name: /^(?:Pot|Net) \d+\b/ });
+  const markers = map.locator('[data-place]').getByRole('button');
   const settledMarkers = () =>
     settledObservation(() => markers.evaluateAll(markerStates));
   const chain: Record<string, Awaited<ReturnType<typeof gearSpots>>> = {};
@@ -958,7 +959,11 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
     await expect(sheet).toHaveCount(0);
   };
   const selection: Record<string, ReturnType<typeof markerStates>> = {};
-  const pot3 = map.getByRole('button', { name: /^Pot 3,/ });
+  const pot3Spot = chain['six-6-show-all'].find(({ gear }) =>
+    gear.includes('Pot 3')
+  );
+  expect(pot3Spot?.chooser).toBeNull();
+  const pot3 = markerAt(map, pot3Spot?.place ?? '');
   await showFromGear('Pot 3');
   await expect(pot3).toBeFocused();
   selection['selected-1-single-focused'] = await settledMarkers();
@@ -980,12 +985,21 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await page.mouse.move(0, 0);
   await page.clock.fastForward(8000);
   await expect(toastOf(page)).toBeHidden();
-  const ledByPot6 = map.getByRole('button', { name: /^Pot 6 \+/ });
   await showFromGear('Pot 6');
-  await expect(ledByPot6).toBeFocused();
-  await expect(ledByPot6).toHaveAttribute('aria-current', 'true');
+  const shownPlace = await map
+    .locator('[data-place]')
+    .filter({ has: page.locator('button[aria-current="true"]') })
+    .getAttribute('data-place');
+  const groupWithPot6 = markerAt(map, shownPlace ?? '');
+  await expect(groupWithPot6).toBeFocused();
   selection['selected-3-group-focused'] = await settledMarkers();
   await capture('selected-3-group-focused');
+  const pot6Spot = (await gearSpots(map)).find(
+    ({ place }) => place === shownPlace
+  );
+  expect(pot6Spot?.chooser).not.toBeNull();
+  expect(pot6Spot?.gear).toEqual(expect.arrayContaining(['Pot 6', 'Pot 1']));
+  await expect(groupWithPot6).toBeFocused();
   const mapView = map.getByRole('region', { name: 'Map view' });
   for (const key of ['ArrowRight', 'ArrowDown']) await mapView.press(key);
   await expect(map.locator('[aria-current="true"]')).toHaveCount(0);
@@ -1055,6 +1069,6 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   expect(stepsAtFive).toEqual(stepsAtOne);
   expect(stored).toEqual({ kept: 0, released: 12345 });
   log(
-    'Six drops created through the UI 0.0012 N and 0.0004 E apart (five pots then a net) are each drawn once, alone or in a group of several, with no empty marker, while Undo shows, once settled, zoomed in, back, further out and after Show all gear (six-in-a-line.json). Show on map rings Pot 3 alone while focused and after focus moves on, then a group led by Pot 6 sharing Pot 1 position; a keyboard pan clears the ring (show-on-map-selection.json). Released 12345 fits its unchanged field with steppers unmoved, is saved and reads back on reopening (five-digit-count.json).'
+    'Six drops created through the UI 0.0012 N and 0.0004 E apart (five pots then a net) are each drawn once, alone or in a group of several, with no empty marker, while Undo shows, once settled, zoomed in, back, further out and after Show all gear (six-in-a-line.json). Show on map rings Pot 3 alone while focused and after focus moves on, then the group that holds Pot 6 and Pot 1 at one position; a keyboard pan clears the ring (show-on-map-selection.json). Released 12345 fits its unchanged field with steppers unmoved, is saved and reads back on reopening (five-digit-count.json).'
   );
 });

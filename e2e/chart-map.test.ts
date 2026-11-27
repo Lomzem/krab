@@ -1,6 +1,6 @@
 import type { BrowserContext, Locator, Page, Route } from '@playwright/test';
 import { expect, storedDrops, test, toastOf } from './fixtures';
-import { gearSpots, type Spot } from './gear-on-map';
+import { gearSpots, markerAt, type Spot } from './gear-on-map';
 import { MADE_UP_SEA } from '../playwright.config';
 import { deliverFix, holdFixes } from './held-geolocation';
 import {
@@ -921,6 +921,7 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
   test(`on a ${String(width)} by ${String(height)} screen in ${colorScheme} mode, six drops in a line ending with a ${last.toLowerCase()} each keep a marker or a place in a group as the map settles, zooms out and back, shows all, zooms in twice and filters, drawn whole and tappable inside the map view with no control over any of them, and each opens its own gear`, async ({
     page
   }) => {
+    test.slow();
     await page.emulateMedia({ colorScheme });
     await page.setViewportSize({ width, height });
     const map = mapArea(page);
@@ -1011,18 +1012,14 @@ for (const { width, height, colorScheme, last } of SIX_IN_A_LINE) {
     await expectEveryDropOnce('with time labels again');
 
     for (const name of names) {
-      const own = map.getByRole('button', { name: new RegExp(`^${name},`) });
-      if (await own.count()) {
-        await own.click();
-      } else {
-        const group = spots.find(({ gear }) => gear.includes(name));
-        await map
-          .getByRole('button', { name: group?.name, exact: true })
-          .click();
+      const spot = spots.find(({ gear }) => gear.includes(name));
+      await markerAt(map, spot?.place ?? '').click();
+      if (spot?.chooser)
         await dialogs
-          .getByRole('button', { name: new RegExp(`^${name},`) })
+          .getByRole('list')
+          .getByRole('button')
+          .nth(spot.gear.indexOf(name))
           .click();
-      }
       await expect(dialogs).toHaveCount(1);
       await expect(dialogs.getByRole('heading', { level: 2 })).toHaveText(name);
       await page.keyboard.press('Escape');
@@ -1646,16 +1643,11 @@ const settled = async (target: Locator) => {
 const sharedSpotOf = (spots: Spot[]) =>
   spots
     .filter(({ gear }) => gear.includes('Pot 3'))
-    .map(({ name, gear }) => {
+    .map(({ chooser, gear }) => {
       const sharing = ['Pot 1', 'Pot 2', 'Pot 4'].filter((other) =>
         gear.includes(other)
       );
-      const where = / (in this area|here)$/.exec(name)?.[1];
-      const said =
-        gear.length > 1
-          ? `${String(gear.length)} gear ${String(where)}`
-          : 'alone';
-      return `${sharing.join('+')} ${said}`;
+      return `${sharing.join('+')} ${chooser ?? 'alone'}`;
     })
     .join(' | ');
 
