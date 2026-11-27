@@ -1161,11 +1161,7 @@ const keyboardRing = async (page: Page, control: Locator) => {
   await page.keyboard.press('Tab');
   await expect(control).toBeFocused();
   return control.evaluate((focused) => {
-    const drawn =
-      focused instanceof HTMLInputElement && focused.type === 'radio'
-        ? (focused.closest('label') ?? focused)
-        : focused;
-    const style = getComputedStyle(drawn);
+    const style = getComputedStyle(focused);
     return {
       width: style.outlineWidth,
       offset: style.outlineOffset,

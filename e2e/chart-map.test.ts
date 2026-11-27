@@ -1274,6 +1274,33 @@ for (const text of ['100%', '200%']) {
   });
 }
 
+const capsuleDividers = (button: Element) =>
+  [
+    ...(button.parentElement?.parentElement?.querySelectorAll(
+      'span[aria-hidden="true"]'
+    ) ?? [])
+  ].map((span) => {
+    const { width, height } = span.getBoundingClientRect();
+    return { width, height };
+  });
+
+test('on a map 13rem tall or less, every map control divider shows as a 1 px line across its row', async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 852, height: 300 });
+  await dropPotAndOpenMap(page);
+  const zoomIn = mapControl(page, 'Zoom in');
+  await expect(zoomIn).toBeVisible();
+  expect((await boxOf(mapArea(page))).height).toBeLessThanOrEqual(208);
+  const dividers = await zoomIn.evaluate(capsuleDividers);
+  expect(dividers).toHaveLength(3);
+  for (const { width, height } of dividers)
+    expect([Math.min(width, height), Math.max(width, height) >= 20]).toEqual([
+      1,
+      true
+    ]);
+});
+
 test('with the map credits open, a tap on Filter or Drop pot does what it says and closes the credits', async ({
   page
 }) => {

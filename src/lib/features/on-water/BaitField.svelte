@@ -13,6 +13,7 @@
     CommandList,
     CommandStatus
   } from '@ui-sdk/svelte/command';
+  import { Radio, RadioGroup } from '@ui-sdk/svelte/radio';
   import {
     baitChips,
     baitKey,
@@ -21,7 +22,8 @@
     type BaitChoice,
     type BaitSearch
   } from './bait-options';
-  import { CHOICE_FOCUS, FOCUS } from '#lib/shared/control-states.js';
+  import { FOCUS } from '#lib/shared/control-states.js';
+  import { elementRef } from '#lib/shared/element-ref.js';
   import { QUIET_BUTTON } from './controls';
   import SelectedCheck from './SelectedCheck.svelte';
 
@@ -47,6 +49,7 @@
 
   const own = $derived(baitKey(bait));
   const chips = $derived(baitChips(choices, bait));
+  const checked = $derived(chips.some((chip) => chip.key === own) ? own : null);
   const typed = $derived(baitKey(search.query));
   const found = $derived(baitMatches(choices, search.query));
   const listed = $derived(found.add !== null || found.matches.length > 0);
@@ -83,7 +86,7 @@
   const pick = (picked: string) => {
     choose(picked);
     void tick().then(() => {
-      chipRow?.querySelector<HTMLInputElement>('input:checked')?.focus();
+      chipRow?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
     });
   };
 
@@ -98,29 +101,33 @@
     >Bait</legend
   >
   {#if chips.length > 0}
-    <div bind:this={chipRow} class="flex flex-wrap gap-2">
+    <RadioGroup
+      {@attach elementRef<HTMLElement>((element) => {
+        chipRow = element;
+      })}
+      class="flex flex-wrap gap-2"
+      aria-labelledby={legendId}
+      bind:value={
+        () => checked,
+        (next) => {
+          const chip = chips.find((each) => each.key === next);
+          if (chip) choose(chip.label);
+        }
+      }
+    >
       {#each chips as chip (chip.key)}
-        <label
-          class="flex min-h-12 max-w-full min-w-0 cursor-pointer touch-manipulation items-center gap-2 rounded-control border border-input bg-card py-2 pr-2 pl-3 text-base font-medium break-words has-checked:border-primary has-checked:bg-accent has-checked:text-accent-foreground {CHOICE_FOCUS}"
+        <Radio
+          value={chip.key}
+          class="flex min-h-12 max-w-full min-w-0 cursor-pointer touch-manipulation items-center gap-2 rounded-control border border-input bg-card py-2 pr-2 pl-3 text-left text-base font-medium break-words data-checked:border-primary data-checked:bg-accent data-checked:text-accent-foreground {FOCUS}"
+          onclick={() => {
+            choose(chip.label);
+          }}
         >
-          <input
-            class="sr-only"
-            type="radio"
-            name="{idPrefix}-bait"
-            value={chip.label}
-            checked={chip.key === own}
-            onchange={() => {
-              choose(chip.label);
-            }}
-            onclick={() => {
-              choose(chip.label);
-            }}
-          />
           <span class="min-w-0">{chip.label}</span>
           <SelectedCheck shown={chip.key === own} />
-        </label>
+        </Radio>
       {/each}
-    </div>
+    </RadioGroup>
   {/if}
   <Collapsible
     class="grid gap-2"

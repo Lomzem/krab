@@ -117,6 +117,7 @@
           : 'border-input'
       ]}
       onclick={() => {
+        left = [];
         onchange(NOTHING);
       }}>Nothing caught<SelectedCheck shown={nothing} /></Button
     >

@@ -580,6 +580,13 @@ test('leaving a fractional or one-sided count names the fix at once without stor
   await collectedRow(page, 'Pot 1').click();
   const nothingCaught = sheet.getByRole('button', { name: 'Nothing caught' });
   await expect(nothingCaught).toHaveAttribute('aria-pressed', 'false');
+  await kept.fill('2.5');
+  await page.keyboard.press('Tab');
+  await expect(kept).toHaveAttribute('aria-invalid', 'true');
+  await nothingCaught.click();
+  await expect(kept).toHaveValue('0');
+  await kept.fill('2.5');
+  await expect(kept).not.toHaveAttribute('aria-invalid');
   await nothingCaught.click();
   await expect(nothingCaught).toHaveAttribute('aria-pressed', 'true');
   await sheet.getByRole('button', { name: 'Clear catch' }).click();

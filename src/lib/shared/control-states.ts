@@ -7,9 +7,6 @@ export const FOCUS_INSET =
 export const FOCUS_INVERSE =
   'focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-inverse-action';
 
-export const CHOICE_FOCUS =
-  'has-focus-visible:outline-3 has-focus-visible:outline-offset-3 has-focus-visible:outline-ring';
-
 export const CHOICE_FOCUS_INSET =
   'has-focus-visible:outline-3 has-focus-visible:-outline-offset-6 has-focus-visible:outline-ring';
 

@@ -1028,15 +1028,19 @@
           </Button>
         {/if}
         {#if places.length > 0 || locate}
-          <span class="mx-2 h-px bg-border" aria-hidden="true"></span>
+          <span
+            class="mx-2 h-px bg-border tiny-map:mx-0 tiny-map:my-2 tiny-map:h-auto tiny-map:w-px"
+            aria-hidden="true"
+          ></span>
         {/if}
         <Button
           class="{ICON_BUTTON} aria-disabled:text-muted-foreground aria-disabled:active:bg-transparent"
           aria-label="Zoom in"
           aria-disabled={zoom >= MAX_ZOOM}
           onclick={() => {
+            if (zoom >= MAX_ZOOM) return;
             leaveOverview();
-            if (zoom < MAX_ZOOM) map?.zoomIn();
+            map?.zoomIn();
           }}
         >
           <Icon name="plus" size={20} />
@@ -1046,8 +1050,9 @@
           aria-label="Zoom out"
           aria-disabled={zoom <= MIN_ZOOM}
           onclick={() => {
+            if (zoom <= MIN_ZOOM) return;
             leaveOverview();
-            if (zoom > MIN_ZOOM) map?.zoomOut();
+            map?.zoomOut();
           }}
         >
           <Icon name="minus" size={20} />
