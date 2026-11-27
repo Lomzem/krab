@@ -5,7 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { MADE_UP_SEA } from '../../playwright.config';
 import { toastOf } from '../../e2e/fixtures';
 import { gearSpots, markerAt } from '../../e2e/gear-on-map';
-import { deliverFix, holdFixes } from '../../e2e/held-geolocation';
+import { deliverFix, holdFixes, letFixAge } from '../../e2e/held-geolocation';
 import { readTrips, recorder } from './evidence';
 
 function measureCredits() {
@@ -682,6 +682,7 @@ test('the newest drop stays drawn and tappable during Undo while the Offline not
   await capture(`newest-${tag}-1-during-undo-and-notice`);
   await expect(toastOf(page)).toContainText('Pot 2 dropped');
   await page.mouse.move(0, 0);
+  await letFixAge(page);
   await page.clock.fastForward(8000);
   await expect(toastOf(page)).toBeHidden();
   await expect(map.getByRole('img', { name: 'Last position' })).toBeVisible();
@@ -886,7 +887,7 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
     'Map'
   );
   await context.grantPermissions(['geolocation']);
-  await holdFixes(page, { steady: true });
+  await holdFixes(page);
   const map = page.getByRole('region', { name: 'Map', exact: true });
   const sheet = page.getByRole('dialog');
   const finding = page.getByText('Finding position');
@@ -936,7 +937,6 @@ test('six drops in a line, the gear Show on map rings alone and in a group, and 
   await page.mouse.move(0, 0);
   await page.clock.fastForward(8000);
   await expect(toastOf(page)).toBeHidden();
-  await deliverFix(page, fixAt(names.length - 1));
   await expectEveryDropOnce('six-2-settled');
   const zoomIn = map.getByRole('button', { name: 'Zoom in' });
   const zoomOut = map.getByRole('button', { name: 'Zoom out' });

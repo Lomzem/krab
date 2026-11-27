@@ -1,7 +1,12 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, holdStorage, releaseStorage, test, toastOf } from './fixtures';
 import { expectAccessibleInBothThemes } from './accessibility';
-import { deliverFix, denyLocation, holdFixes } from './held-geolocation';
+import {
+  deliverFix,
+  denyLocation,
+  holdFixes,
+  letFixAge
+} from './held-geolocation';
 
 const MIN_TARGET_PX = 44;
 
@@ -167,6 +172,7 @@ test('Finding position returns just after 5 seconds or on resume with a stale fi
 }) => {
   const finding = page.getByText('Finding position');
   await holdFixes(page);
+  await letFixAge(page);
   await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -204,6 +210,7 @@ test('a stale fix shows as Last position with no distances, and Centre on my pos
   const centre = map.getByRole('button', { name: 'Centre on my position' });
   const away = { ...MADE_UP_SEA, latitude: MADE_UP_SEA.latitude + 0.001 };
   await holdFixes(page);
+  await letFixAge(page);
   await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -255,6 +262,7 @@ test('Drop again from a sheet on Gear shows Finding position with Cancel and Sav
   const gearTab = page.getByRole('tab', { name: 'Gear', exact: true });
 
   await holdFixes(page);
+  await letFixAge(page);
   await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -304,6 +312,7 @@ test('a stale fix says Finding position on Gear and in an open sheet, and distan
   const away = { ...MADE_UP_SEA, latitude: MADE_UP_SEA.latitude + 0.001 };
 
   await holdFixes(page);
+  await letFixAge(page);
   await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -407,6 +416,7 @@ test("a fix that goes stale under a drop's Undo toast says Finding position on D
 }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   await holdFixes(page);
+  await letFixAge(page);
   await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -494,6 +504,7 @@ test('a drop with no fix within 5 seconds saves without a position by itself, a 
   page
 }) => {
   await holdFixes(page);
+  await letFixAge(page);
   await page.clock.install({ time: START });
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();

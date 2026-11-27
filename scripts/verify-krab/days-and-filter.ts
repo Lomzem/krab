@@ -25,6 +25,7 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
   page,
   context
 }, info) => {
+  test.slow();
   const { log, capture, keep } = recorder(
     page,
     info,

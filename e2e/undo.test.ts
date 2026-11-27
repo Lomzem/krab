@@ -1000,7 +1000,6 @@ test("ending the trip retires a failed drop's Retry so it never saves into the n
     toastOf(page).filter({ hasText: 'Pot 1 dropped' })
   );
   await page.clock.runFor(8000);
-  await deliverFix(page, SECOND_FIX, new Date(PAUSED.getTime() + 8000));
 
   await failStorage(page, 'writes');
   await dropPot.click();
@@ -1046,7 +1045,6 @@ test("End trip waits while a failed drop's Retry is saving, so the retried drop 
     toastOf(page).filter({ hasText: 'Pot 1 dropped' })
   );
   await page.clock.runFor(8000);
-  await deliverFix(page, SECOND_FIX, new Date(PAUSED.getTime() + 8000));
 
   await failStorage(page, 'writes');
   await dropPot.click();

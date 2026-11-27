@@ -2,7 +2,7 @@ import type { BrowserContext, Locator, Page, Route } from '@playwright/test';
 import { expect, storedDrops, test, toastOf } from './fixtures';
 import { gearSpots, markerAt, type Spot } from './gear-on-map';
 import { MADE_UP_SEA } from '../playwright.config';
-import { deliverFix, holdFixes } from './held-geolocation';
+import { deliverFix, holdFixes, letFixAge } from './held-geolocation';
 import {
   expectAccessibleInBothThemes,
   expectFocusTrapped
@@ -1352,6 +1352,7 @@ for (const [width, height] of [
     providers
   }) => {
     await holdFixes(page);
+    await letFixAge(page);
     await page.setViewportSize({ width, height });
     await page.goto('/');
     await page.getByRole('button', { name: 'Turn on location' }).click();
@@ -2007,7 +2008,7 @@ test('drops that share a spot stay in one group at every zoom, and a group that 
   const SHARED =
     /^(Pot 1\+Pot 2 3 gear here|Pot 1\+Pot 2\+Pot 4 4 gear in this area)$/;
   const sharedSpot = async () => sharedSpotOf(await gearSpots(map));
-  await holdFixes(page, { steady: true });
+  await holdFixes(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await dropAt(page, 1);
@@ -2064,7 +2065,7 @@ test('Show on map rings and leads the gear it shows, alone or in its group, afte
     await sheet.getByRole('button', { name: 'Show on map' }).click();
     await expect(sheet).toHaveCount(0);
   };
-  await holdFixes(page, { steady: true });
+  await holdFixes(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Turn on location' }).click();
   await dropAt(page, 1);

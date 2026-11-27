@@ -3,7 +3,7 @@ import { expect, holdStorage, releaseStorage, test, toastOf } from './fixtures';
 import { MADE_UP_SEA } from '../playwright.config';
 import { expectAccessibleInBothThemes } from './accessibility';
 import { chooseDays } from './day-choices';
-import { deliverFix, holdFixes } from './held-geolocation';
+import { deliverFix, holdFixes, letFixAge } from './held-geolocation';
 import { failStorage, injectStorageFaults } from './storage-faults';
 
 const MORNING = new Date('2031-06-10T07:30:00-04:00');
@@ -174,6 +174,7 @@ test('a past trip lists its collected and uncollected gear, saves an edited catc
   const main = page.getByRole('main');
   await holdFixes(page);
   await startMixedTrip(page, () => deliverFix(page, MADE_UP_SEA));
+  await letFixAge(page);
   await page.clock.fastForward('00:06');
   await page.getByRole('button', { name: 'Drop net' }).click();
   await page.getByRole('button', { name: 'Save without position' }).click();

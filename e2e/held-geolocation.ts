@@ -4,36 +4,47 @@ export type Fix = { latitude: number; longitude: number; accuracy?: number };
 
 type HeldFix = {
   deliverFix?: PositionCallback;
-  denyLocation?: PositionErrorCallback | null;
+  denyLocation?: PositionErrorCallback;
+  fixAges?: boolean;
 };
 
-export const holdFixes = (page: Page, { steady = false } = {}) =>
-  page.addInitScript(
-    ({ steady }) => {
-      const held = window as HeldFix;
-      navigator.geolocation.watchPosition = (success, error) => {
-        let last: GeolocationCoordinates | null = null;
-        held.deliverFix = (position) => {
-          last = position.coords;
-          success(position);
-        };
-        held.denyLocation = error;
-        if (steady) {
-          setInterval(() => {
-            if (last) {
-              success({
-                coords: last,
-                timestamp: Date.now()
-              } as GeolocationPosition);
-            }
-          }, 1000);
-        }
-        return 1;
+export const holdFixes = (page: Page) =>
+  page.addInitScript(() => {
+    const held = window as HeldFix;
+    let last: GeolocationCoordinates | null = null;
+    let report: PositionCallback | null = null;
+    let renewal: ReturnType<typeof setInterval> | undefined;
+    const renew = () => {
+      if (last && report && !held.fixAges)
+        report({ coords: last, timestamp: Date.now() } as GeolocationPosition);
+    };
+    navigator.geolocation.watchPosition = (success, error) => {
+      report = success;
+      held.deliverFix = (position) => {
+        last = position.coords;
+        success(position);
       };
-      navigator.geolocation.clearWatch = () => undefined;
-    },
-    { steady }
-  );
+      held.denyLocation = (denial) => {
+        last = null;
+        error?.(denial);
+      };
+      clearInterval(renewal);
+      renewal = setInterval(renew, 4000);
+      return 1;
+    };
+    navigator.geolocation.clearWatch = () => {
+      report = null;
+      clearInterval(renewal);
+    };
+  });
+
+export const letFixAge = async (page: Page) => {
+  const ages = () => {
+    (window as HeldFix).fixAges = true;
+  };
+  await page.addInitScript(ages);
+  await page.evaluate(ages);
+};
 
 export const deliverFix = (page: Page, fix: Fix, at?: Date) =>
   page.evaluate(

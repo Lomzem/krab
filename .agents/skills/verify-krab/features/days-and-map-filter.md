@@ -31,7 +31,7 @@ Covers drops either side of local midnight, day grouping, Today/All, collected v
 
 ## Gotchas
 
-- With `page.clock` installed, WebKit's emulated geolocation still stamps fixes with real time, so a fix looks stale after a clock jump and a drop waits for a position. Deliver fixes with `deliverFix` from `e2e/held-geolocation.ts`: without a time it stamps the page's `Date.now()`, and an explicit `Date` stamps exactly that. It is a plain module, separate from the e2e `providers` fixture, so live verify still reaches the real map providers.
+- With `page.clock` installed, WebKit's emulated geolocation still stamps fixes with real time, so a fix looks stale after a clock jump and a drop waits for a position. Deliver fixes with `deliverFix` from `e2e/held-geolocation.ts`: without a time it stamps the page's `Date.now()`, and an explicit `Date` stamps exactly that. After `holdFixes`, the held fix renews every 4 seconds of page time, inside the 5 second freshness limit, so a clock jump that expires a toast keeps the position current; call `letFixAge` before a jump only when the drive checks a stale fix. It is a plain module, separate from the e2e `providers` fixture, so live verify still reaches the real map providers.
 - On a multi-day trip, match the Collected region with `exact: true`; a plain name match also finds its "Collected Day N" regions.
 - Prove a filter toggle where nothing else hides the target: Collected gear over All days, and Time in the water on a visible label. The app re-reads the clock every 15 s, so `setFixedTime` leaves an old label; pause, then run the clock to a known time.
 - Day boundaries follow the browser's time zone. Always set `timezoneId`; the container's default is UTC.
