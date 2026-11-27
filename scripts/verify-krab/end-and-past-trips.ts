@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import type { Page } from '@playwright/test';
 import { expect, test } from './recipe';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
@@ -61,8 +60,6 @@ test('ending a trip asks first, keeps Net 1 as uncollected, and leaves the trip 
     .getByRole('main')
     .getByRole('button', { name: 'End trip' });
 
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await fishOneMorning(page);
@@ -181,8 +178,6 @@ test('past trips list an ended trip, open its gear and map, survive reload, and 
     exact: true
   });
 
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await fishOneMorning(page);

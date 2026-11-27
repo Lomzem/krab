@@ -3,7 +3,6 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './recipe';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
@@ -140,8 +139,6 @@ test('finding gear on the Map tab and from the Gear list', async ({
   const { log, capture, keep } = recorder(page, info, 'finding-gear', 'Map');
   const requested: string[] = [];
   context.on('request', (request) => requested.push(request.url()));
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await page.clock.install();
@@ -217,7 +214,6 @@ test('NOAA chart tiles line up with a public coastline at two zooms', async ({
 }, info) => {
   test.skip(!liveProviders, 'needs real NOAA tiles');
   const { log, keep } = recorder(page, info, 'finding-gear', 'Alignment');
-  keep('doctor.json', doctor());
   await page.goto('/');
   const samples = [];
   for (const zoom of ALIGNMENT_ZOOMS) {

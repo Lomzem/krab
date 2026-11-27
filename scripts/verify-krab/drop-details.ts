@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import type { Page } from '@playwright/test';
 import { expect, test } from './recipe';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
@@ -39,8 +38,6 @@ test('drop details stay a draft until Save, refuse a bad depth, save and survive
     return trips[0]?.drops.find((item) => item.gearId === gear?.id);
   };
 
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await context.setGeolocation({ ...MADE_UP_SEA, accuracy: 8 });
   await page.goto('/');

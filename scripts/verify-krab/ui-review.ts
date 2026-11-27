@@ -6,7 +6,6 @@ import { MADE_UP_SEA } from '../../playwright.config';
 import { toastOf } from '../../e2e/fixtures';
 import { gearSpots } from '../../e2e/gear-on-map';
 import { deliverFix, holdFixes } from '../../e2e/held-geolocation';
-import { doctor } from './doctor';
 import { readTrips, recorder } from './evidence';
 
 function measureCredits() {
@@ -266,7 +265,6 @@ test('supplemental UI review with live maps and accessibility observations', asy
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(page, info, 'ui-review', 'Map');
-  keep('doctor.json', doctor());
   await context.grantPermissions(['geolocation']);
   page.on('pageerror', (error) => {
     log(`pageerror: ${error.message}`);

@@ -160,6 +160,54 @@ const cases: PolicyCase[] = [
     risk: 'A static import of test skips the NOAA and OpenFreeMap fixture, or the fixture test is refused'
   },
   {
+    name: 'static Playwright test import versus the recipe doctor fixture',
+    file: 'scripts/verify-krab/probe.ts',
+    valid: 'import { expect, test } from "./recipe"; export { expect, test };',
+    invalid: 'import { test } from "@playwright/test"; export { test };',
+    command: 'lint',
+    diagnostic: "Import test from './recipe'",
+    risk: 'A recipe drives the preview without the doctor receipt, or the recipe test is refused'
+  },
+  {
+    name: 'dynamic Playwright import versus the recipe doctor fixture',
+    file: 'scripts/verify-krab/probe.ts',
+    valid: 'export const load = () => import("./recipe");',
+    invalid: 'export const load = () => import(`@playwright/test`);',
+    command: 'lint',
+    diagnostic: "Import test from './recipe'",
+    risk: 'A dynamic import drives the preview without the doctor receipt, or a dynamic import of the recipe is refused'
+  },
+  {
+    name: 'e2e fixture test import versus the recipe doctor fixture',
+    file: 'scripts/verify-krab/probe.ts',
+    valid:
+      'import { toastOf } from "../../e2e/fixtures"; import { testWithFixtureProviders } from "./recipe"; export { testWithFixtureProviders, toastOf };',
+    invalid: 'import { test } from "../../e2e/fixtures"; export { test };',
+    command: 'lint',
+    diagnostic: "Import test from './recipe'",
+    risk: 'A recipe takes the e2e test, which answers providers but drives without the doctor receipt, or e2e helpers are refused'
+  },
+  {
+    name: 'dynamic e2e fixture import versus the recipe doctor fixture',
+    file: 'scripts/verify-krab/probe.ts',
+    valid: 'export const load = () => import("./evidence");',
+    invalid: 'export const load = () => import("../../e2e/fixtures");',
+    command: 'lint',
+    diagnostic: "Import test from './recipe'",
+    risk: 'A dynamic import takes the e2e test without the doctor receipt, or other dynamic imports are refused'
+  },
+  {
+    name: 'throw syntax in verify-krab recipes',
+    file: 'scripts/verify-krab/probe.ts',
+    valid:
+      'export const fail = () => Promise.reject(new Error("unavailable"));',
+    invalid:
+      'export function fail(): never { throw new Error("unavailable"); }',
+    command: 'lint',
+    diagnostic: 'Use Effect failure APIs instead of throw',
+    risk: 'The recipe import rule replaces the inherited syntax restrictions'
+  },
+  {
     name: 'code depth boundary',
     file: 'src/lib/shared/probe.ts',
     valid:

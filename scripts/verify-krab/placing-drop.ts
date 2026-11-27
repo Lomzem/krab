@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { expect, test } from './recipe';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
@@ -10,8 +9,6 @@ test('placing a drop from Map survives reload', async ({
   context
 }, info) => {
   const { log, capture, keep } = recorder(page, info, 'placing-drop', 'Map');
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await page.goto('/licenses/atkinson-hyperlegible-next-OFL.txt');
   await expect(readTrips(page)).rejects.toThrow('Cannot read Krab IndexedDB');
   expect(
@@ -69,8 +66,6 @@ test('placing a drop with location denied saves it without a position', async ({
   context
 }, info) => {
   const { log, capture, keep } = recorder(page, info, 'placing-drop', 'Denied');
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.clearPermissions();
   log('fresh iPhone WebKit context; location permission cleared (denied)');
   await page.goto('/');

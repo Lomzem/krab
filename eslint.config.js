@@ -55,6 +55,26 @@ const EFFECT_ONLY = [
 const USE_FIXTURE_TEST =
   "Import test from './fixtures', whose auto fixture answers NOAA and OpenFreeMap.";
 
+const USE_RECIPE_TEST =
+  "Import test from './recipe', whose auto fixtures run doctor and answer NOAA and OpenFreeMap.";
+
+const testOnlyFrom = (allowed, otherTests, message) => ({
+  'no-restricted-imports': [
+    'error',
+    {
+      patterns: [{ regex: `^(?!${allowed}$)`, importNames: ['test'], message }]
+    }
+  ],
+  'no-restricted-syntax': [
+    'error',
+    ...EFFECT_ONLY,
+    {
+      selector: `ImportExpression:matches([source.value=/^(?:${otherTests})$/], [source.quasis.0.value.cooked=/^(?:${otherTests})$/])`,
+      message
+    }
+  ]
+});
+
 export default defineConfig([
   {
     ignores: [
@@ -129,25 +149,16 @@ export default defineConfig([
   },
   {
     files: ['e2e/**/*.test.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          name: '@playwright/test',
-          importNames: ['test'],
-          message: USE_FIXTURE_TEST
-        }
-      ],
-      'no-restricted-syntax': [
-        'error',
-        ...EFFECT_ONLY,
-        {
-          selector:
-            "ImportExpression:matches([source.value='@playwright/test'], [source.quasis.0.value.cooked='@playwright/test'])",
-          message: USE_FIXTURE_TEST
-        }
-      ]
-    }
+    rules: testOnlyFrom('\\./fixtures', '@playwright.test', USE_FIXTURE_TEST)
+  },
+  {
+    files: ['scripts/verify-krab/**/*.ts'],
+    ignores: ['scripts/verify-krab/recipe.ts', '**/*.test.ts'],
+    rules: testOnlyFrom(
+      '\\./recipe',
+      '@playwright.test|(?:\\.\\.?.)+e2e.fixtures(?:\\.ts)?',
+      USE_RECIPE_TEST
+    )
   },
   prettier
 ]);

@@ -2,10 +2,10 @@
 import { strict as assert } from 'node:assert';
 import AxeBuilder from '@axe-core/playwright';
 import type { Locator } from '@playwright/test';
-import { test, expect, toastOf } from '../../e2e/fixtures';
+import { toastOf } from '../../e2e/fixtures';
+import { testWithFixtureProviders as test, expect } from './recipe';
 import { holdFixes, deliverFix } from '../../e2e/held-geolocation';
 import { MADE_UP_SEA } from '../../playwright.config';
-import { doctor } from './doctor';
 import { readTrips, recorder } from './evidence';
 
 const EVENING = new Date('2031-06-10T23:40:00-04:00');
@@ -35,7 +35,6 @@ test('visual inventory through a dense overnight trip', async ({
 }, info) => {
   test.setTimeout(90000);
   const { capture, keep, log } = recorder(page, info, 'visual-inventory', 'UI');
-  keep('doctor.json', doctor());
   // Playwright's clock moves performance.now ahead of the animation timeline, so a sheet spring timed from it never plays.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await holdFixes(page);
@@ -262,7 +261,6 @@ test('visual inventory with location denied', async ({
     'visual-inventory',
     'Denied'
   );
-  keep('doctor.json', doctor());
   await context.clearPermissions();
   await page.clock.install();
   await page.goto('/');
@@ -327,7 +325,6 @@ test('visual inventory for bait picker', async ({ page }, info) => {
     'visual-inventory',
     'Bait'
   );
-  keep('doctor.json', doctor());
   // Playwright's clock moves performance.now ahead of the animation timeline, so a sheet spring timed from it never plays.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await holdFixes(page);

@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import type { Page } from '@playwright/test';
 import { expect, test } from './recipe';
-import { doctor } from './doctor';
 import { toastOf } from '../../e2e/fixtures';
 import { readTrips, recorder } from './evidence';
 import { MADE_UP_SEA } from '../../playwright.config';
@@ -51,8 +50,6 @@ test('an overnight trip groups gear by day and the Map filter narrows only the m
     await expect(sheet).toBeHidden();
   };
 
-  keep('doctor.json', doctor());
-  log('doctor passed: our preview process owns 4173');
   await context.grantPermissions(['geolocation']);
   await holdFixes(page);
   await page.clock.install({ time: LATE_EVENING });
