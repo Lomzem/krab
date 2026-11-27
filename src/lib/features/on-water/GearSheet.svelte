@@ -94,6 +94,7 @@
   let discarding = $state(false);
 
   const discard = async () => {
+    if (discarding) return;
     discarding = true;
     await tick();
     discarding = false;
@@ -193,7 +194,7 @@
       session.keepEditing();
     }}
     ongo={() => void discard()}
-    returnFocus={open && !discarding ? editing : 'none'}
+    returnFocus={open ? editing : 'none'}
   />
 
   {#snippet footer()}

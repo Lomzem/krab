@@ -131,6 +131,7 @@
     return () => {
       cancelAnimationFrame(frame);
       current.cancel();
+      countdown = null;
     };
   });
 

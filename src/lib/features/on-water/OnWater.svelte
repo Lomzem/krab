@@ -270,9 +270,14 @@
       restingFocus()?.focus();
     });
 
+  const showSheet = (origin: SheetOrigin) => {
+    droppingAgain = false;
+    gearSheet.show(origin);
+  };
+
   const opensFrom =
     (from: SheetOrigin['from']) => (dropId: string, opener: HTMLElement) => {
-      gearSheet.show({
+      showSheet({
         dropId,
         from,
         returnFocus: openerFocus(dropId, opener)
@@ -378,7 +383,7 @@
               showOnMap = null;
             }}
             onopen={(dropId: string, returnFocus: () => HTMLElement | null) => {
-              gearSheet.show({ dropId, from: 'map', returnFocus });
+              showSheet({ dropId, from: 'map', returnFocus });
             }}
             newest={water.notice?.offer.action === 'undo-drop'
               ? water.notice.offer.dropId
@@ -441,7 +446,7 @@
             returnFocus: () => HTMLElement | null,
             from: 'list' | 'map'
           ) => {
-            gearSheet.show({ dropId, from, returnFocus });
+            showSheet({ dropId, from, returnFocus });
           }}
           ondelete={(tripId: string) => water.deleteTrip(tripId)}
           onretry={reload}

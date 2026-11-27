@@ -14,6 +14,8 @@ import {
   expectFocusTrapped
 } from './accessibility';
 import { failStorage, injectStorageFaults } from './storage-faults';
+import { deliverFix, holdFixes, letFixAge } from './held-geolocation';
+import { MADE_UP_SEA } from '../playwright.config';
 
 const gearRow = (page: Page, name: string | RegExp) =>
   page.getByRole('main').getByRole('button').filter({ hasText: name });
@@ -493,6 +495,41 @@ test('deleting a drop right after closing another gear sheet returns focus to th
   await expect(
     page.getByRole('heading', { name: 'Gear', level: 1 })
   ).toBeFocused();
+});
+
+test('while Drop again for one gear waits for a position, closing another gear sheet returns focus to its row', async ({
+  page
+}) => {
+  const sheet = page.getByRole('dialog');
+  const paused = new Date('2031-03-04T06:00:00Z');
+
+  await holdFixes(page);
+  await letFixAge(page);
+  await page.clock.install({ time: new Date('2031-03-04T05:00:00Z') });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Turn on location' }).click();
+  await page.clock.pauseAt(paused);
+  await deliverFix(page, MADE_UP_SEA, paused);
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 1 dropped');
+  await page.getByRole('button', { name: 'Drop pot' }).click();
+  await expect(toastOf(page)).toContainText('Pot 2 dropped');
+  await page.getByRole('tab', { name: 'Gear', exact: true }).click();
+
+  await gearRow(page, 'Pot 1').click();
+  await sheet.getByRole('button', { name: 'Collect', exact: true }).click();
+  await page.clock.runFor(5001);
+  await sheet.getByRole('button', { name: 'Drop pot again here' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(
+    page.getByRole('heading', { name: 'Finding drop position' })
+  ).toBeFocused();
+
+  await gearRow(page, 'Pot 2').click();
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(gearRow(page, 'Pot 2')).toBeFocused();
 });
 
 test('deleting a drop already deleted in another tab closes the sheet without an error and drops its row', async ({
